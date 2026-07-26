@@ -6,8 +6,9 @@ timer during focus. Nothing about a user is ever stored.
 
 ## Principle
 
-Keep it light. No auth, no database, no video SFU. Every piece of state is
-ephemeral and lives in memory or in the browser. Rooms die when empty.
+Keep it light and **free to run forever**. No auth, no database, no video SFU, no
+always-on server. Every piece of state is ephemeral and lives in memory or in the
+browser. Rooms die when empty. All infra sits inside free tiers.
 
 ## Core flow
 
@@ -34,11 +35,23 @@ ephemeral and lives in memory or in the browser. Rooms die when empty.
 
 | Piece | Choice | Role |
 |---|---|---|
-| Server | Single WebSocket server, in-memory `Map` of rooms | Signaling relay, membership, timer phase broadcast, matchmaking queue, cap-of-4, IP rate-limit on room creation. No DB. |
-| Video | Native browser WebRTC, **mesh** (peer-to-peer) | ≤4 people = 3 connections each. No video server. |
-| NAT | Google STUN + metered/self-host TURN fallback | TURN covers ~15% of strict-NAT networks. |
-| Frontend | React + Vite | To-do list stays client-side, never sent to server. |
-| Hosting | WS server always-on (Fly/Railway); frontend on Vercel | In-memory room state can't survive serverless. |
+| Server | **Cloudflare Workers + Durable Objects** — one DO per room, in-memory state | Signaling relay, membership, timer phase broadcast, matchmaking queue, cap-of-4, rate-limit on room creation. No DB, no always-on box. |
+| Video | Native browser WebRTC, **mesh** (peer-to-peer) | ≤4 people = 3 connections each. Zero server bandwidth. |
+| NAT | Google STUN. **No TURN in v1.** | STUN covers most networks; ~10-15% strict-NAT users won't connect (documented). Cloudflare free TURN is the fallback if needed. |
+| Frontend | React + Vite → **Cloudflare Pages / GitHub Pages** | Static, free. To-do list stays client-side, never sent to server. |
+
+### Cost — free forever
+
+Everything runs inside free tiers with no always-on server:
+- **Cloudflare Workers + Durable Objects**: free tier ~100k requests/day, WebSocket
+  hibernation, in-memory DO state. No paid box.
+- **Cloudflare/GitHub Pages**: static hosting, free.
+- **WebRTC mesh**: peer-to-peer video, no server bandwidth cost.
+- **STUN**: free (Google).
+
+**Honest ceiling:** "free" holds while traffic stays under Cloudflare's free tier
+(~100k req/day). A viral spike would need a paid plan — unlikely for a niche 4-person
+tool, but not hidden. No credit card required to run it.
 
 ## Data stored
 
