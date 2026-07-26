@@ -86,7 +86,6 @@ export default function Home({ pendingRoom, onEnter }) {
         <header className="brand">
           <h1>Nook</h1>
           <p className="tagline">You've been invited. Add your name and what you're here to do.</p>
-          <div className="badge-circle">you're invited ✌️</div>
           <Moon size={40} />
         </header>
         {identity}
@@ -101,7 +100,6 @@ export default function Home({ pendingRoom, onEnter }) {
       <header className="brand">
         <h1>Nook</h1>
         <p className="tagline">Quiet coworking for up to four. See who's around, or open a room and let people join.</p>
-        <div className="badge-circle">high fives &amp; good vibes ✌️</div>
         <Moon size={40} />
       </header>
 
@@ -111,7 +109,7 @@ export default function Home({ pendingRoom, onEnter }) {
           <span className="live-dot" title="live" />
         </div>
         {rooms.length === 0 ? (
-          <p className="chat-empty">No open rooms yet. Be the first — open one below.</p>
+          <p className="chat-empty">No open rooms yet. Be the first. Open one below.</p>
         ) : (
           <ul className="room-list">
             {rooms.map((r) => {

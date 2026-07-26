@@ -101,15 +101,15 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   }
   function downloadTodos() {
     const body = todos.map((t, i) => `[${done[i] ? 'x' : ' '}] ${t}`).join('\n');
-    download('nook-todo.txt', `Nook — to-do list\n\n${body || '(empty)'}\n`);
+    download('nook-todo.txt', `Nook to-do list\n\n${body || '(empty)'}\n`);
   }
   function downloadChat() {
     const body = chat.map((m) => `[${new Date(m.t).toLocaleTimeString()}] ${m.name}: ${m.text}`).join('\n');
-    download('nook-chat.txt', `Nook — chat log\n\n${body || '(no messages)'}\n`);
+    download('nook-chat.txt', `Nook chat log\n\n${body || '(no messages)'}\n`);
   }
 
   if (status === 'kicked') return <Ended msg="You were removed from this room." onLeave={onLeave} />;
-  if (status === 'full') return <Ended msg="That room is full — four is the max." onLeave={onLeave} />;
+  if (status === 'full') return <Ended msg="That room is full. Four is the max." onLeave={onLeave} />;
   if (status === 'closed') return <Ended msg="You left the room." onLeave={onLeave} />;
 
   return (

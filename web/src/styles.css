@@ -64,12 +64,6 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
   font-size: clamp(80px, 20vw, 150px); line-height: 0.86; letter-spacing: 0.01em; text-transform: uppercase;
 }
 .tagline { color: var(--cream); opacity: 0.92; margin: 6px 0 0; max-width: 30ch; font-weight: 500; font-size: 17px; }
-.brand .badge-circle {
-  position: absolute; top: 24px; right: 22px; width: 128px; height: 128px; border-radius: 50%;
-  background: var(--pink); color: var(--ink); display: grid; place-items: center; text-align: center;
-  padding: 14px; font-family: var(--display); font-weight: 700; font-size: 15px; line-height: 1.15;
-  transform: rotate(6deg); z-index: 2; box-shadow: var(--shadow);
-}
 .brand .moon { position: absolute; bottom: 20px; right: 26px; z-index: 2; }
 
 .card {
@@ -243,7 +237,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .rail { position: static; }
   .banner { flex-direction: column; align-items: flex-start; }
   .timer { justify-items: start; }
-  .brand .badge-circle { width: 92px; height: 92px; font-size: 12px; }
   .actions.two { grid-template-columns: 1fr; }
 }
 
