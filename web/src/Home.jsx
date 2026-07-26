@@ -8,8 +8,8 @@ const phaseLabel = { greet: 'greeting', focus: 'focusing', regroup: 'regrouping'
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
 const AV = ['#3e5ad5', '#10124e', '#1f97bf', '#5a7d2a']; // blue, indigo, teal, moss — readable with white text
 
-export default function Home({ pendingRoom, onEnter }) {
-  const [name, setName] = useState('');
+export default function Home({ pendingRoom, onEnter, embedded = false, initialName = '', onClose }) {
+  const [name, setName] = useState(initialName);
   const [todos, setTodos] = useState(['']);
   const [focusMin, setFocusMin] = useState(50);
   const [regroupMin, setRegroupMin] = useState(5);
@@ -19,9 +19,9 @@ export default function Home({ pendingRoom, onEnter }) {
   const cleanTodos = () => todos.map((t) => t.trim()).filter(Boolean);
   const canGo = name.trim().length > 0;
 
-  // Presence: only connect when opted in and named. Entering a room unmounts
-  // Home, which closes the socket and drops you from everyone's roster.
-  const online = available && canGo && !pendingRoom;
+  // Presence: only connect when opted in and named. Not while shown as an
+  // in-room overlay — you're already in a session, so you're not "around".
+  const online = available && canGo && !pendingRoom && !embedded;
   const { roster, selfId, invite, dismissInvite, ping } = useLobby(online, name.trim());
   const others = roster.filter((p) => p.id !== selfId);
 
@@ -51,6 +51,14 @@ export default function Home({ pendingRoom, onEnter }) {
     const t = setInterval(load, 4000);
     return () => { alive = false; clearInterval(t); };
   }, [pendingRoom]);
+
+  // Esc closes the in-room overlay.
+  useEffect(() => {
+    if (!embedded) return;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [embedded, onClose]);
 
   function setTodo(i, v) {
     const next = [...todos];
@@ -112,10 +120,11 @@ export default function Home({ pendingRoom, onEnter }) {
     );
   }
 
-  return (
-    <main className="home wide">
+  const wide = (
+    <main className={`home wide${embedded ? ' embedded' : ''}`}>
+      {embedded && <button className="overlay-close" onClick={onClose} aria-label="Close">×</button>}
       <Sparkles />
-      {invite && (
+      {!embedded && invite && (
         <div className="invite-toast" role="alert">
           <span><strong>{invite.fromName}</strong> wants to cowork ✌️</span>
           <div className="invite-actions">
@@ -172,6 +181,7 @@ export default function Home({ pendingRoom, onEnter }) {
 
       {identity}
 
+      {!embedded && (
       <section className="card presence">
         <div className="panel-head">
           <h2 className="panel-title">Around now</h2>
@@ -199,6 +209,7 @@ export default function Home({ pendingRoom, onEnter }) {
           <p className="hint">Toggle on to see who else is around and let them invite you to cowork.</p>
         )}
       </section>
+      )}
 
       <section className="card start-card">
         <h2 className="panel-title">Start your own</h2>
@@ -215,4 +226,13 @@ export default function Home({ pendingRoom, onEnter }) {
       </section>
     </main>
   );
+
+  if (embedded) {
+    return (
+      <div className="home-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+        {wide}
+      </div>
+    );
+  }
+  return wide;
 }

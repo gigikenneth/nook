@@ -24,20 +24,39 @@ function restoreSession() {
 
 export default function App() {
   const [session, setSession] = useState(restoreSession); // { roomId, name, todos, focusMin, regroupMin }
+  const [browsing, setBrowsing] = useState(false); // peeking Home while in a session
   const pendingRoom = roomFromHash();
 
   function enter(s) {
     sessionStorage.setItem(KEY, JSON.stringify(s));
     window.location.hash = `room/${encodeURIComponent(s.roomId)}`;
     setSession(s);
+    setBrowsing(false);
   }
 
   function leave() {
     sessionStorage.removeItem(KEY);
     window.location.hash = '';
     setSession(null);
+    setBrowsing(false);
   }
 
-  if (session) return <Room {...session} onLeave={leave} />;
+  // From the in-room Home overlay: joining/opening another room leaves the
+  // current one, so confirm first.
+  function switchRoom(s) {
+    if (!window.confirm('Leave your current room and join this one?')) return;
+    enter(s);
+  }
+
+  if (session) {
+    return (
+      <>
+        <Room {...session} onLeave={leave} onBrowse={() => setBrowsing(true)} />
+        {browsing && (
+          <Home embedded initialName={session.name} onClose={() => setBrowsing(false)} onEnter={switchRoom} />
+        )}
+      </>
+    );
+  }
   return <Home pendingRoom={pendingRoom} onEnter={enter} />;
 }

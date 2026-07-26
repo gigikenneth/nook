@@ -63,7 +63,7 @@ function Timer({ endsAt, label }) {
   );
 }
 
-export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, onLeave }) {
+export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, onLeave, onBrowse }) {
   const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
   const { selfId, hostId, peers, phase, endsAt, ready, shared, order, goals, chat, status, local } = room;
 
@@ -140,6 +140,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
           {isPublic ? <span className="badge badge-greet">open</span> : <span className="badge">invite only</span>}
         </div>
         <div className="room-actions">
+          {onBrowse && <button className="ghost sm" onClick={onBrowse}>Home</button>}
           <button className="secondary sm" onClick={copy}>{copied ? 'Link copied' : 'Copy invite link'}</button>
           <button className="primary sm" onClick={onLeave}>Leave</button>
         </div>

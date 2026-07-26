@@ -256,6 +256,18 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .invite-actions { display: flex; gap: 8px; flex: none; }
 .invite-toast .ghost { color: var(--cream); opacity: .85; }
 
+/* In-room Home overlay: peek the home page without leaving the session. */
+.home-overlay {
+  position: fixed; inset: 0; z-index: 60; overflow-y: auto;
+  background: rgba(16, 18, 78, 0.45);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+}
+.overlay-close {
+  position: absolute; top: 14px; right: 14px; z-index: 3;
+  width: 40px; height: 40px; padding: 0; border-radius: 50%;
+  background: #fff; color: var(--ink); font-size: 22px; line-height: 1; box-shadow: var(--shadow);
+}
+
 .badge { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 4px 10px; border-radius: var(--r-pill); background: var(--cream2); color: var(--muted); }
 .badge-greet { background: var(--pink); color: var(--ink); }
 .badge-focus { background: var(--olive); color: var(--cream); }
