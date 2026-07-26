@@ -2,6 +2,12 @@ name = "nook"
 main = "src/worker.js"
 compatibility_date = "2024-09-23"
 
+# The Worker also serves the built React app. Static files are served directly;
+# unmatched paths (/rooms, /room/:id/ws) fall through to the Worker. Routing is
+# hash-based, so every real page path is "/" -> index.html; no SPA fallback needed.
+[assets]
+directory = "./web/dist"
+
 # Free-plan Durable Objects must be SQLite-backed (new_sqlite_classes).
 # We don't use SQL storage — state is in-memory — but the class must be declared this way.
 [[durable_objects.bindings]]
