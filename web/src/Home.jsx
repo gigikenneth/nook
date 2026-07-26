@@ -4,6 +4,8 @@ import { Moon, Sparkles } from './graphics.jsx';
 
 const uid = () => crypto.randomUUID();
 const phaseLabel = { greet: 'greeting', focus: 'focusing', regroup: 'regrouping' };
+const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
+const AV = ['#3e5ad5', '#10124e', '#1f97bf', '#5a7d2a']; // blue, indigo, teal, moss — readable with white text
 
 export default function Home({ pendingRoom, onEnter }) {
   const [name, setName] = useState('');
@@ -115,9 +117,16 @@ export default function Home({ pendingRoom, onEnter }) {
               const full = r.count >= 4;
               return (
                 <li key={r.roomId} className="room-row">
-                  <div className="room-people">
-                    <strong>{names || 'Someone'}</strong>
-                    {goals && <span>{goals}</span>}
+                  <div className="room-left">
+                    <div className="room-avatars">
+                      {r.occupants.slice(0, 4).map((o, i) => (
+                        <span key={i} className="room-av" style={{ background: AV[i % AV.length] }}>{initials(o.name)}</span>
+                      ))}
+                    </div>
+                    <div className="room-people">
+                      <strong>{names || 'Someone'}</strong>
+                      {goals && <span>{goals}</span>}
+                    </div>
                   </div>
                   <div className="room-meta">
                     <span className={`badge badge-${r.phase}`}>{phaseLabel[r.phase]}</span>
