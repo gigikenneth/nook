@@ -2,10 +2,10 @@
 
 # 🌙 Nook
 
-### Quiet virtual coworking for up to four people.
+### Your focus crew for the next 50 minutes.
 
-Show up, say what you're working on, work heads-down alongside each other, then
-regroup. No account, no downloads, nothing saved. Inspired by Groove.
+Show up, say what you're on, and get it done alongside a few other people. Rooms
+of up to four. No account, no downloads, nothing saved. Inspired by Groove.
 
 **[→ Open Nook](https://nook.gigikenneth.workers.dev)**
 

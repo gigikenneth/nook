@@ -135,9 +135,15 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
       )}
       <header className="brand">
         <h1>Nook</h1>
-        <p className="tagline">Quiet coworking for up to four. See who's around, or open a room and let people join.</p>
+        <p className="tagline">Your focus crew for the next 50 minutes. Show up, say what you're on, and get it done alongside a few other people.</p>
         <Moon size={40} />
       </header>
+
+      <ol className="steps">
+        <li><span>1</span> Add your name</li>
+        <li><span>2</span> Join a room or open your own</li>
+        <li><span>3</span> Focus together, then regroup</li>
+      </ol>
 
       <section className="directory card">
         <div className="panel-head">
@@ -218,8 +224,10 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
               ))}
             </ul>
           )
+        ) : !canGo ? (
+          <p className="hint">Add your name above, then tick <strong>I'm around to cowork</strong> to see who else is here.</p>
         ) : (
-          <p className="hint">Toggle on to see who else is around and let them invite you to cowork.</p>
+          <p className="hint">Tick <strong>I'm around to cowork</strong> to see who's here and let people invite you.</p>
         )}
       </section>
       )}

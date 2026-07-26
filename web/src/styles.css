@@ -63,7 +63,13 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
   font-family: var(--wordmark); font-weight: 800; color: var(--cream);
   font-size: clamp(72px, 17vw, 128px); line-height: 0.9; letter-spacing: -0.02em; text-transform: uppercase;
 }
-.tagline { color: var(--cream); opacity: 0.92; margin: 6px 0 0; max-width: 30ch; font-weight: 500; font-size: 17px; }
+.tagline { color: var(--cream); opacity: 0.92; margin: 6px 0 0; max-width: 34ch; font-weight: 500; font-size: 17px; }
+
+/* First-open orientation: the three things you do, in order. */
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: center; }
+.steps li { display: flex; align-items: center; gap: 9px; font-weight: 700; color: var(--muted); font-size: 14px; }
+.steps li span { width: 24px; height: 24px; border-radius: 50%; flex: none; display: grid; place-items: center;
+  background: var(--olive); color: var(--cream); font-size: 12px; font-family: var(--display); }
 .brand .moon { position: absolute; bottom: 20px; right: 26px; z-index: 2; }
 
 .card {
