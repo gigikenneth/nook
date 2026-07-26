@@ -152,6 +152,8 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
               const names = r.occupants.map((o) => o.name).join(', ');
               const goals = r.occupants.map((o) => o.goal).filter(Boolean).join(' · ');
               const full = r.count >= 4;
+              // Live sessions show how long is left; refreshed each poll (~4s).
+              const minsLeft = r.endsAt ? Math.max(0, Math.round((r.endsAt - Date.now()) / 60000)) : null;
               return (
                 <li key={r.roomId} className="room-row">
                   <div className="room-left">
@@ -167,9 +169,11 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
                   </div>
                   <div className="room-meta">
                     <span className={`badge badge-${r.phase}`}>{phaseLabel[r.phase]}</span>
+                    {minsLeft != null && <span className="time-left">~{minsLeft}m left</span>}
+                    {r.locked && <span className="badge badge-locked" title="Closed to new people">🔒</span>}
                     <span className="count">{r.count}/4</span>
-                    <button className="primary sm" disabled={full || !canGo}
-                      title={!canGo ? 'Add your name first' : full ? 'Room is full' : ''}
+                    <button className="primary sm" disabled={full || !canGo || r.locked}
+                      title={r.locked ? 'Locked by the host' : !canGo ? 'Add your name first' : full ? 'Room is full' : ''}
                       onClick={() => go(r.roomId, true)}>Join</button>
                   </div>
                 </li>

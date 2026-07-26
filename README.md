@@ -49,8 +49,11 @@ check off, or delete tasks** on your list mid-session.
 
 ## Join someone, or start your own
 
-The home screen shows a **live directory** of open rooms: who's around and what
-they're working on. Join anyone with a free seat.
+The home screen shows a **live directory** of open rooms: who's around, what
+they're working on, and how long a session has left. Join anyone with a free
+seat, even mid-session — you'll drop into whatever phase they're in and wrap up
+together. Hosts can **lock** their room to keep it to the current group, or leave
+it **open** so latecomers can join.
 
 Or start your own:
 

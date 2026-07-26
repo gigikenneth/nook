@@ -106,6 +106,7 @@ room state. The actual media flows peer-to-peer over WebRTC.
 | `ready` / `unready` | — | Toggle your ready state. All ready → focus starts. |
 | `chat` | `text` | Send a chat message (relayed, never stored). |
 | `start` | — | Host only: skip the wait and start focus now. |
+| `lock` | `locked` | Host only: open/close the room to newcomers. |
 | `kick` | `id` | Host only: remove a participant. |
 | `restart` | — | Host only: from regroup, run another session. |
 
@@ -120,6 +121,7 @@ room state. The actual media flows peer-to-peer over WebRTC.
 | `signal` | `from`, `data` | A relayed WebRTC signal from a peer. |
 | `phase` | `phase`, `endsAt`, `serverNow` | The phase changed. |
 | `ready-state` | `ready` | The set of ready ids changed. |
+| `locked-state` | `locked` | The room was opened/closed to newcomers. |
 | `shared-state` | `shared` | The set of ids who've shared their goal changed. |
 | `goal` | `id`, `text` | A peer updated their goal. |
 | `chat` | `id`, `name`, `text`, `t` | A chat message. |
@@ -133,6 +135,7 @@ The client maps close codes to distinct states so failures aren't misreported:
 |:--|:--|:--|
 | `4000` | Kicked by host | "You were removed from this room." |
 | `4001` | Room is full | "That room is full. Four is the max." |
+| `4002` | Locked by the host | "This room is locked." |
 | `1006` | Abnormal close (server unreachable) | "Can't reach the server." |
 | other | Normal close | "You left the room." |
 
@@ -157,13 +160,21 @@ person — cheap, and it needs no media server.
 
 Public rooms report themselves to the single global `LobbyDO`:
 
-- On any change, a room POSTs `/update` with `{ roomId, count, phase, occupants }`.
-  A room reporting `count <= 0` is deleted from the registry.
+- On any change, a room POSTs `/update` with `{ roomId, count, phase, endsAt,
+  locked, occupants }`. A room reporting `count <= 0` is deleted from the registry.
 - The home page GETs `/rooms`, which prunes entries older than `STALE_MS = 30s`
   (so a room that dies without cleanly reporting still ages out) and returns the
   list sorted so that **greeting rooms with a free seat float to the top** — the
   most joinable rooms first.
 - Invite-only rooms never report, so they never appear.
+
+**Joining ongoing sessions.** Because `endsAt` and `locked` are in the directory,
+each row shows how long a live session has left (`~N min left`, refreshed each
+poll) and whether it's locked. Joining works in **any** phase, not just greet: an
+open room with a free seat can be joined mid-focus, and the newcomer lands in the
+current phase to wrap up with the group. The **host** can flip a room's `locked`
+state at any time; a locked room stays visible in the directory (with a lock
+badge and a disabled Join) but rejects new sockets with close code `4002`.
 
 ## Presence and cowork invites
 
@@ -221,6 +232,7 @@ Nothing here is persisted; it exists only while the room's DO is alive.
 | `hostId` | `id` | First to join; migrates if they leave. |
 | `focusMin` / `regroupMin` | `number` | Session lengths, set by the creator. |
 | `isPublic` | `boolean` | Whether it's listed in the directory. |
+| `locked` | `boolean` | Host closed the room to newcomers (mid-session join off). |
 
 **Per lobby (`LobbyDO`):** `rooms: Map<roomId, {count, phase, occupants, updated}>`.
 

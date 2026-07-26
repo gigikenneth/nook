@@ -272,6 +272,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .badge-greet { background: var(--pink); color: var(--ink); }
 .badge-focus { background: var(--olive); color: var(--cream); }
 .badge-regroup { background: var(--purple); color: #fff; }
+.badge-locked { background: var(--cream2); color: var(--muted); }
+.time-left { font-size: 12px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+.ghost.is-locked { color: var(--olive); font-weight: 800; }
 
 .actions.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .actions.two button { display: grid; gap: 3px; padding: 18px; text-align: center; }

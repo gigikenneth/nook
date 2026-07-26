@@ -65,7 +65,7 @@ function Timer({ endsAt, label }) {
 
 export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, onLeave, onBrowse }) {
   const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
-  const { selfId, hostId, peers, phase, endsAt, ready, shared, order, goals, chat, status, local } = room;
+  const { selfId, hostId, peers, phase, endsAt, ready, shared, order, locked, goals, chat, status, local } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
   // Personal, editable task list (browser-only, never synced). Stable ids so
@@ -128,6 +128,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
   if (status === 'kicked') return <Ended msg="You were removed from this room." onLeave={onLeave} />;
   if (status === 'full') return <Ended msg="That room is full. Four is the max." onLeave={onLeave} />;
+  if (status === 'locked') return <Ended msg="This room is locked. The host isn't taking new people right now." onLeave={onLeave} />;
   if (status === 'offline') return <Ended msg="Can't reach the server. Is the Worker running on :8787?" onLeave={onLeave} />;
   if (status === 'closed') return <Ended msg="You left the room." onLeave={onLeave} />;
 
@@ -138,8 +139,15 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
           <Moon size={26} className="small" /><span>Nook</span>
           <span className="dot">·</span><span className="count">{count}/4 here</span>
           {isPublic ? <span className="badge badge-greet">open</span> : <span className="badge">invite only</span>}
+          {locked && <span className="badge badge-locked">🔒 locked</span>}
         </div>
         <div className="room-actions">
+          {isHost && (
+            <button className={`ghost sm ${locked ? 'is-locked' : ''}`} onClick={room.toggleLock}
+              title={locked ? 'Room is closed to new people' : 'Anyone with space can join, even mid-session'}>
+              {locked ? '🔒 Locked' : '🔓 Open'}
+            </button>
+          )}
           {onBrowse && <button className="ghost sm" onClick={onBrowse}>Home</button>}
           <button className="secondary sm" onClick={copy}>{copied ? 'Link copied' : 'Copy invite link'}</button>
           <button className="primary sm" onClick={onLeave}>Leave</button>

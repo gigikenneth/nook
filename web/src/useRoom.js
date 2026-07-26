@@ -16,6 +16,7 @@ export function useRoom(roomId, name, opts) {
   const [ready, setReady] = useState([]);
   const [shared, setShared] = useState([]); // ids who confirmed sharing their goal
   const [order, setOrder] = useState([]); // join order — drives the greet turn frame
+  const [locked, setLocked] = useState(false); // host closed the room to newcomers
   const [goals, setGoals] = useState({}); // id -> text
   const [chat, setChat] = useState([]); // { id, name, text, t } — never persisted
   const [config, setConfig] = useState({ focusMin: opts.focusMin, regroupMin: opts.regroupMin });
@@ -98,6 +99,7 @@ export function useRoom(roomId, name, opts) {
           setReady(m.ready || []);
           setShared(m.shared || []);
           setOrder(m.order || []);
+          setLocked(m.locked || false);
           setConfig({ focusMin: m.focusMin, regroupMin: m.regroupMin });
           if (m.goals) setGoals(m.goals);
           applyPhaseToTracks(m.phase);
@@ -140,6 +142,9 @@ export function useRoom(roomId, name, opts) {
         case 'order':
           setOrder(m.order);
           break;
+        case 'locked-state':
+          setLocked(m.locked);
+          break;
         case 'goal':
           setGoals((g) => ({ ...g, [m.id]: m.text }));
           break;
@@ -181,7 +186,12 @@ export function useRoom(roomId, name, opts) {
       // 4000 kicked, 4001 room full (both sent by the server). 1006 is an abnormal
       // close — handshake never completed, i.e. the server is unreachable, NOT full.
       socket.onclose = (e) =>
-        setStatus(e.code === 4000 ? 'kicked' : e.code === 4001 ? 'full' : e.code === 1006 ? 'offline' : 'closed');
+        setStatus(
+          e.code === 4000 ? 'kicked'
+          : e.code === 4001 ? 'full'
+          : e.code === 4002 ? 'locked'
+          : e.code === 1006 ? 'offline'
+          : 'closed');
       socket.onmessage = (ev) => handle(JSON.parse(ev.data));
     }
 
@@ -198,8 +208,9 @@ export function useRoom(roomId, name, opts) {
   }, [roomId]);
 
   return {
-    selfId, hostId, peers, phase, endsAt, ready, shared, order, goals, chat, config, status, local, media,
+    selfId, hostId, peers, phase, endsAt, ready, shared, order, locked, goals, chat, config, status, local, media,
     shareGoal: () => sendWs({ type: 'shared' }),
+    toggleLock: () => sendWs({ type: 'lock', locked: !locked }),
     toggleCam: () => { camOn.current = !camOn.current; setMedia((m) => ({ ...m, cam: camOn.current })); applyTracks(); },
     toggleMic: () => { micOn.current = !micOn.current; setMedia((m) => ({ ...m, mic: micOn.current })); applyTracks(); },
     setReady: (r) => sendWs({ type: r ? 'ready' : 'unready' }),

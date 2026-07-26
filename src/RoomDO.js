@@ -22,6 +22,7 @@ export class RoomDO {
     this.goals = new Map(); // id -> goal text
     this.ready = new Set();
     this.shared = new Set(); // ids who confirmed they shared their goal (greet turn-taking)
+    this.locked = false; // host can close the room to newcomers (mid-session join off)
     this.phase = 'greet'; // greet | focus | regroup
     this.endsAt = null;
     this.focusMin = 50;
@@ -43,6 +44,15 @@ export class RoomDO {
       const [client, server] = Object.values(pair);
       server.accept();
       server.close(4001, 'full');
+      return new Response(null, { status: 101, webSocket: client });
+    }
+    if (this.locked && this.sessions.size > 0) {
+      // Host closed the room to newcomers. (Never lock out the very first joiner,
+      // who creates the room.) Signal with 4002 so the client can explain it.
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+      server.accept();
+      server.close(4002, 'locked');
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -87,6 +97,7 @@ export class RoomDO {
       shared: [...this.shared],
       order: [...this.sessions.keys()],
       goals: Object.fromEntries(this.goals),
+      locked: this.locked,
     });
     this.broadcast({ type: 'order', order: [...this.sessions.keys()] });
     this.broadcastExcept(id, { type: 'peer-join', id, name });
@@ -135,6 +146,13 @@ export class RoomDO {
         break;
       case 'start': // host skips the wait-for-everyone
         if (id === this.hostId && this.phase === 'greet') this.startFocus();
+        break;
+      case 'lock': // host opens/closes the room to newcomers
+        if (id === this.hostId) {
+          this.locked = !!m.locked;
+          this.broadcast({ type: 'locked-state', locked: this.locked });
+          this.syncLobby();
+        }
         break;
       case 'kick':
         if (id === this.hostId) {
@@ -210,6 +228,8 @@ export class RoomDO {
         roomId: this.roomId,
         count: this.sessions.size,
         phase: this.phase,
+        endsAt: this.endsAt,
+        locked: this.locked,
         occupants,
       }),
     }).catch(() => {});
