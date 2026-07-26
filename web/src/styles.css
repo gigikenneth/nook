@@ -91,6 +91,21 @@ input::placeholder, textarea::placeholder { color: #9b9885; }
 input:focus, textarea:focus { background: #fff; border-color: var(--olive); }
 input:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
 
+/* Custom checkbox — the generic input styling above (and iOS defaults) make a
+   raw checkbox look like a rounded field, so draw our own square + checkmark. */
+input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none;
+  width: 20px; height: 20px; flex: none; padding: 0; margin: 0;
+  border: 2px solid var(--muted); border-radius: 6px; background: #fff;
+  cursor: pointer; position: relative; transition: background .15s, border-color .15s;
+}
+input[type="checkbox"]:checked { background: var(--orange); border-color: var(--orange); }
+input[type="checkbox"]:checked::after {
+  content: ''; position: absolute; left: 5px; top: 1px;
+  width: 6px; height: 11px; border: solid var(--ink); border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+input[type="checkbox"]:disabled { opacity: .5; cursor: not-allowed; }
+
 .todo-edit, .goal-list, .todo-check { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .todo-edit li { display: flex; gap: 6px; align-items: center; }
 .durations { display: flex; gap: 14px; }
@@ -182,7 +197,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .todo-check li { display: flex; gap: 9px; align-items: center; }
 .todo-check li label { display: flex; gap: 11px; align-items: flex-start; cursor: pointer; }
-.todo-check input[type="checkbox"] { width: auto; flex: none; accent-color: var(--orange); }
+.todo-check input[type="checkbox"] { margin-top: 1px; }
 .todo-check .task-text { flex: 1; min-width: 0; border: none; background: transparent; padding: 6px 8px; margin: 0; }
 .todo-check .task-text:focus { background: #fff; }
 .todo-check li.done span,
@@ -248,7 +263,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* Presence: who's around + cowork invites */
 .avail-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
-.avail-toggle input { width: auto; accent-color: var(--orange); }
 .avail-toggle .link-like { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; color: var(--olive); }
 .people-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .person-row { display: flex; align-items: center; gap: 12px; }
