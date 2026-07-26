@@ -1,112 +1,100 @@
-# Nook
+<div align="center">
 
-Quiet virtual coworking for up to four people. Show up, say what you're working
-on, work heads-down alongside each other, then regroup. Inspired by Groove.
+# 🌙 Nook
 
-**Login-free. No database. Free to run.** Nothing about you is stored. Your name
-and to-do list live only in your browser and in a room's memory, and the room
-disappears when everyone leaves.
+### Quiet virtual coworking for up to four people.
+
+Show up, say what you're working on, work heads-down alongside each other, then
+regroup. No account, no downloads, nothing saved. Inspired by Groove.
+
+**[→ Open Nook](https://nook.gigikenneth.workers.dev)**
+
+</div>
+
+---
+
+## What is this?
+
+Working alone is hard. Nook gives you the quiet company of a few other people
+working at the same time: you can see each other, say what you're each trying to
+get done, then go heads-down together for a focused stretch. It's like sitting at
+a shared table in a library, not a video call.
+
+A room holds **four people, max**. That's on purpose. Small enough that everyone's
+presence actually matters.
 
 ## How a session works
 
-1. **Greet** (cameras on). Type your name and what you're working on. Everyone
-   shares in turn: a frame moves from person to person, and each taps "I've
-   shared my goal" to pass it along. Toggle your own mic or camera whenever you
-   like. Mark yourself ready when you're set.
-2. **Focus** (cameras off). Once everyone's ready, all you see is your to-do list
-   and a shared countdown (50 minutes by default). Add, edit, check off, or
-   delete tasks at any point during the session.
-3. **Regroup** (cameras on). See what got done, then run another round.
+A session moves through three short phases, together, on a shared timer:
 
-The landing page shows a **live directory** of open rooms: who's around and what
-they're working on, so you can join someone. Or start your own:
+| Phase | Cameras | What happens |
+|:--|:--|:--|
+| 🟢 **Greet** | On | Say hi. Type what you're working on. Everyone shares in turn, then marks themselves ready. |
+| 🔵 **Focus** | Off | Heads-down. Just your to-do list and a shared countdown (50 min by default). |
+| 🟣 **Regroup** | On | See what got done. Run another round, or head out. |
 
-- **Open room**: listed in the directory, anyone can join (max 4).
-- **Invite only**: private, not listed. Share the link yourself.
+You control your **own mic and camera** at any time, and you can **add, edit,
+check off, or delete tasks** on your list mid-session.
 
-There's an ephemeral **chat** (never stored, history dies with the room) and
-one-click **Download list** / **Download chat** to keep a copy. Soft chimes mark
-the start of focus, the end of the timer, and the regroup.
+## Join someone, or start your own
 
-## Design
+The home screen shows a **live directory** of open rooms: who's around and what
+they're working on. Join anyone with a free seat.
 
-Flat and retro-playful. The palette is the exact hue-complement of Groove's warm
-one (every hue rotated 180 degrees on the wheel): a pale-blue ground with deep
-indigo, mint, cyan, and lime accents. Type is Bricolage Grotesque for the
-wordmark, Archivo for headings, Hanken Grotesk for body, and IBM Plex Mono for
-the timer. Emoji art is [Twemoji](https://github.com/jdecked/twemoji).
+Or start your own:
 
-## Architecture
+- **Open room** — listed in the directory, anyone can join (up to 4).
+- **Invite only** — private and unlisted; share the link yourself.
 
-No always-on server, no video server, no database.
+There's a lightweight **chat** during the session, and one-tap **Download list**
+or **Download chat** if you want to keep anything.
 
-| Piece | What it does |
-|---|---|
-| **Cloudflare Worker** (`src/worker.js`) | Serves the built web app, exposes the room directory at `/rooms`, and upgrades the room WebSocket at `/room/:id/ws`. |
-| **RoomDO** (`src/RoomDO.js`) | One Durable Object per room. In-memory members, runs the session timer (via DO alarms), relays WebRTC signaling, enforces the cap of 4. |
-| **LobbyDO** (`src/LobbyDO.js`) | Live directory of open rooms. Public rooms report their occupants; stale entries are pruned. |
-| **Web app** (`web/`) | React + Vite. Video is a WebRTC **mesh** (peer-to-peer): at four or fewer people no SFU is needed, so it costs no server bandwidth. |
+## Your privacy
 
-Video uses Google's public STUN server. There is **no TURN in v1**, so roughly
-10 to 15 percent of users behind strict NAT won't connect video (presence and
-the timer still work). Add a TURN server if that becomes a problem.
+Nook stores **nothing**. No account, no database, no analytics.
 
-## Run locally
+- Your name and to-do list live only in your browser and in the room's memory.
+- Chat is relayed live and never saved — the history disappears when the room does.
+- Video is **peer-to-peer** (it never touches a server).
+- When everyone leaves, the room simply ceases to exist.
 
-Two processes. From the repo root:
+## FAQ
 
-```bash
-# 1. Signaling Worker (http://localhost:8787)
-npm install
-npm run dev
+**Do I need an account?** No. Type a name and you're in.
 
-# 2. Web app (http://localhost:5173), in a second terminal
-cd web
-npm install
-npm run dev
-```
+**Is my video recorded?** No. Video is a direct peer-to-peer connection between
+the people in the room. Nothing is stored or passed through a server.
 
-Open http://localhost:5173. Both processes must run: the app talks to the Worker
-on :8787, and a missing Worker shows up as "Can't reach the server," not a fake
-error. To test with others, share the invite link or open a second browser
-profile.
+**What if my camera won't connect?** Nook uses a public STUN server and no TURN
+relay yet, so a small number of people on strict networks won't get video
+through. Presence, the timer, chat, and your list all still work.
 
-## Deploy (free tier)
+**Can more than four people join?** No — four is the cap, by design.
 
-The Worker serves both the API and the built app, so it's one command and one
-URL. You need a free Cloudflare account.
+**Is it really free?** Yes. It runs entirely on free infrastructure. See
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) if you want to run your own.
+
+## Run it yourself
+
+Nook is open source (MIT). You can run it locally or deploy your own copy for
+free on Cloudflare.
+
+- **[Development guide](docs/DEVELOPMENT.md)** — local setup, project layout, how to contribute.
+- **[Architecture](docs/ARCHITECTURE.md)** — how it works, the signaling protocol, the data model.
+- **[Deployment guide](docs/DEPLOYMENT.md)** — ship your own in one command, custom domains, adding TURN.
+
+Quick start:
 
 ```bash
-npm --prefix web install
-npm --prefix web run build   # produces web/dist, which the Worker serves
-npx wrangler login           # once, opens your browser
-npx wrangler deploy          # deploys the Worker + app to https://nook.<you>.workers.dev
+git clone https://github.com/gigikenneth/nook.git
+cd nook
+npm install && npm run dev            # signaling Worker on :8787
+cd web && npm install && npm run dev  # web app on :5173
 ```
 
-That's it. The app and the signaling server share an origin, so there's no CORS
-or environment wiring to do.
-
-Hosting the app and Worker on separate origins is still supported: build the app
-with `VITE_API_BASE=https://your-worker.workers.dev` and deploy `web/dist`
-anywhere static.
-
-### Cost
-
-Everything fits inside free tiers: Durable Objects (about 100k requests/day),
-static asset serving, and peer-to-peer video that costs no server bandwidth. No
-card required. A spike past the free tier would need a paid Cloudflare plan,
-unlikely for a niche four-person tool.
-
-## Configuration
-
-- `VITE_API_BASE` (build-time): the Worker origin. Leave it unset for the
-  single-origin deploy above, or when developing locally. Set it only if you
-  host the app and Worker on separate origins.
-- Session lengths (focus and regroup minutes) are set per room by whoever creates
-  it, in the "Session length" fields on the home screen.
+Open http://localhost:5173. (Both processes need to be running.)
 
 ## License
 
-MIT (Nook's own code). See [LICENSE](LICENSE). Third-party assets keep their own
-licenses: Twemoji graphics are CC-BY 4.0, vendored in `web/public/twemoji/` with
-their `ATTRIBUTION.txt`.
+MIT. See [LICENSE](LICENSE). Emoji art is [Twemoji](https://github.com/jdecked/twemoji)
+(CC-BY 4.0), vendored in `web/public/twemoji/`.
