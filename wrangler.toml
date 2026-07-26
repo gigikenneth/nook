@@ -1,0 +1,17 @@
+name = "nook"
+main = "src/worker.js"
+compatibility_date = "2024-09-23"
+
+# Free-plan Durable Objects must be SQLite-backed (new_sqlite_classes).
+# We don't use SQL storage — state is in-memory — but the class must be declared this way.
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "RoomDO"
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "LobbyDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RoomDO", "LobbyDO"]
