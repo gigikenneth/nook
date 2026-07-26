@@ -78,7 +78,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
     <div className="card">
       <label className="field">
         <span>Your name</span>
-        <input value={name} onChange={(e) => setName(e.target.value)}
+        <input id="nook-name" value={name} onChange={(e) => setName(e.target.value)}
           placeholder="What should we call you?" maxLength={32} />
       </label>
       <div className="field">
@@ -192,7 +192,16 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
           <label className="avail-toggle">
             <input type="checkbox" checked={available} disabled={!canGo}
               onChange={(e) => setAvailable(e.target.checked)} />
-            <span>{canGo ? "I'm around to cowork" : 'Add your name to appear'}</span>
+            <span
+              className={!canGo ? 'link-like' : undefined}
+              onClick={!canGo ? (e) => {
+                e.preventDefault();
+                const el = document.getElementById('nook-name');
+                el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                el?.focus();
+              } : undefined}>
+              {canGo ? "I'm around to cowork" : 'Add your name to appear'}
+            </span>
           </label>
         </div>
         {online ? (
