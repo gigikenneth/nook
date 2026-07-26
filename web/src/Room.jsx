@@ -217,9 +217,9 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
 function PhaseBanner({ phase, endsAt, regroupMin }) {
   const copy = {
-    greet: { t: 'Say hello', s: 'Cameras on. Share what you’re working on, then mark yourself ready.' },
+    greet: { t: 'Say hello', s: 'Share what you’re working on, then mark yourself ready. Turn your camera or mic on if you like.' },
     focus: { t: 'Heads down', s: 'Cameras off. Just you, your list, and the clock.' },
-    regroup: { t: 'Regroup', s: regroupMin > 0 ? 'Cameras back on. How did it go?' : 'Wrapping up.' },
+    regroup: { t: 'Regroup', s: regroupMin > 0 ? 'How did it go? Turn your camera on to chat.' : 'Wrapping up.' },
   }[phase];
   return (
     <div className={`banner banner-${phase}`}>

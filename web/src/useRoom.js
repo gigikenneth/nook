@@ -29,9 +29,10 @@ export function useRoom(roomId, name, opts) {
 
   // Manual mic/cam intent. Effective track state = intent AND the phase allows
   // media at all (focus forces everything off). `media` mirrors intent for the UI.
-  const camOn = useRef(true);
-  const micOn = useRef(true);
-  const [media, setMedia] = useState({ cam: true, mic: true });
+  // Default OFF: you join muted with your camera off and turn them on if you want.
+  const camOn = useRef(false);
+  const micOn = useRef(false);
+  const [media, setMedia] = useState({ cam: false, mic: false });
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
 
