@@ -301,6 +301,27 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   .banner { flex-direction: column; align-items: flex-start; }
   .timer { justify-items: start; }
   .actions.two { grid-template-columns: 1fr; }
+  /* Header can't fit on one line — let both groups wrap. */
+  .room-head { flex-wrap: wrap; gap: 10px; }
+  .room-actions { flex-wrap: wrap; }
+}
+
+/* Phones: tighten spacing, let cards use the full width, drop edge decorations. */
+@media (max-width: 560px) {
+  .home { padding: 4vh 16px 9vh; gap: 16px; }
+  .home.wide { max-width: 100%; }
+  .room { padding: 14px; gap: 14px; }
+  .sparkles { display: none; }
+  .brand { padding: 30px 22px 34px; }
+  .tagline { font-size: 16px; }
+  .steps { justify-content: flex-start; gap: 8px 16px; }
+  .room-actions { width: 100%; }
+  .room-actions button { flex: 1 1 auto; }
+  .banner { padding: 18px 20px; }
+  .banner h2 { font-size: 24px; }
+  .timer-clock { font-size: 34px; }
+  .card, .panel { padding: 20px; }
+  .invite-toast { left: 12px; right: 12px; transform: none; max-width: none; justify-content: space-between; animation: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
