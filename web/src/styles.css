@@ -247,7 +247,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .people-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .person-row { display: flex; align-items: center; gap: 12px; }
 .person-row strong { font-size: 15px; font-family: var(--display); font-weight: 700; }
-.person-row .primary { margin-left: auto; }
+/* Ping stands out from the indigo header/hero: use the bright live-accent (cyan). */
+.person-row .primary { margin-left: auto; background: var(--orange); color: var(--ink); }
 .invite-toast {
   position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 50;
   display: flex; align-items: center; gap: 16px; max-width: calc(100vw - 32px);
