@@ -23,7 +23,17 @@ function download(filename, text) {
 
 function Video({ stream, muted }) {
   const ref = useRef(null);
-  useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v || !stream) return;
+    v.srcObject = stream;
+    // Some browsers block autoplay of an unmuted peer stream; nudge it and
+    // retry on the next click if the first play() is rejected.
+    const play = () => v.play().catch(() => {});
+    play();
+    window.addEventListener('click', play, { once: true });
+    return () => window.removeEventListener('click', play);
+  }, [stream]);
   return <video ref={ref} autoPlay playsInline muted={muted} />;
 }
 
@@ -129,11 +139,12 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   if (status === 'kicked') return <Ended msg="You were removed from this room." onLeave={onLeave} />;
   if (status === 'full') return <Ended msg="That room is full. Four is the max." onLeave={onLeave} />;
   if (status === 'locked') return <Ended msg="This room is locked. The host isn't taking new people right now." onLeave={onLeave} />;
-  if (status === 'offline') return <Ended msg="Can't reach the server. Is the Worker running on :8787?" onLeave={onLeave} />;
+  if (status === 'offline') return <Ended msg="Lost connection to the server. Check your internet, then rejoin." onLeave={onLeave} />;
   if (status === 'closed') return <Ended msg="You left the room." onLeave={onLeave} />;
 
   return (
     <main className="room">
+      {status === 'reconnecting' && <div className="reconnecting" role="status">Reconnecting…</div>}
       <header className="room-head">
         <div className="room-id">
           <Moon size={26} className="small" /><span>Nook</span>

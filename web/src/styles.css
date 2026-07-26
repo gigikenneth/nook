@@ -282,6 +282,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .invite-toast .primary { background: var(--olive); color: var(--cream); } /* contrast against cyan */
 .invite-toast .ghost { color: var(--ink); opacity: .7; }
 
+.reconnecting {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 70; text-align: center;
+  padding: 8px 12px; font-weight: 700; font-size: 14px; background: var(--orange); color: var(--ink);
+}
+
 /* In-room Home overlay: peek the home page without leaving the session. */
 .home-overlay {
   position: fixed; inset: 0; z-index: 60; overflow-y: auto;

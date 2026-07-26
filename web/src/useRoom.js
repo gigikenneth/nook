@@ -140,6 +140,9 @@ export function useRoom(roomId, name, opts) {
             const ans = await pc.createAnswer();
             await pc.setLocalDescription(ans);
             sendWs({ type: 'signal', to: from, data: { sdp: pc.localDescription } });
+            // We rolled back our own offer to accept theirs — re-send it so our
+            // just-added track (e.g. camera) reaches them too, not just one way.
+            if (collision) renegotiate(from, pc);
           } catch { /* raced negotiation; a later signal recovers */ }
         } else if (data.sdp.type === 'answer' && pc) {
           try { await pc.setRemoteDescription(data.sdp); await flushCands(pc); } catch {}
@@ -237,19 +240,34 @@ export function useRoom(roomId, name, opts) {
       // only when you turn it on (see ensureMedia). This avoids a confusing
       // upfront permission prompt and a dead toggle if you decline it.
       const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}`;
-      const socket = new WebSocket(`${wsBase}/room/${encodeURIComponent(roomId)}/ws?${qs}`);
-      ws.current = socket;
-      socket.onopen = () => setStatus('connected');
-      // 4000 kicked, 4001 room full (both sent by the server). 1006 is an abnormal
-      // close — handshake never completed, i.e. the server is unreachable, NOT full.
-      socket.onclose = (e) =>
-        setStatus(
-          e.code === 4000 ? 'kicked'
-          : e.code === 4001 ? 'full'
-          : e.code === 4002 ? 'locked'
-          : e.code === 1006 ? 'offline'
-          : 'closed');
-      socket.onmessage = (ev) => handle(JSON.parse(ev.data));
+      let attempts = 0;
+      const MAX_RETRIES = 6;
+
+      function connect() {
+        const socket = new WebSocket(`${wsBase}/room/${encodeURIComponent(roomId)}/ws?${qs}`);
+        ws.current = socket;
+        socket.onopen = () => { attempts = 0; setStatus('connected'); };
+        socket.onmessage = (ev) => handle(JSON.parse(ev.data));
+        // 4000 kicked, 4001 full, 4002 locked (server-sent, terminal). 1000/1005
+        // are clean closes. Anything else (1006 abnormal drop) is a transient
+        // network blip — reconnect with backoff instead of dead-ending.
+        socket.onclose = (e) => {
+          if (dead) return;
+          if (e.code === 4000) return setStatus('kicked');
+          if (e.code === 4001) return setStatus('full');
+          if (e.code === 4002) return setStatus('locked');
+          if (e.code === 1000 || e.code === 1005) return setStatus('closed');
+          // Tear down stale peer connections; a fresh welcome rebuilds them.
+          pcMap.forEach((pc) => pc.close());
+          pcMap.clear();
+          setPeers({});
+          if (attempts >= MAX_RETRIES) return setStatus('offline');
+          attempts += 1;
+          setStatus('reconnecting');
+          setTimeout(() => { if (!dead) connect(); }, Math.min(1000 * 2 ** (attempts - 1), 8000));
+        };
+      }
+      connect();
     }
 
     run();
