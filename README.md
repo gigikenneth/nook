@@ -9,6 +9,10 @@ regroup. No account, no downloads, nothing saved. Inspired by Groove.
 
 **[→ Open Nook](https://nook.gigikenneth.workers.dev)**
 
+<br>
+
+<img src="docs/images/home.png" alt="Nook home screen with a live directory of coworking rooms" width="720">
+
 </div>
 
 ---
@@ -36,6 +40,13 @@ A session moves through three short phases, together, on a shared timer:
 You control your **own mic and camera** at any time, and you can **add, edit,
 check off, or delete tasks** on your list mid-session.
 
+<table>
+<tr>
+<td width="50%"><img src="docs/images/session.png" alt="Greet phase: two people, taking turns to share what they're working on"><br><em>Greet: share what you're working on, in turn.</em></td>
+<td width="50%"><img src="docs/images/focus.png" alt="Focus phase: heads-down with a shared timer and a personal task list"><br><em>Focus: heads-down with a shared timer and your list.</em></td>
+</tr>
+</table>
+
 ## Join someone, or start your own
 
 The home screen shows a **live directory** of open rooms: who's around and what
@@ -48,6 +59,20 @@ Or start your own:
 
 There's a lightweight **chat** during the session, and one-tap **Download list**
 or **Download chat** if you want to keep anything.
+
+## Find someone to cowork
+
+Flip on **"I'm around to cowork"** and you'll show up in the **Around now** list
+for anyone else who's opted in. See someone you'd like to work alongside? **Ping**
+them: it opens a room and sends them an invite they can join with one tap. It's
+opt-in only, and you drop off the list the moment you're in a session.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/images/presence.png" alt="Around now list showing who has opted in to cowork, each with a Ping button"><br><em>See who's around and ping them.</em></td>
+<td width="50%"><img src="docs/images/invite.png" alt="An incoming cowork invite toast with Join and Dismiss"><br><em>Get pinged, join with one tap.</em></td>
+</tr>
+</table>
 
 ## Your privacy
 
