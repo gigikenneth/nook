@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { wsBase } from './config';
+import { apiBase, wsBase } from './config';
 
-// STUN only — no TURN in v1. ~10-15% of users behind strict NAT won't connect.
-const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+// STUN by default; the /ice endpoint adds a TURN relay when configured so peers
+// behind strict NAT (different networks) can still connect.
+const DEFAULT_ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
 // Mesh WebRTC over a Durable Object WebSocket. The newcomer offers to every
 // existing peer; existing peers only answer. That one-directional rule avoids
@@ -26,6 +27,7 @@ export function useRoom(roomId, name, opts) {
   const ws = useRef(null);
   const pcs = useRef(new Map()); // peerId -> RTCPeerConnection
   const localStream = useRef(null);
+  const iceRef = useRef(DEFAULT_ICE); // RTCPeerConnection config; filled from /ice on join
 
   // Manual mic/cam intent. Effective track state = intent AND the phase allows
   // media at all (focus forces everything off). `media` mirrors intent for the UI.
@@ -86,7 +88,7 @@ export function useRoom(roomId, name, opts) {
     const pcMap = pcs.current;
 
     function makePc(peerId) {
-      const pc = new RTCPeerConnection(ICE);
+      const pc = new RTCPeerConnection(iceRef.current);
       if (localStream.current) {
         localStream.current.getTracks().forEach((t) => pc.addTrack(t, localStream.current));
       }
@@ -201,6 +203,14 @@ export function useRoom(roomId, name, opts) {
     }
 
     async function run() {
+      // Pull ICE servers (STUN + TURN if configured) before any peer connects.
+      try {
+        const res = await fetch(`${apiBase}/ice`);
+        const data = await res.json();
+        if (!dead && data.iceServers) iceRef.current = { iceServers: data.iceServers };
+      } catch { /* keep STUN-only default */ }
+      if (dead) return;
+
       // No camera/mic prompt on join — you appear as an avatar and acquire media
       // only when you turn it on (see ensureMedia). This avoids a confusing
       // upfront permission prompt and a dead toggle if you decline it.

@@ -84,27 +84,40 @@ VITE_API_BASE=https://nook.<you>.workers.dev npm --prefix web run build
 means "same origin as the page". The Worker already sends permissive CORS headers
 for the cross-origin case.
 
-## Adding a TURN server (better connectivity)
+## Adding a TURN server (needed across networks)
 
-By default Nook uses only Google's public STUN server and no TURN relay, so
-~10–15% of users behind strict NAT can't establish video. To fix that, add a TURN
-server to the ICE configuration in `web/src/useRoom.js`:
+Video/audio is peer-to-peer. With only STUN (the default), people on **different
+networks** where one side is behind a strict/symmetric NAT can't form a direct
+connection — they see each other's names and the timer (that's the server), but
+no camera or mic comes through. A **TURN relay** fixes this by relaying the media.
 
-```js
-const ICE = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    {
-      urls: 'turn:your-turn-host:3478',
-      username: 'user',
-      credential: 'pass',
-    },
-  ],
-};
-```
+Nook uses **Cloudflare's free TURN** service. The Worker's `/ice` endpoint mints
+short-lived TURN credentials when two secrets are set; otherwise it returns
+STUN-only (video still works for same-network / permissive-NAT users).
 
-Cloudflare offers a TURN service on its free plan; any standard TURN server works.
-Then rebuild and redeploy.
+**Set it up (one time):**
+
+1. In the Cloudflare dashboard: **Realtime → TURN Keys → Create**. Copy the
+   **Key ID** and the **API Token**.
+2. Add them as Worker secrets (run each, paste the value when prompted):
+
+   ```bash
+   npx wrangler secret put TURN_KEY_ID
+   npx wrangler secret put TURN_API_TOKEN
+   ```
+
+3. Redeploy:
+
+   ```bash
+   npx wrangler deploy
+   ```
+
+That's it — every room now falls back to the TURN relay when a direct connection
+isn't possible. Cloudflare TURN is free; you only pay if relayed traffic is huge
+(unlikely, since only strict-NAT peers use the relay).
+
+Any standard TURN server works too — point the `/ice` endpoint in
+`src/worker.js` at it instead.
 
 ## Cost
 

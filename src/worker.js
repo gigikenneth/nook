@@ -24,6 +24,29 @@ export default {
       });
     }
 
+    // ICE servers for WebRTC. Always STUN; add a Cloudflare TURN relay (for peers
+    // behind strict NAT that can't connect directly) when credentials are set.
+    if (url.pathname === '/ice') {
+      const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
+      if (env.TURN_KEY_ID && env.TURN_API_TOKEN) {
+        try {
+          const r = await fetch(
+            `https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`,
+            {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${env.TURN_API_TOKEN}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ttl: 86400 }),
+            },
+          );
+          if (r.ok) {
+            const data = await r.json();
+            if (data.iceServers) iceServers.push(data.iceServers);
+          }
+        } catch { /* fall back to STUN-only */ }
+      }
+      return Response.json({ iceServers }, { headers: cors });
+    }
+
     // Presence websocket for the "who's around" list + cowork invites.
     if (url.pathname === '/lobby/ws') {
       const lobby = env.LOBBY.get(env.LOBBY.idFromName('global'));
