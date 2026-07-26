@@ -252,11 +252,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .invite-toast {
   position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 50;
   display: flex; align-items: center; gap: 16px; max-width: calc(100vw - 32px);
-  background: var(--olive); color: var(--cream); padding: 12px 12px 12px 22px;
-  border-radius: var(--r-pill); box-shadow: var(--shadow); font-weight: 600;
+  /* Bright cyan so the invite pops instead of blending with the indigo header. */
+  background: var(--orange); color: var(--ink); padding: 10px 10px 10px 22px;
+  border-radius: var(--r-pill); box-shadow: 0 16px 40px -16px rgba(41, 188, 238, 0.7); font-weight: 700;
+  animation: toast-pop .3s var(--spring);
 }
+@keyframes toast-pop { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .invite-actions { display: flex; gap: 8px; flex: none; }
-.invite-toast .ghost { color: var(--cream); opacity: .85; }
+.invite-toast .primary { background: var(--olive); color: var(--cream); } /* contrast against cyan */
+.invite-toast .ghost { color: var(--ink); opacity: .7; }
 
 /* In-room Home overlay: peek the home page without leaving the session. */
 .home-overlay {
