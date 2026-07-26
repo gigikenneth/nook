@@ -171,7 +171,15 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
             {phase === 'greet' && (
               <GreetPanel selfId={selfId} selfName={name} goal={goal} setGoal={setGoal}
                 onShareGoal={() => goal.trim() && room.sendGoal(goal.trim())}
-                onShared={() => { if (goal.trim()) room.sendGoal(goal.trim()); room.shareGoal(); }}
+                onShared={() => {
+                  const g = goal.trim();
+                  if (g) {
+                    room.sendGoal(g);
+                    // Your shared goal becomes the top item on your to-do list (deduped).
+                    setTasks((ts) => ts.some((t) => t.text === g) ? ts : [{ id: nextTaskId(), text: g, done: false }, ...ts]);
+                  }
+                  room.shareGoal();
+                }}
                 goals={goals} peers={peers} order={order} shared={shared}
                 ready={ready} iAmReady={iAmReady} count={count}
                 onReady={() => room.setReady(!iAmReady)} isHost={isHost} onStart={room.start} />
