@@ -80,10 +80,14 @@ by everyone being ready, or by the DO alarm firing.
 - **Regroup → Greet:** the regroup alarm fires (or the host restarts), calling
   `toGreet()`, which clears the ready and shared sets and broadcasts the reset.
 
-**Camera/mic rule:** media is enabled during greet and regroup, and disabled
-during focus. Each client also has manual mic/camera toggles; the effective track
-state is *(manual intent) AND (phase allows media)*, so focus always forces media
-off regardless of the toggles.
+**Camera/mic rule:** camera and mic default **off**, and are acquired **lazily** —
+there is no `getUserMedia` prompt on join. You appear as an avatar until you tap
+"Camera on" / "Mic on", at which point the track is acquired, added to every peer
+connection, and negotiated over. The effective track state is *(manual intent)
+AND (phase allows media)*, and focus always forces media off. Because a track
+toggled on mid-call wasn't in the original offer, adding it triggers a fresh
+offer/answer; simultaneous toggles are resolved with the perfect-negotiation
+pattern (the lower-id peer is impolite and ignores a colliding offer).
 
 **Greet heartbeat:** while a public room sits in greet waiting for people, the DO
 re-arms a short alarm (`HEARTBEAT_MS = 12s`) purely to re-report itself to the

@@ -35,6 +35,7 @@ export function useRoom(roomId, name, opts) {
   const [media, setMedia] = useState({ cam: false, mic: false });
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
+  const selfIdRef = useRef(null); // for renegotiation glare handling
 
   const applyTracks = useCallback((phOverride) => {
     const s = localStream.current;
@@ -48,6 +49,37 @@ export function useRoom(roomId, name, opts) {
     const s = ws.current;
     if (s && s.readyState === 1) s.send(JSON.stringify(obj));
   }, []);
+
+  // Toggling media on mid-call adds a track the original offer didn't have, so
+  // the peer needs a fresh offer/answer.
+  const renegotiate = useCallback(async (peerId, pc) => {
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      sendWs({ type: 'signal', to: peerId, data: { sdp: pc.localDescription } });
+    } catch { /* negotiation raced; the next signal recovers */ }
+  }, [sendWs]);
+
+  // Lazily acquire mic/camera only when the user turns it on — no permission
+  // prompt on join. Returns false if denied or no device, so the toggle can
+  // fall back to off instead of getting stuck. Wires the track to every peer.
+  const ensureMedia = useCallback(async (kind) => {
+    const cur = localStream.current;
+    if (cur && (kind === 'video' ? cur.getVideoTracks() : cur.getAudioTracks())[0]) return true;
+    let got;
+    try { got = await navigator.mediaDevices.getUserMedia(kind === 'video' ? { video: true } : { audio: true }); }
+    catch { return false; }
+    const track = got.getTracks()[0];
+    let stream = localStream.current;
+    if (!stream) { stream = new MediaStream(); localStream.current = stream; }
+    stream.addTrack(track);
+    setLocal(stream);
+    for (const [peerId, pc] of pcs.current) {
+      pc.addTrack(track, stream);
+      await renegotiate(peerId, pc);
+    }
+    return true;
+  }, [renegotiate]);
 
   useEffect(() => {
     let dead = false;
@@ -78,12 +110,21 @@ export function useRoom(roomId, name, opts) {
       if (data.sdp) {
         if (data.sdp.type === 'offer') {
           if (!pc) pc = makePc(from);
-          await pc.setRemoteDescription(data.sdp);
-          const ans = await pc.createAnswer();
-          await pc.setLocalDescription(ans);
-          sendWs({ type: 'signal', to: from, data: { sdp: pc.localDescription } });
+          // Perfect-negotiation glare handling: if both sides offer at once, the
+          // "impolite" peer (lower id) ignores the colliding offer; the polite
+          // one rolls back and accepts it.
+          const collision = pc.signalingState !== 'stable';
+          const polite = (selfIdRef.current || '') > from;
+          if (collision && !polite) return;
+          try {
+            if (collision) await pc.setLocalDescription({ type: 'rollback' });
+            await pc.setRemoteDescription(data.sdp);
+            const ans = await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            sendWs({ type: 'signal', to: from, data: { sdp: pc.localDescription } });
+          } catch { /* raced negotiation; a later signal recovers */ }
         } else if (data.sdp.type === 'answer' && pc) {
-          await pc.setRemoteDescription(data.sdp);
+          try { await pc.setRemoteDescription(data.sdp); } catch {}
         }
       } else if (data.candidate && pc) {
         try { await pc.addIceCandidate(data.candidate); } catch {}
@@ -94,6 +135,7 @@ export function useRoom(roomId, name, opts) {
       switch (m.type) {
         case 'welcome':
           setSelfId(m.selfId);
+          selfIdRef.current = m.selfId;
           setHostId(m.hostId);
           setPhase(m.phase);
           setEndsAt(m.endsAt);
@@ -158,28 +200,10 @@ export function useRoom(roomId, name, opts) {
       }
     }
 
-    async function acquireMedia() {
-      try { return await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); }
-      catch {
-        try { return await navigator.mediaDevices.getUserMedia({ audio: true }); }
-        catch { return null; }
-      }
-    }
-
     async function run() {
-      // Never let an unanswered camera prompt block joining the room. If the user
-      // hasn't decided within the window, join without media (avatar tile).
-      let timedOut = false;
-      const mediaP = acquireMedia();
-      mediaP.then((s) => { if (timedOut && s) s.getTracks().forEach((t) => t.stop()); });
-      const stream = await Promise.race([
-        mediaP,
-        new Promise((r) => setTimeout(() => { timedOut = true; r(null); }, 8000)),
-      ]);
-      if (dead) { stream && stream.getTracks().forEach((t) => t.stop()); return; }
-      localStream.current = stream;
-      setLocal(stream);
-
+      // No camera/mic prompt on join — you appear as an avatar and acquire media
+      // only when you turn it on (see ensureMedia). This avoids a confusing
+      // upfront permission prompt and a dead toggle if you decline it.
       const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}`;
       const socket = new WebSocket(`${wsBase}/room/${encodeURIComponent(roomId)}/ws?${qs}`);
       ws.current = socket;
@@ -212,8 +236,16 @@ export function useRoom(roomId, name, opts) {
     selfId, hostId, peers, phase, endsAt, ready, shared, order, locked, goals, chat, config, status, local, media,
     shareGoal: () => sendWs({ type: 'shared' }),
     toggleLock: () => sendWs({ type: 'lock', locked: !locked }),
-    toggleCam: () => { camOn.current = !camOn.current; setMedia((m) => ({ ...m, cam: camOn.current })); applyTracks(); },
-    toggleMic: () => { micOn.current = !micOn.current; setMedia((m) => ({ ...m, mic: micOn.current })); applyTracks(); },
+    toggleCam: async () => {
+      const on = !camOn.current;
+      if (on && !(await ensureMedia('video'))) return; // denied/no device — stay off
+      camOn.current = on; setMedia((m) => ({ ...m, cam: on })); applyTracks();
+    },
+    toggleMic: async () => {
+      const on = !micOn.current;
+      if (on && !(await ensureMedia('audio'))) return;
+      micOn.current = on; setMedia((m) => ({ ...m, mic: on })); applyTracks();
+    },
     setReady: (r) => sendWs({ type: r ? 'ready' : 'unready' }),
     start: () => sendWs({ type: 'start' }),
     kick: (id) => sendWs({ type: 'kick', id }),
