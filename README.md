@@ -77,6 +77,17 @@ opt-in only, and you drop off the list the moment you're in a session.
 </tr>
 </table>
 
+## Peek without leaving
+
+In a session and curious what else is happening? Tap **Home** in the room header
+to open the full home screen as an overlay — browse the directory, see who's
+around — while your session keeps running underneath. Close it and you're right
+back in.
+
+<div align="center">
+<img src="docs/images/overlay.png" alt="The home screen open as an overlay over a running session" width="640">
+</div>
+
 ## Your privacy
 
 Nook stores **nothing**. No account, no database, no analytics.
