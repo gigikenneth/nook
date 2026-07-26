@@ -156,7 +156,10 @@ export function useRoom(roomId, name, opts) {
       const socket = new WebSocket(`${wsBase}/room/${encodeURIComponent(roomId)}/ws?${qs}`);
       ws.current = socket;
       socket.onopen = () => setStatus('connected');
-      socket.onclose = (e) => setStatus(e.code === 4000 ? 'kicked' : e.code === 1006 ? 'full' : 'closed');
+      // 4000 kicked, 4001 room full (both sent by the server). 1006 is an abnormal
+      // close — handshake never completed, i.e. the server is unreachable, NOT full.
+      socket.onclose = (e) =>
+        setStatus(e.code === 4000 ? 'kicked' : e.code === 4001 ? 'full' : e.code === 1006 ? 'offline' : 'closed');
       socket.onmessage = (ev) => handle(JSON.parse(ev.data));
     }
 

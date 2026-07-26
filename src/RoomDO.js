@@ -35,7 +35,14 @@ export class RoomDO {
       return new Response('expected websocket', { status: 426 });
     }
     if (this.sessions.size >= MAX) {
-      return new Response('room full', { status: 403 });
+      // Signal "full" over the socket (code 4001) — a 403 on the upgrade just
+      // surfaces to the browser as a generic 1006, indistinguishable from the
+      // server being down. Accept, then close with a code the client can read.
+      const pair = new WebSocketPair();
+      const [client, server] = Object.values(pair);
+      server.accept();
+      server.close(4001, 'full');
+      return new Response(null, { status: 101, webSocket: client });
     }
 
     const url = new URL(req.url);

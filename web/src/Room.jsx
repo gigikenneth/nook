@@ -110,6 +110,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
   if (status === 'kicked') return <Ended msg="You were removed from this room." onLeave={onLeave} />;
   if (status === 'full') return <Ended msg="That room is full. Four is the max." onLeave={onLeave} />;
+  if (status === 'offline') return <Ended msg="Can't reach the server. Is the Worker running on :8787?" onLeave={onLeave} />;
   if (status === 'closed') return <Ended msg="You left the room." onLeave={onLeave} />;
 
   return (
