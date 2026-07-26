@@ -54,9 +54,9 @@ export function useRoom(roomId, name, opts) {
 
   // Toggling media on mid-call adds a track the original offer didn't have, so
   // the peer needs a fresh offer/answer.
-  const renegotiate = useCallback(async (peerId, pc) => {
+  const renegotiate = useCallback(async (peerId, pc, iceRestart = false) => {
     try {
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer(iceRestart ? { iceRestart: true } : undefined);
       await pc.setLocalDescription(offer);
       sendWs({ type: 'signal', to: peerId, data: { sdp: pc.localDescription } });
     } catch { /* negotiation raced; the next signal recovers */ }
@@ -89,6 +89,7 @@ export function useRoom(roomId, name, opts) {
 
     function makePc(peerId) {
       const pc = new RTCPeerConnection(iceRef.current);
+      pc._pendingCands = []; // ICE candidates that arrive before the remote description
       if (localStream.current) {
         localStream.current.getTracks().forEach((t) => pc.addTrack(t, localStream.current));
       }
@@ -99,8 +100,22 @@ export function useRoom(roomId, name, opts) {
         const [stream] = e.streams;
         setPeers((p) => ({ ...p, [peerId]: { ...(p[peerId] || {}), stream } }));
       };
+      // Recover from a dropped connection: one side (deterministic by id) restarts
+      // ICE. Without this, an intermittent first-attempt failure never recovers.
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'failed' && (selfIdRef.current || '') > peerId) {
+          renegotiate(peerId, pc, true);
+        }
+      };
       pcMap.set(peerId, pc);
       return pc;
+    }
+
+    // Add any ICE candidates that arrived before the remote description was set.
+    async function flushCands(pc) {
+      const pend = pc._pendingCands || [];
+      pc._pendingCands = [];
+      for (const c of pend) { try { await pc.addIceCandidate(c); } catch {} }
     }
 
     // Reconcile tracks whenever the phase changes (focus forces media off);
@@ -121,15 +136,22 @@ export function useRoom(roomId, name, opts) {
           try {
             if (collision) await pc.setLocalDescription({ type: 'rollback' });
             await pc.setRemoteDescription(data.sdp);
+            await flushCands(pc);
             const ans = await pc.createAnswer();
             await pc.setLocalDescription(ans);
             sendWs({ type: 'signal', to: from, data: { sdp: pc.localDescription } });
           } catch { /* raced negotiation; a later signal recovers */ }
         } else if (data.sdp.type === 'answer' && pc) {
-          try { await pc.setRemoteDescription(data.sdp); } catch {}
+          try { await pc.setRemoteDescription(data.sdp); await flushCands(pc); } catch {}
         }
       } else if (data.candidate && pc) {
-        try { await pc.addIceCandidate(data.candidate); } catch {}
+        // Buffer candidates that arrive before the remote description is set,
+        // otherwise addIceCandidate throws and the candidate is lost.
+        if (pc.remoteDescription && pc.remoteDescription.type) {
+          try { await pc.addIceCandidate(data.candidate); } catch {}
+        } else {
+          pc._pendingCands.push(data.candidate);
+        }
       }
     }
 
