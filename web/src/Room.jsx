@@ -27,10 +27,19 @@ function Video({ stream, muted }) {
   return <video ref={ref} autoPlay playsInline muted={muted} />;
 }
 
-function Tile({ name, stream, self, camOff, isHost, canKick, onKick }) {
+function Tile({ name, stream, self, camOff, isHost, canKick, onKick, media, onToggleCam, onToggleMic }) {
+  const camShown = stream && !camOff && media?.cam !== false;
   return (
     <div className={`tile ${camOff ? 'camoff' : ''}`}>
-      {stream && !camOff ? <Video stream={stream} muted={self} /> : <div className="avatar">{initials(name)}</div>}
+      {camShown ? <Video stream={stream} muted={self} /> : <div className="avatar">{initials(name)}</div>}
+      {self && !camOff && (
+        <div className="tile-controls">
+          <button className={`mediabtn ${media?.cam ? '' : 'off'}`} onClick={onToggleCam}
+            aria-pressed={!media?.cam}>{media?.cam ? '📷 Camera on' : '🚫 Camera off'}</button>
+          <button className={`mediabtn ${media?.mic ? '' : 'off'}`} onClick={onToggleMic}
+            aria-pressed={!media?.mic}>{media?.mic ? '🎙 Mic on' : '🔇 Mic off'}</button>
+        </div>
+      )}
       <div className="tile-bar">
         <span className="tile-name">{name}{self ? ' (you)' : ''}{isHost ? ' · host' : ''}</span>
         {canKick && <button className="ghost kick" onClick={onKick}>Remove</button>}
@@ -56,7 +65,7 @@ function Timer({ endsAt, label }) {
 
 export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, onLeave }) {
   const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
-  const { selfId, hostId, peers, phase, endsAt, ready, goals, chat, status, local } = room;
+  const { selfId, hostId, peers, phase, endsAt, ready, shared, order, goals, chat, status, local } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
   // Personal, editable task list (browser-only, never synced). Stable ids so
@@ -132,7 +141,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         </div>
         <div className="room-actions">
           <button className="secondary sm" onClick={copy}>{copied ? 'Link copied' : 'Copy invite link'}</button>
-          <button className="primary sm" onClick={onLeave}>Leave 🔥</button>
+          <button className="primary sm" onClick={onLeave}>Leave</button>
         </div>
       </header>
 
@@ -140,7 +149,8 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
       <section className="stage">
         <div className={`grid grid-${count}`}>
-          <Tile name={name} stream={local} self camOff={camOff} isHost={isHost} />
+          <Tile name={name} stream={local} self camOff={camOff} isHost={isHost}
+            media={room.media} onToggleCam={room.toggleCam} onToggleMic={room.toggleMic} />
           {peerIds.map((id) => (
             <Tile key={id} name={peers[id].name || 'Guest'} stream={peers[id].stream} camOff={camOff}
               isHost={id === hostId} canKick={isHost && id !== selfId} onKick={() => room.kick(id)} />
@@ -150,14 +160,16 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         <div className="rail">
           <aside className="panel">
             {phase === 'greet' && (
-              <GreetPanel goal={goal} setGoal={setGoal}
+              <GreetPanel selfId={selfId} selfName={name} goal={goal} setGoal={setGoal}
                 onShareGoal={() => goal.trim() && room.sendGoal(goal.trim())}
-                goals={goals} peers={peers} ready={ready} iAmReady={iAmReady} count={count}
+                onShared={() => { if (goal.trim()) room.sendGoal(goal.trim()); room.shareGoal(); }}
+                goals={goals} peers={peers} order={order} shared={shared}
+                ready={ready} iAmReady={iAmReady} count={count}
                 onReady={() => room.setReady(!iAmReady)} isHost={isHost} onStart={room.start} />
             )}
             {phase === 'focus' && (
               <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
-                onRemove={removeTask} endsAt={endsAt} />
+                onRemove={removeTask} />
             )}
             {phase === 'regroup' && (
               <RegroupPanel tasks={tasks} endsAt={endsAt} isHost={isHost} onRestart={room.restart} />
@@ -208,8 +220,15 @@ function PhaseBanner({ phase, endsAt, regroupMin }) {
   );
 }
 
-function GreetPanel({ goal, setGoal, onShareGoal, goals, peers, ready, iAmReady, count, onReady, isHost, onStart }) {
-  const others = Object.keys(peers);
+function GreetPanel({ selfId, selfName, goal, setGoal, onShareGoal, onShared, goals, peers, order, shared,
+  ready, iAmReady, count, onReady, isHost, onStart }) {
+  // Turn-taking: the frame sits on the first person (join order) who hasn't shared yet.
+  const currentSharer = order.find((id) => !shared.includes(id));
+  const allShared = order.length > 0 && !currentSharer;
+  const myTurn = currentSharer === selfId;
+  const nameOf = (id) => (id === selfId ? 'You' : peers[id]?.name || 'Guest');
+  const goalOf = (id) => (id === selfId ? goal : goals[id] || '');
+
   return (
     <>
       <label className="field">
@@ -217,28 +236,48 @@ function GreetPanel({ goal, setGoal, onShareGoal, goals, peers, ready, iAmReady,
         <input value={goal} onChange={(e) => setGoal(e.target.value)} onBlur={onShareGoal}
           placeholder="Your focus for this session" maxLength={200} />
       </label>
+
       <ul className="goal-list">
-        {others.map((id, i) => (
-          <li key={id}>
-            <span className="goal-chip" style={{ background: CHIP[i % CHIP.length] }}>{initials(peers[id].name)}</span>
-            <div className="goal-body">
-              <strong>{peers[id].name || 'Guest'}’s goal</strong>
-              <span>{goals[id] || '…'}</span>
-            </div>
-          </li>
-        ))}
+        {order.map((id) => {
+          const isCurrent = id === currentSharer;
+          const hasShared = shared.includes(id);
+          return (
+            <li key={id} className={`share-row ${isCurrent ? 'current' : ''} ${hasShared ? 'shared' : ''}`}>
+              <span className="goal-chip" style={{ background: CHIP[order.indexOf(id) % CHIP.length] }}>
+                {initials(id === selfId ? selfName : nameOf(id))}
+              </span>
+              <div className="goal-body">
+                <strong>{id === selfId ? 'You' : `${nameOf(id)}’s goal`}</strong>
+                <span>{goalOf(id) || (isCurrent ? 'sharing now…' : '…')}</span>
+              </div>
+              {hasShared && <span className="share-tick" aria-label="shared">✓</span>}
+            </li>
+          );
+        })}
       </ul>
-      <div className="ready-row">
-        <span>{ready.length}/{count} ready</span>
-        <button className={`primary ${iAmReady ? 'is-on' : ''}`} onClick={onReady}>{iAmReady ? 'Ready ✓' : 'I’m ready'}</button>
-      </div>
+
+      {!allShared && myTurn && (
+        <button className="primary" onClick={onShared} disabled={!goal.trim()}>I’ve shared my goal</button>
+      )}
+      {!allShared && !myTurn && currentSharer && (
+        <p className="hint">{nameOf(currentSharer)} is sharing… you’re up next in turn.</p>
+      )}
+
+      {allShared && (
+        <>
+          <div className="ready-row">
+            <span>{ready.length}/{count} ready</span>
+            <button className={`primary ${iAmReady ? 'is-on' : ''}`} onClick={onReady}>{iAmReady ? 'Ready ✓' : 'I’m ready'}</button>
+          </div>
+          <p className="hint">Everyone’s shared. Focus begins when everyone’s ready.</p>
+        </>
+      )}
       {isHost && <button className="link-btn" onClick={onStart}>Start now (don’t wait)</button>}
-      <p className="hint">Focus begins when everyone’s ready.</p>
     </>
   );
 }
 
-function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, endsAt }) {
+function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove }) {
   const [draft, setDraft] = useState('');
   function add(e) {
     e.preventDefault();
@@ -263,7 +302,6 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, endsAt }) {
         <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add a task…" maxLength={200} />
         <button className="primary sm" type="submit" disabled={!draft.trim()}>Add</button>
       </form>
-      <Timer endsAt={endsAt} label="focus ends in" />
     </>
   );
 }

@@ -10,7 +10,6 @@ export default function Home({ pendingRoom, onEnter }) {
   const [todos, setTodos] = useState(['']);
   const [focusMin, setFocusMin] = useState(50);
   const [regroupMin, setRegroupMin] = useState(5);
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [rooms, setRooms] = useState([]);
 
   const cleanTodos = () => todos.map((t) => t.trim()).filter(Boolean);
@@ -65,17 +64,15 @@ export default function Home({ pendingRoom, onEnter }) {
           ))}
         </ul>
       </div>
-      <button className="link-btn" onClick={() => setShowAdvanced((s) => !s)}>
-        {showAdvanced ? 'Hide session length' : 'Set session length'}
-      </button>
-      {showAdvanced && (
+      <div className="field">
+        <span>Session length</span>
         <div className="durations">
           <label className="field small"><span>Focus (min)</span>
             <input type="number" min="1" max="180" value={focusMin} onChange={(e) => setFocusMin(Number(e.target.value))} /></label>
           <label className="field small"><span>Regroup (min)</span>
             <input type="number" min="0" max="60" value={regroupMin} onChange={(e) => setRegroupMin(Number(e.target.value))} /></label>
         </div>
-      )}
+      </div>
     </div>
   );
 

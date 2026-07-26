@@ -147,6 +147,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .tile-bar { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 12px; border-radius: var(--r-pill); background: rgba(23, 23, 23, 0.55); }
 .tile-name { color: #fff; font-size: 13px; font-weight: 600; }
 .kick { color: var(--pink); font-size: 12px; padding: 4px 10px; }
+.tile-controls { position: absolute; top: 10px; left: 10px; display: flex; gap: 8px; z-index: 2; }
+.mediabtn { padding: 7px 13px; font-size: 12px; font-weight: 700; border-radius: var(--r-pill);
+  background: rgba(23, 23, 23, 0.55); color: #fff; }
+.mediabtn:hover:not(:disabled) { filter: brightness(1.15); }
+.mediabtn.off { background: var(--orange); color: var(--ink); } /* accent (cyan) when muted/off */
 
 .panel { background: #fff; border-radius: var(--r-lg); padding: 22px; display: grid; gap: 15px; box-shadow: var(--shadow); }
 .panel-title { font-size: 21px; }
@@ -158,6 +163,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .goal-body { display: grid; gap: 1px; min-width: 0; }
 .goal-body strong { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--olive); }
 .goal-body span { font-size: 14px; }
+
+/* Greet turn-taking: the frame sits on whoever is sharing now and advances. */
+.share-row { border: 2px solid transparent; border-radius: var(--r-md); padding: 8px 10px; transition: border-color .2s var(--spring), background .2s; }
+.share-row.current { border-color: var(--olive); background: var(--cream); }
+.share-row.shared { opacity: .6; }
+.share-tick { margin-left: auto; align-self: center; color: var(--pink-deep); font-weight: 800; }
 
 .ready-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .ready-row span { color: var(--muted); font-size: 14px; font-weight: 700; }

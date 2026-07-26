@@ -21,6 +21,7 @@ export class RoomDO {
     this.sessions = new Map(); // id -> { ws, name }
     this.goals = new Map(); // id -> goal text
     this.ready = new Set();
+    this.shared = new Set(); // ids who confirmed they shared their goal (greet turn-taking)
     this.phase = 'greet'; // greet | focus | regroup
     this.endsAt = null;
     this.focusMin = 50;
@@ -83,8 +84,11 @@ export class RoomDO {
       focusMin: this.focusMin,
       regroupMin: this.regroupMin,
       ready: [...this.ready],
+      shared: [...this.shared],
+      order: [...this.sessions.keys()],
       goals: Object.fromEntries(this.goals),
     });
+    this.broadcast({ type: 'order', order: [...this.sessions.keys()] });
     this.broadcastExcept(id, { type: 'peer-join', id, name });
 
     this.syncLobby();
@@ -124,6 +128,10 @@ export class RoomDO {
       case 'unready':
         this.ready.delete(id);
         this.broadcast({ type: 'ready-state', ready: [...this.ready] });
+        break;
+      case 'shared': // "I've shared my goal" — advances the greet turn frame
+        this.shared.add(id);
+        this.broadcast({ type: 'shared-state', shared: [...this.shared] });
         break;
       case 'start': // host skips the wait-for-everyone
         if (id === this.hostId && this.phase === 'greet') this.startFocus();
@@ -179,8 +187,10 @@ export class RoomDO {
     this.phase = 'greet';
     this.endsAt = null;
     this.ready.clear();
+    this.shared.clear();
     this.broadcastPhase();
     this.broadcast({ type: 'ready-state', ready: [] });
+    this.broadcast({ type: 'shared-state', shared: [] });
     this.syncLobby();
   }
 
@@ -209,9 +219,12 @@ export class RoomDO {
     if (!this.sessions.has(id)) return;
     this.sessions.delete(id);
     this.ready.delete(id);
+    this.shared.delete(id);
     this.goals.delete(id);
     this.broadcast({ type: 'peer-leave', id });
     this.broadcast({ type: 'ready-state', ready: [...this.ready] });
+    this.broadcast({ type: 'shared-state', shared: [...this.shared] });
+    this.broadcast({ type: 'order', order: [...this.sessions.keys()] });
     if (this.sessions.size === 0) {
       this.phase = 'greet';
       this.endsAt = null;

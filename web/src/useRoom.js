@@ -14,6 +14,8 @@ export function useRoom(roomId, name, opts) {
   const [phase, setPhase] = useState('greet');
   const [endsAt, setEndsAt] = useState(null);
   const [ready, setReady] = useState([]);
+  const [shared, setShared] = useState([]); // ids who confirmed sharing their goal
+  const [order, setOrder] = useState([]); // join order — drives the greet turn frame
   const [goals, setGoals] = useState({}); // id -> text
   const [chat, setChat] = useState([]); // { id, name, text, t } — never persisted
   const [config, setConfig] = useState({ focusMin: opts.focusMin, regroupMin: opts.regroupMin });
@@ -23,6 +25,22 @@ export function useRoom(roomId, name, opts) {
   const ws = useRef(null);
   const pcs = useRef(new Map()); // peerId -> RTCPeerConnection
   const localStream = useRef(null);
+
+  // Manual mic/cam intent. Effective track state = intent AND the phase allows
+  // media at all (focus forces everything off). `media` mirrors intent for the UI.
+  const camOn = useRef(true);
+  const micOn = useRef(true);
+  const [media, setMedia] = useState({ cam: true, mic: true });
+  const phaseRef = useRef(phase);
+  phaseRef.current = phase;
+
+  const applyTracks = useCallback((phOverride) => {
+    const s = localStream.current;
+    if (!s) return;
+    const mediaOn = (phOverride || phaseRef.current) !== 'focus';
+    s.getVideoTracks().forEach((t) => { t.enabled = mediaOn && camOn.current; });
+    s.getAudioTracks().forEach((t) => { t.enabled = mediaOn && micOn.current; });
+  }, []);
 
   const sendWs = useCallback((obj) => {
     const s = ws.current;
@@ -49,13 +67,9 @@ export function useRoom(roomId, name, opts) {
       return pc;
     }
 
-    // Cameras + mics are on during greet/regroup, off during focus.
-    function applyPhaseToTracks(ph) {
-      const s = localStream.current;
-      if (!s) return;
-      const on = ph !== 'focus';
-      s.getTracks().forEach((t) => { t.enabled = on; });
-    }
+    // Reconcile tracks whenever the phase changes (focus forces media off);
+    // manual mic/cam intent is honored via applyTracks.
+    const applyPhaseToTracks = (ph) => applyTracks(ph);
 
     async function onSignal(from, data) {
       let pc = pcMap.get(from);
@@ -82,6 +96,8 @@ export function useRoom(roomId, name, opts) {
           setPhase(m.phase);
           setEndsAt(m.endsAt);
           setReady(m.ready || []);
+          setShared(m.shared || []);
+          setOrder(m.order || []);
           setConfig({ focusMin: m.focusMin, regroupMin: m.regroupMin });
           if (m.goals) setGoals(m.goals);
           applyPhaseToTracks(m.phase);
@@ -117,6 +133,12 @@ export function useRoom(roomId, name, opts) {
           break;
         case 'ready-state':
           setReady(m.ready);
+          break;
+        case 'shared-state':
+          setShared(m.shared);
+          break;
+        case 'order':
+          setOrder(m.order);
           break;
         case 'goal':
           setGoals((g) => ({ ...g, [m.id]: m.text }));
@@ -176,7 +198,10 @@ export function useRoom(roomId, name, opts) {
   }, [roomId]);
 
   return {
-    selfId, hostId, peers, phase, endsAt, ready, goals, chat, config, status, local,
+    selfId, hostId, peers, phase, endsAt, ready, shared, order, goals, chat, config, status, local, media,
+    shareGoal: () => sendWs({ type: 'shared' }),
+    toggleCam: () => { camOn.current = !camOn.current; setMedia((m) => ({ ...m, cam: camOn.current })); applyTracks(); },
+    toggleMic: () => { micOn.current = !micOn.current; setMedia((m) => ({ ...m, mic: micOn.current })); applyTracks(); },
     setReady: (r) => sendWs({ type: r ? 'ready' : 'unready' }),
     start: () => sendWs({ type: 'start' }),
     kick: (id) => sendWs({ type: 'kick', id }),
