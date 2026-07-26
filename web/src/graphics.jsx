@@ -10,13 +10,11 @@ export function ChatDoodle() {
   return <img src={`${A}/1f4ac.svg`} className="doodle" alt="" />;
 }
 
-// Fun decorations scattered around the hero: sparkles, stars, coffee, a plant.
+// Fun decorations scattered around the hero: sparkles and stars.
 const DECOR = [
   { icon: '2728', top: '9%', left: '13%', size: 26, delay: '0s' },
   { icon: '2b50', top: '20%', left: '85%', size: 20, delay: '0.6s' },
-  { icon: '2615', top: '46%', left: '6%', size: 24, delay: '1.2s' },
   { icon: '2728', top: '32%', left: '92%', size: 18, delay: '0.4s' },
-  { icon: '1fab4', top: '72%', left: '90%', size: 30, delay: '1.6s' },
   { icon: '2b50', top: '82%', left: '9%', size: 16, delay: '2s' },
 ];
 
