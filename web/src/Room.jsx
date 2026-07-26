@@ -6,6 +6,9 @@ import { Moon, ChatDoodle } from './graphics.jsx';
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
 const CHIP = ['#29bcee', '#a5d67b', '#6be492', '#171a6b']; // cyan, lime, green, indigo (Groove complements)
 
+let taskSeq = 0;
+const nextTaskId = () => ++taskSeq;
+
 function download(filename, text) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -56,7 +59,13 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   const { selfId, hostId, peers, phase, endsAt, ready, goals, chat, status, local } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
-  const [done, setDone] = useState({});
+  // Personal, editable task list (browser-only, never synced). Stable ids so
+  // add/edit/delete works mid-session without index shuffling.
+  const [tasks, setTasks] = useState(() => todos.map((t) => ({ id: nextTaskId(), text: t, done: false })));
+  const addTask = (text) => setTasks((ts) => [...ts, { id: nextTaskId(), text, done: false }]);
+  const editTask = (id, text) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, text } : t)));
+  const toggleTask = (id) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const removeTask = (id) => setTasks((ts) => ts.filter((t) => t.id !== id));
   const [copied, setCopied] = useState(false);
   const [draft, setDraft] = useState('');
 
@@ -100,7 +109,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     if (t) { room.sendChat(t); setDraft(''); }
   }
   function downloadTodos() {
-    const body = todos.map((t, i) => `[${done[i] ? 'x' : ' '}] ${t}`).join('\n');
+    const body = tasks.map((t) => `[${t.done ? 'x' : ' '}] ${t.text}`).join('\n');
     download('nook-todo.txt', `Nook to-do list\n\n${body || '(empty)'}\n`);
   }
   function downloadChat() {
@@ -146,9 +155,12 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
                 goals={goals} peers={peers} ready={ready} iAmReady={iAmReady} count={count}
                 onReady={() => room.setReady(!iAmReady)} isHost={isHost} onStart={room.start} />
             )}
-            {phase === 'focus' && <FocusPanel todos={todos} done={done} setDone={setDone} endsAt={endsAt} />}
+            {phase === 'focus' && (
+              <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
+                onRemove={removeTask} endsAt={endsAt} />
+            )}
             {phase === 'regroup' && (
-              <RegroupPanel todos={todos} done={done} endsAt={endsAt} isHost={isHost} onRestart={room.restart} />
+              <RegroupPanel tasks={tasks} endsAt={endsAt} isHost={isHost} onRestart={room.restart} />
             )}
           </aside>
 
@@ -226,32 +238,45 @@ function GreetPanel({ goal, setGoal, onShareGoal, goals, peers, ready, iAmReady,
   );
 }
 
-function FocusPanel({ todos, done, setDone, endsAt }) {
+function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, endsAt }) {
+  const [draft, setDraft] = useState('');
+  function add(e) {
+    e.preventDefault();
+    const t = draft.trim();
+    if (t) { onAdd(t); setDraft(''); }
+  }
   return (
     <>
       <h3 className="panel-title">Your list</h3>
-      {todos.length === 0 && <p className="hint">No list this time. Just focus.</p>}
+      {tasks.length === 0 && <p className="hint">Nothing yet. Add a task below.</p>}
       <ul className="todo-check">
-        {todos.map((t, i) => (
-          <li key={i} className={done[i] ? 'done' : ''}>
-            <label><input type="checkbox" checked={!!done[i]} onChange={(e) => setDone({ ...done, [i]: e.target.checked })} /><span>{t}</span></label>
+        {tasks.map((t) => (
+          <li key={t.id} className={t.done ? 'done' : ''}>
+            <input type="checkbox" checked={t.done} onChange={() => onToggle(t.id)} aria-label="Done" />
+            <input className="task-text" value={t.text} onChange={(e) => onEdit(t.id, e.target.value)}
+              maxLength={200} aria-label="Task" />
+            <button className="ghost x" onClick={() => onRemove(t.id)} aria-label="Remove task">×</button>
           </li>
         ))}
       </ul>
+      <form className="chat-form" onSubmit={add}>
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add a task…" maxLength={200} />
+        <button className="primary sm" type="submit" disabled={!draft.trim()}>Add</button>
+      </form>
       <Timer endsAt={endsAt} label="focus ends in" />
     </>
   );
 }
 
-function RegroupPanel({ todos, done, endsAt, isHost, onRestart }) {
-  const finished = todos.filter((_, i) => done[i]).length;
+function RegroupPanel({ tasks, endsAt, isHost, onRestart }) {
+  const finished = tasks.filter((t) => t.done).length;
   return (
     <>
       <h3 className="panel-title">How it went</h3>
-      <p className="tally">{finished}/{todos.length || 0} done</p>
+      <p className="tally">{finished}/{tasks.length || 0} done</p>
       <ul className="todo-check">
-        {todos.map((t, i) => (
-          <li key={i} className={done[i] ? 'done' : ''}><span>{done[i] ? '✓' : '·'} {t}</span></li>
+        {tasks.map((t) => (
+          <li key={t.id} className={t.done ? 'done' : ''}><span>{t.done ? '✓' : '·'} {t.text}</span></li>
         ))}
       </ul>
       <Timer endsAt={endsAt} label="regroup ends in" />
