@@ -1,7 +1,18 @@
 node_modules/
-.env
 .DS_Store
 dist/
-.wrangler/
 web/dist/
 .vite/
+
+# Secrets / local config — never commit these
+.env
+.env.*
+!.env.example
+web/.env
+web/.env.*
+!web/.env.example
+.dev.vars
+.dev.vars.*
+
+# Wrangler local state
+.wrangler/
