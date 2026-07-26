@@ -91,30 +91,40 @@ networks** where one side is behind a strict/symmetric NAT can't form a direct
 connection — they see each other's names and the timer (that's the server), but
 no camera or mic comes through. A **TURN relay** fixes this by relaying the media.
 
-Nook uses **Cloudflare's free TURN** service. The Worker's `/ice` endpoint mints
-short-lived TURN credentials when two secrets are set; otherwise it returns
-STUN-only (video still works for same-network / permissive-NAT users).
+The Worker's `/ice` endpoint returns STUN plus a TURN relay when credentials are
+set (STUN-only otherwise, so video still works for same-network / permissive-NAT
+users). It supports two providers, in order: **Metered** (no credit card) and
+**Cloudflare** (needs a card, larger free tier).
 
-**Set it up (one time):**
+### Option A: Metered (no credit card)
 
-1. In the Cloudflare dashboard: **Realtime → TURN Keys → Create**. Copy the
-   **Key ID** and the **API Token**.
-2. Add them as Worker secrets (run each, paste the value when prompted):
+Free tier is 500 MB/month of relayed traffic (only strict-NAT peers use the
+relay, so it stretches, but it's small — fine for testing and light use).
+
+1. Sign up at **dashboard.metered.ca** (email, no card). Under **Developers**,
+   copy your **Metered domain** (`yourname.metered.live`) and **Secret Key**.
+2. Set them as Worker secrets (the secret key stays server-side — the `/ice`
+   endpoint uses it to mint short-lived TURN credentials, never sending it to the
+   browser):
 
    ```bash
-   npx wrangler secret put TURN_KEY_ID
-   npx wrangler secret put TURN_API_TOKEN
+   printf 'yourname.metered.live' | npx wrangler secret put METERED_DOMAIN
+   printf 'YOUR_SECRET_KEY'        | npx wrangler secret put METERED_SECRET_KEY
    ```
 
-3. Redeploy:
+3. Redeploy: `npx wrangler deploy`. Verify with `curl https://<your-worker>/ice`
+   — you should see `turn:global.relay.metered.ca` entries.
 
-   ```bash
-   npx wrangler deploy
-   ```
+### Option B: Cloudflare TURN (needs a card, 1,000 GB free)
 
-That's it — every room now falls back to the TURN relay when a direct connection
-isn't possible. Cloudflare TURN is free; you only pay if relayed traffic is huge
-(unlikely, since only strict-NAT peers use the relay).
+Requires a payment method on file (no charge at Nook's scale). Dashboard →
+**Realtime → TURN Keys → Create**, then:
+
+```bash
+npx wrangler secret put TURN_KEY_ID       # the Turn Token ID
+npx wrangler secret put TURN_API_TOKEN    # the API Token
+npx wrangler deploy
+```
 
 Any standard TURN server works too — point the `/ice` endpoint in
 `src/worker.js` at it instead.
