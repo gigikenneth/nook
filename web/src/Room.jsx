@@ -4,7 +4,7 @@ import { chime } from './sound';
 import { Moon, ChatDoodle } from './graphics.jsx';
 
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
-const CHIP = ['#ee5b29', '#ac7bd6', '#e46bbd', '#6b6817']; // orange, purple, pink, olive
+const CHIP = ['#29bcee', '#a5d67b', '#6be492', '#171a6b']; // cyan, lime, green, indigo (Groove complements)
 
 function download(filename, text) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
