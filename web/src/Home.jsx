@@ -83,8 +83,12 @@ export default function Home({ pendingRoom, onEnter }) {
     return (
       <main className="home">
         <Sparkles />
-        <header className="brand"><Moon size={64} /><h1>Nook</h1>
-          <p className="tagline">You've been invited to a room. Add your name and what you're here to do.</p></header>
+        <header className="brand">
+          <h1>Nook</h1>
+          <p className="tagline">You've been invited. Add your name and what you're here to do.</p>
+          <div className="badge-circle">you're invited ✌️</div>
+          <Moon size={40} />
+        </header>
         {identity}
         <button className="primary block" disabled={!canGo} onClick={() => go(pendingRoom, false)}>Enter room</button>
       </main>
@@ -94,8 +98,12 @@ export default function Home({ pendingRoom, onEnter }) {
   return (
     <main className="home wide">
       <Sparkles />
-      <header className="brand"><Moon size={64} /><h1>Nook</h1>
-        <p className="tagline">Quiet coworking for up to four. See who's around, or open a room and let people join.</p></header>
+      <header className="brand">
+        <h1>Nook</h1>
+        <p className="tagline">Quiet coworking for up to four. See who's around, or open a room and let people join.</p>
+        <div className="badge-circle">high fives &amp; good vibes ✌️</div>
+        <Moon size={40} />
+      </header>
 
       <section className="directory card">
         <div className="panel-head">

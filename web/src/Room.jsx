@@ -4,6 +4,7 @@ import { chime } from './sound';
 import { Moon, ChatDoodle } from './graphics.jsx';
 
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
+const CHIP = ['#ee5b29', '#ac7bd6', '#e46bbd', '#6b6817']; // orange, purple, pink, olive
 
 function download(filename, text) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
@@ -121,7 +122,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         </div>
         <div className="room-actions">
           <button className="secondary sm" onClick={copy}>{copied ? 'Link copied' : 'Copy invite link'}</button>
-          <button className="ghost sm" onClick={onLeave}>Leave</button>
+          <button className="primary sm" onClick={onLeave}>Leave 🔥</button>
         </div>
       </header>
 
@@ -204,8 +205,14 @@ function GreetPanel({ goal, setGoal, onShareGoal, goals, peers, ready, iAmReady,
           placeholder="Your focus for this session" maxLength={200} />
       </label>
       <ul className="goal-list">
-        {others.map((id) => (
-          <li key={id}><strong>{peers[id].name || 'Guest'}</strong><span>{goals[id] || '…'}</span></li>
+        {others.map((id, i) => (
+          <li key={id}>
+            <span className="goal-chip" style={{ background: CHIP[i % CHIP.length] }}>{initials(peers[id].name)}</span>
+            <div className="goal-body">
+              <strong>{peers[id].name || 'Guest'}’s goal</strong>
+              <span>{goals[id] || '…'}</span>
+            </div>
+          </li>
         ))}
       </ul>
       <div className="ready-row">
