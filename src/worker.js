@@ -24,6 +24,12 @@ export default {
       });
     }
 
+    // Presence websocket for the "who's around" list + cowork invites.
+    if (url.pathname === '/lobby/ws') {
+      const lobby = env.LOBBY.get(env.LOBBY.idFromName('global'));
+      return lobby.fetch(req);
+    }
+
     // Room signaling websocket: /room/:id/ws
     const m = url.pathname.match(/^\/room\/([^/]+)\/ws$/);
     if (m) {

@@ -35,7 +35,7 @@ signaling protocol, and the data model.
 |:--|:--|:--|
 | **Worker** | `src/worker.js` | HTTP entrypoint. Serves the static app, exposes the room directory (`/rooms`), and upgrades the room WebSocket (`/room/:id/ws`). |
 | **RoomDO** | `src/RoomDO.js` | One [Durable Object](https://developers.cloudflare.com/durable-objects/) per room. Holds live WebSocket sessions in memory, runs the phase timer via DO alarms, relays WebRTC signaling, and enforces the cap of 4. |
-| **LobbyDO** | `src/LobbyDO.js` | A single global Durable Object. A live registry of open (public) rooms for the landing page. |
+| **LobbyDO** | `src/LobbyDO.js` | A single global Durable Object. A live registry of open (public) rooms for the landing page, and the presence hub for the "who's around" list and cowork invites. |
 | **Web app** | `web/` | React + Vite front end. `useRoom.js` owns the WebSocket and the WebRTC mesh. |
 
 ### Why Durable Objects
@@ -164,6 +164,45 @@ Public rooms report themselves to the single global `LobbyDO`:
   list sorted so that **greeting rooms with a free seat float to the top** — the
   most joinable rooms first.
 - Invite-only rooms never report, so they never appear.
+
+## Presence and cowork invites
+
+Beyond the room directory, `LobbyDO` is also a **presence hub**. People on the
+home screen who opt in ("I'm around to cowork") hold a WebSocket to
+`/lobby/ws`, so they can see who else is around and ping each other to start a
+session.
+
+- **Opt-in and home-only.** The presence socket opens only when you toggle
+  availability *and* have a name. Entering a room unmounts the home screen, which
+  closes the socket and drops you from everyone's roster. So only opted-in,
+  browsing people are ever listed or pingable — never anyone mid-session.
+- **Ping into a room you open.** Pinging someone generates a room id, sends them
+  an `invite`, and drops you into that (public) room. They get a toast with a
+  Join button that takes them straight in.
+- **Spam guard.** Repeat pings to the same person within `PING_COOLDOWN_MS` (4s)
+  are dropped server-side.
+
+### Presence protocol (`/lobby/ws`)
+
+Client → lobby:
+
+| `type` | Payload | Effect |
+|:--|:--|:--|
+| `hello` | `name` | Opt in and appear in the roster. |
+| `rename` | `name` | Update your displayed name. |
+| `ping` | `toId`, `roomId` | Invite one person to cowork in `roomId`. |
+
+Lobby → client:
+
+| `type` | Payload | Meaning |
+|:--|:--|:--|
+| `welcome` | `id` | Your presence id (so you can exclude yourself from the roster). |
+| `roster` | `people: [{id, name}]` | The current set of opted-in people. Re-sent on every change. |
+| `invite` | `fromId`, `fromName`, `roomId` | Someone pinged you to cowork. |
+
+> **Scale ceiling:** a single global `LobbyDO` holds every presence socket. That's
+> fine for dozens of concurrent people; scaling to thousands would need sharding
+> the lobby. Noted, not built — Nook is a niche tool.
 
 ## Data model (all in memory)
 

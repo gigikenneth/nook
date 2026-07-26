@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { apiBase } from './config';
+import { useLobby } from './useLobby';
 import { Moon, Sparkles } from './graphics.jsx';
 
 const uid = () => crypto.randomUUID();
@@ -13,9 +14,27 @@ export default function Home({ pendingRoom, onEnter }) {
   const [focusMin, setFocusMin] = useState(50);
   const [regroupMin, setRegroupMin] = useState(5);
   const [rooms, setRooms] = useState([]);
+  const [available, setAvailable] = useState(false); // opt in to "who's around"
 
   const cleanTodos = () => todos.map((t) => t.trim()).filter(Boolean);
   const canGo = name.trim().length > 0;
+
+  // Presence: only connect when opted in and named. Entering a room unmounts
+  // Home, which closes the socket and drops you from everyone's roster.
+  const online = available && canGo && !pendingRoom;
+  const { roster, selfId, invite, dismissInvite, ping } = useLobby(online, name.trim());
+  const others = roster.filter((p) => p.id !== selfId);
+
+  function pingPerson(p) {
+    const roomId = uid();
+    ping(p.id, roomId); // invite them into a room we're about to open
+    go(roomId, true);
+  }
+  function acceptInvite() {
+    const roomId = invite.roomId;
+    dismissInvite();
+    onEnter({ roomId, name: name.trim(), todos: cleanTodos(), focusMin, regroupMin, isPublic: false });
+  }
 
   // Poll the live directory of open rooms.
   useEffect(() => {
@@ -96,6 +115,15 @@ export default function Home({ pendingRoom, onEnter }) {
   return (
     <main className="home wide">
       <Sparkles />
+      {invite && (
+        <div className="invite-toast" role="alert">
+          <span><strong>{invite.fromName}</strong> wants to cowork ✌️</span>
+          <div className="invite-actions">
+            <button className="primary sm" onClick={acceptInvite}>Join</button>
+            <button className="ghost sm" onClick={dismissInvite}>Dismiss</button>
+          </div>
+        </div>
+      )}
       <header className="brand">
         <h1>Nook</h1>
         <p className="tagline">Quiet coworking for up to four. See who's around, or open a room and let people join.</p>
@@ -143,6 +171,34 @@ export default function Home({ pendingRoom, onEnter }) {
       </section>
 
       {identity}
+
+      <section className="card presence">
+        <div className="panel-head">
+          <h2 className="panel-title">Around now</h2>
+          <label className="avail-toggle">
+            <input type="checkbox" checked={available} disabled={!canGo}
+              onChange={(e) => setAvailable(e.target.checked)} />
+            <span>{canGo ? "I'm around to cowork" : 'Add your name to appear'}</span>
+          </label>
+        </div>
+        {online ? (
+          others.length === 0 ? (
+            <p className="chat-empty">No one else around yet. Anyone who opts in can see you and invite you.</p>
+          ) : (
+            <ul className="people-list">
+              {others.map((p, i) => (
+                <li key={p.id} className="person-row">
+                  <span className="goal-chip" style={{ background: AV[i % AV.length] }}>{initials(p.name)}</span>
+                  <strong>{p.name}</strong>
+                  <button className="primary sm" onClick={() => pingPerson(p)}>Ping to cowork</button>
+                </li>
+              ))}
+            </ul>
+          )
+        ) : (
+          <p className="hint">Toggle on to see who else is around and let them invite you to cowork.</p>
+        )}
+      </section>
 
       <section className="card start-card">
         <h2 className="panel-title">Start your own</h2>

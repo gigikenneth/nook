@@ -240,6 +240,22 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .room-meta .count { color: var(--muted); font-size: 13px; font-weight: 700; }
 .room-meta .primary { background: var(--pink); color: var(--ink); }
 
+/* Presence: who's around + cowork invites */
+.avail-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.avail-toggle input { width: auto; accent-color: var(--orange); }
+.people-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.person-row { display: flex; align-items: center; gap: 12px; }
+.person-row strong { font-size: 15px; font-family: var(--display); font-weight: 700; }
+.person-row .primary { margin-left: auto; }
+.invite-toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 50;
+  display: flex; align-items: center; gap: 16px; max-width: calc(100vw - 32px);
+  background: var(--olive); color: var(--cream); padding: 12px 12px 12px 22px;
+  border-radius: var(--r-pill); box-shadow: var(--shadow); font-weight: 600;
+}
+.invite-actions { display: flex; gap: 8px; flex: none; }
+.invite-toast .ghost { color: var(--cream); opacity: .85; }
+
 .badge { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 4px 10px; border-radius: var(--r-pill); background: var(--cream2); color: var(--muted); }
 .badge-greet { background: var(--pink); color: var(--ink); }
 .badge-focus { background: var(--olive); color: var(--cream); }
