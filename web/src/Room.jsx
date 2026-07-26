@@ -1,25 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRoom } from './useRoom';
+import { chime } from './sound';
+import { Moon, ChatDoodle } from './graphics.jsx';
 
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
 
-// Attaches a MediaStream to a <video>. Self is muted to avoid echo.
+function download(filename, text) {
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 function Video({ stream, muted }) {
   const ref = useRef(null);
-  useEffect(() => {
-    if (ref.current && stream) ref.current.srcObject = stream;
-  }, [stream]);
+  useEffect(() => { if (ref.current && stream) ref.current.srcObject = stream; }, [stream]);
   return <video ref={ref} autoPlay playsInline muted={muted} />;
 }
 
 function Tile({ name, stream, self, camOff, isHost, canKick, onKick }) {
   return (
     <div className={`tile ${camOff ? 'camoff' : ''}`}>
-      {stream && !camOff ? (
-        <Video stream={stream} muted={self} />
-      ) : (
-        <div className="avatar">{initials(name)}</div>
-      )}
+      {stream && !camOff ? <Video stream={stream} muted={self} /> : <div className="avatar">{initials(name)}</div>}
       <div className="tile-bar">
         <span className="tile-name">{name}{self ? ' (you)' : ''}{isHost ? ' · host' : ''}</span>
         {canKick && <button className="ghost kick" onClick={onKick}>Remove</button>}
@@ -30,10 +37,7 @@ function Tile({ name, stream, self, camOff, isHost, canKick, onKick }) {
 
 function Timer({ endsAt, label }) {
   const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(t);
-  }, []);
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, []);
   if (!endsAt) return null;
   const remaining = Math.max(0, endsAt - now);
   const mm = String(Math.floor(remaining / 60000)).padStart(2, '0');
@@ -46,49 +50,74 @@ function Timer({ endsAt, label }) {
   );
 }
 
-export default function Room({ roomId, name, todos, focusMin, regroupMin, onLeave }) {
-  const room = useRoom(roomId, name, { focusMin, regroupMin });
-  const { selfId, hostId, peers, phase, endsAt, ready, goals, status, local } = room;
+export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, onLeave }) {
+  const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
+  const { selfId, hostId, peers, phase, endsAt, ready, goals, chat, status, local } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
-  const [done, setDone] = useState({}); // todo index -> bool
+  const [done, setDone] = useState({});
   const [copied, setCopied] = useState(false);
+  const [draft, setDraft] = useState('');
 
   const isHost = selfId && selfId === hostId;
   const iAmReady = selfId && ready.includes(selfId);
   const peerIds = Object.keys(peers);
   const count = peerIds.length + 1;
   const inviteLink = `${window.location.origin}${window.location.pathname}#room/${encodeURIComponent(roomId)}`;
+  const camOff = phase === 'focus';
 
   // Send the pre-typed goal once connected.
   const sentGoal = useRef(false);
   useEffect(() => {
-    if (selfId && goal.trim() && !sentGoal.current) {
-      room.sendGoal(goal.trim());
-      sentGoal.current = true;
-    }
+    if (selfId && goal.trim() && !sentGoal.current) { room.sendGoal(goal.trim()); sentGoal.current = true; }
   }, [selfId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Chimes on phase transitions.
+  const prevPhase = useRef(phase);
+  useEffect(() => {
+    const prev = prevPhase.current;
+    if (prev !== phase) {
+      if (phase === 'focus') chime('start');
+      else if (phase === 'regroup') chime('end');
+      else if (phase === 'greet' && prev === 'regroup') chime('regroup');
+      prevPhase.current = phase;
+    }
+  }, [phase]);
+
+  // Keep the chat log pinned to the newest message.
+  const logRef = useRef(null);
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [chat.length]);
 
   function copy() {
     navigator.clipboard?.writeText(inviteLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
-
-  const camOff = phase === 'focus';
+  function send(e) {
+    e.preventDefault();
+    const t = draft.trim();
+    if (t) { room.sendChat(t); setDraft(''); }
+  }
+  function downloadTodos() {
+    const body = todos.map((t, i) => `[${done[i] ? 'x' : ' '}] ${t}`).join('\n');
+    download('nook-todo.txt', `Nook — to-do list\n\n${body || '(empty)'}\n`);
+  }
+  function downloadChat() {
+    const body = chat.map((m) => `[${new Date(m.t).toLocaleTimeString()}] ${m.name}: ${m.text}`).join('\n');
+    download('nook-chat.txt', `Nook — chat log\n\n${body || '(no messages)'}\n`);
+  }
 
   if (status === 'kicked') return <Ended msg="You were removed from this room." onLeave={onLeave} />;
-  if (status === 'full') return <Ended msg="That room is full (four is the max)." onLeave={onLeave} />;
+  if (status === 'full') return <Ended msg="That room is full — four is the max." onLeave={onLeave} />;
   if (status === 'closed') return <Ended msg="You left the room." onLeave={onLeave} />;
 
   return (
     <main className="room">
       <header className="room-head">
         <div className="room-id">
-          <span className="brand-mark small" aria-hidden="true" />
-          <span>Nook</span>
-          <span className="dot">·</span>
-          <span className="count">{count}/4 here</span>
+          <Moon size={26} className="small" /><span>Nook</span>
+          <span className="dot">·</span><span className="count">{count}/4 here</span>
+          {isPublic ? <span className="badge badge-greet">open</span> : <span className="badge">invite only</span>}
         </div>
         <div className="room-actions">
           <button className="secondary sm" onClick={copy}>{copied ? 'Link copied' : 'Copy invite link'}</button>
@@ -102,41 +131,50 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, onLeav
         <div className={`grid grid-${count}`}>
           <Tile name={name} stream={local} self camOff={camOff} isHost={isHost} />
           {peerIds.map((id) => (
-            <Tile
-              key={id}
-              name={peers[id].name || 'Guest'}
-              stream={peers[id].stream}
-              camOff={camOff}
-              isHost={id === hostId}
-              canKick={isHost && id !== selfId}
-              onKick={() => room.kick(id)}
-            />
+            <Tile key={id} name={peers[id].name || 'Guest'} stream={peers[id].stream} camOff={camOff}
+              isHost={id === hostId} canKick={isHost && id !== selfId} onKick={() => room.kick(id)} />
           ))}
         </div>
 
-        <aside className="panel">
-          {phase === 'greet' && (
-            <GreetPanel
-              goal={goal} setGoal={(v) => { setGoal(v); }}
-              onShareGoal={() => goal.trim() && room.sendGoal(goal.trim())}
-              goals={goals} peers={peers} selfId={selfId} name={name}
-              ready={ready} iAmReady={iAmReady} count={count}
-              onReady={() => room.setReady(!iAmReady)}
-              isHost={isHost} onStart={room.start}
-            />
-          )}
+        <div className="rail">
+          <aside className="panel">
+            {phase === 'greet' && (
+              <GreetPanel goal={goal} setGoal={setGoal}
+                onShareGoal={() => goal.trim() && room.sendGoal(goal.trim())}
+                goals={goals} peers={peers} ready={ready} iAmReady={iAmReady} count={count}
+                onReady={() => room.setReady(!iAmReady)} isHost={isHost} onStart={room.start} />
+            )}
+            {phase === 'focus' && <FocusPanel todos={todos} done={done} setDone={setDone} endsAt={endsAt} />}
+            {phase === 'regroup' && (
+              <RegroupPanel todos={todos} done={done} endsAt={endsAt} isHost={isHost} onRestart={room.restart} />
+            )}
+          </aside>
 
-          {phase === 'focus' && (
-            <FocusPanel todos={todos} done={done} setDone={setDone} endsAt={endsAt} />
-          )}
-
-          {phase === 'regroup' && (
-            <RegroupPanel
-              todos={todos} done={done} endsAt={endsAt}
-              isHost={isHost} onRestart={room.restart}
-            />
-          )}
-        </aside>
+          <aside className="panel chat-panel">
+            <div className="panel-head">
+              <h3 className="panel-title">Chat</h3>
+              <span className="hint">not saved</span>
+            </div>
+            <div className="chat-log" ref={logRef}>
+              {chat.length === 0 ? (
+                <div className="chat-empty"><ChatDoodle /><p>Say something. Messages vanish when the room does.</p></div>
+              ) : chat.map((m, i) => (
+                <div key={i} className={`chat-msg ${m.id === selfId ? 'mine' : ''}`}>
+                  <span className="who">{m.id === selfId ? 'You' : m.name}</span>
+                  <span className="body">{m.text}</span>
+                </div>
+              ))}
+            </div>
+            <form className="chat-form" onSubmit={send}>
+              <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Message…" maxLength={500} />
+              <button className="primary chat-send" type="submit" disabled={!draft.trim()}>Send</button>
+            </form>
+            <div className="dl-row">
+              <button className="secondary sm" onClick={downloadTodos}>Download list</button>
+              <button className="secondary sm" onClick={downloadChat} disabled={chat.length === 0}>Download chat</button>
+            </div>
+          </aside>
+        </div>
       </section>
     </main>
   );
@@ -150,16 +188,13 @@ function PhaseBanner({ phase, endsAt, regroupMin }) {
   }[phase];
   return (
     <div className={`banner banner-${phase}`}>
-      <div>
-        <h2>{copy.t}</h2>
-        <p>{copy.s}</p>
-      </div>
+      <div><h2>{copy.t}</h2><p>{copy.s}</p></div>
       {phase !== 'greet' && <Timer endsAt={endsAt} label={phase === 'focus' ? 'focus ends in' : 'regroup ends in'} />}
     </div>
   );
 }
 
-function GreetPanel({ goal, setGoal, onShareGoal, goals, peers, selfId, name, ready, iAmReady, count, onReady, isHost, onStart }) {
+function GreetPanel({ goal, setGoal, onShareGoal, goals, peers, ready, iAmReady, count, onReady, isHost, onStart }) {
   const others = Object.keys(peers);
   return (
     <>
@@ -168,25 +203,16 @@ function GreetPanel({ goal, setGoal, onShareGoal, goals, peers, selfId, name, re
         <input value={goal} onChange={(e) => setGoal(e.target.value)} onBlur={onShareGoal}
           placeholder="Your focus for this session" maxLength={200} />
       </label>
-
       <ul className="goal-list">
         {others.map((id) => (
-          <li key={id}>
-            <strong>{peers[id].name || 'Guest'}</strong>
-            <span>{goals[id] || '…'}</span>
-          </li>
+          <li key={id}><strong>{peers[id].name || 'Guest'}</strong><span>{goals[id] || '…'}</span></li>
         ))}
       </ul>
-
       <div className="ready-row">
         <span>{ready.length}/{count} ready</span>
-        <button className={`primary ${iAmReady ? 'is-on' : ''}`} onClick={onReady}>
-          {iAmReady ? 'Ready ✓' : 'I’m ready'}
-        </button>
+        <button className={`primary ${iAmReady ? 'is-on' : ''}`} onClick={onReady}>{iAmReady ? 'Ready ✓' : 'I’m ready'}</button>
       </div>
-      {isHost && (
-        <button className="link-btn" onClick={onStart}>Start now (don’t wait)</button>
-      )}
+      {isHost && <button className="link-btn" onClick={onStart}>Start now (don’t wait)</button>}
       <p className="hint">Focus begins when everyone’s ready.</p>
     </>
   );
@@ -200,11 +226,7 @@ function FocusPanel({ todos, done, setDone, endsAt }) {
       <ul className="todo-check">
         {todos.map((t, i) => (
           <li key={i} className={done[i] ? 'done' : ''}>
-            <label>
-              <input type="checkbox" checked={!!done[i]}
-                onChange={(e) => setDone({ ...done, [i]: e.target.checked })} />
-              <span>{t}</span>
-            </label>
+            <label><input type="checkbox" checked={!!done[i]} onChange={(e) => setDone({ ...done, [i]: e.target.checked })} /><span>{t}</span></label>
           </li>
         ))}
       </ul>
@@ -221,9 +243,7 @@ function RegroupPanel({ todos, done, endsAt, isHost, onRestart }) {
       <p className="tally">{finished}/{todos.length || 0} done</p>
       <ul className="todo-check">
         {todos.map((t, i) => (
-          <li key={i} className={done[i] ? 'done' : ''}>
-            <span>{done[i] ? '✓' : '·'} {t}</span>
-          </li>
+          <li key={i} className={done[i] ? 'done' : ''}><span>{done[i] ? '✓' : '·'} {t}</span></li>
         ))}
       </ul>
       <Timer endsAt={endsAt} label="regroup ends in" />
@@ -235,11 +255,7 @@ function RegroupPanel({ todos, done, endsAt, isHost, onRestart }) {
 function Ended({ msg, onLeave }) {
   return (
     <main className="ended">
-      <div className="card center">
-        <span className="brand-mark" aria-hidden="true" />
-        <p>{msg}</p>
-        <button className="primary" onClick={onLeave}>Back to start</button>
-      </div>
+      <div className="card center"><Moon size={56} /><p>{msg}</p><button className="primary" onClick={onLeave}>Back to start</button></div>
     </main>
   );
 }

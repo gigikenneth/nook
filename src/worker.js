@@ -15,10 +15,10 @@ export default {
 
     if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
 
-    // Matchmaking: hand back a public room id with an open seat.
-    if (url.pathname === '/match') {
+    // Live directory of open rooms for the landing page.
+    if (url.pathname === '/rooms') {
       const lobby = env.LOBBY.get(env.LOBBY.idFromName('global'));
-      const res = await lobby.fetch(req);
+      const res = await lobby.fetch(new Request('https://lobby/rooms'));
       return new Response(await res.text(), {
         headers: { ...cors, 'Content-Type': 'application/json' },
       });

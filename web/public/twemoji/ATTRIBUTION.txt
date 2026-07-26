@@ -1,0 +1,15 @@
+Graphics in this folder are from Twemoji.
+
+Copyright 2020 Twitter, Inc and other contributors.
+Code licensed under the MIT License: https://opensource.org/licenses/MIT
+Graphics licensed under CC-BY 4.0: https://creativecommons.org/licenses/by/4.0/
+
+Source: https://github.com/jdecked/twemoji
+
+Files used:
+  1f319.svg  crescent moon (brand mark)
+  2728.svg   sparkles
+  2b50.svg   star
+  2615.svg   hot beverage
+  1fab4.svg  potted plant
+  1f4ac.svg  speech balloon (empty chat)

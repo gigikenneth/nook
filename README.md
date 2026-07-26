@@ -15,9 +15,14 @@ disappears when everyone leaves.
    and a shared countdown (50 min by default).
 3. **Regroup** — cameras come back on. See what got done, then run another round.
 
-Two ways in:
-- **Start a room** → get a private invite link to share. No strangers.
-- **Match me** → get dropped into a public room with whoever's around (max 4).
+The landing page shows a **live directory** of open rooms — who's around and what
+they're working on — so you can join someone. Or start your own:
+- **Open room** → listed in the directory, anyone can join (max 4).
+- **Invite only** → private, not listed; share the link yourself.
+
+There's also an ephemeral **chat** (never stored — history dies with the room), and
+one-click **Download list** / **Download chat** to keep a copy. Soft chimes mark the
+start of focus, the end of the timer, and the regroup.
 
 ## Architecture
 
@@ -27,8 +32,10 @@ No always-on server, no video server, no database.
 |---|---|
 | **Cloudflare Worker** (`src/worker.js`) | Routes `/match` and the room WebSocket. |
 | **RoomDO** (`src/RoomDO.js`) | One Durable Object per room. In-memory members, runs the session timer (via DO alarms), relays WebRTC signaling, enforces the cap of 4. |
-| **LobbyDO** (`src/LobbyDO.js`) | Fills one public room to 4, then rotates to a fresh one. |
+| **LobbyDO** (`src/LobbyDO.js`) | Live directory of open rooms. Public rooms report their occupants; stale entries are pruned. |
 | **Web app** (`web/`) | React + Vite. WebRTC **mesh** (peer-to-peer) video — at ≤4 people no SFU is needed. |
+
+Design: Material 3 Expressive + Liquid Glass, green palette, Fredoka display type.
 
 Video uses Google's public STUN server. There's **no TURN in v1**, so roughly
 10–15% of users behind strict NAT won't be able to connect video (presence and
@@ -88,6 +95,13 @@ niche four-person tool.
 
 Full design rationale: [docs/superpowers/specs/2026-07-26-nook-design.md](docs/superpowers/specs/2026-07-26-nook-design.md).
 
+## Assets
+
+Emoji graphics are [Twemoji](https://github.com/jdecked/twemoji) (© Twitter),
+code MIT, graphics CC-BY 4.0. Vendored in `web/public/twemoji/` — see its
+`ATTRIBUTION.txt`.
+
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT (Nook's own code). See [LICENSE](LICENSE). Third-party assets keep their own
+licenses, noted above.

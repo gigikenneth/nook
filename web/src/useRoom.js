@@ -15,6 +15,7 @@ export function useRoom(roomId, name, opts) {
   const [endsAt, setEndsAt] = useState(null);
   const [ready, setReady] = useState([]);
   const [goals, setGoals] = useState({}); // id -> text
+  const [chat, setChat] = useState([]); // { id, name, text, t } — never persisted
   const [config, setConfig] = useState({ focusMin: opts.focusMin, regroupMin: opts.regroupMin });
   const [status, setStatus] = useState('connecting');
   const [local, setLocal] = useState(null);
@@ -82,6 +83,7 @@ export function useRoom(roomId, name, opts) {
           setEndsAt(m.endsAt);
           setReady(m.ready || []);
           setConfig({ focusMin: m.focusMin, regroupMin: m.regroupMin });
+          if (m.goals) setGoals(m.goals);
           applyPhaseToTracks(m.phase);
           setPeers((p) => {
             const n = { ...p };
@@ -119,6 +121,9 @@ export function useRoom(roomId, name, opts) {
         case 'goal':
           setGoals((g) => ({ ...g, [m.id]: m.text }));
           break;
+        case 'chat':
+          setChat((c) => [...c, { id: m.id, name: m.name, text: m.text, t: m.t }]);
+          break;
         case 'host':
           setHostId(m.id);
           break;
@@ -147,7 +152,7 @@ export function useRoom(roomId, name, opts) {
       localStream.current = stream;
       setLocal(stream);
 
-      const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}`;
+      const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}`;
       const socket = new WebSocket(`${wsBase}/room/${encodeURIComponent(roomId)}/ws?${qs}`);
       ws.current = socket;
       socket.onopen = () => setStatus('connected');
@@ -168,11 +173,12 @@ export function useRoom(roomId, name, opts) {
   }, [roomId]);
 
   return {
-    selfId, hostId, peers, phase, endsAt, ready, goals, config, status, local,
+    selfId, hostId, peers, phase, endsAt, ready, goals, chat, config, status, local,
     setReady: (r) => sendWs({ type: r ? 'ready' : 'unready' }),
     start: () => sendWs({ type: 'start' }),
     kick: (id) => sendWs({ type: 'kick', id }),
     restart: () => sendWs({ type: 'restart' }),
     sendGoal: (text) => sendWs({ type: 'goal', text }),
+    sendChat: (text) => sendWs({ type: 'chat', text }),
   };
 }
