@@ -195,6 +195,20 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     setCheckin(null);
   }
 
+  // Five-minutes-left warning chime during focus (#23). Skipped for sessions that
+  // are 5 min or shorter, and if you joined inside the final 5 minutes.
+  const warnedRef = useRef(false);
+  useEffect(() => { if (phase !== 'focus') warnedRef.current = false; }, [phase]);
+  useEffect(() => {
+    if (phase !== 'focus' || !endsAt || warnedRef.current) return;
+    const FIVE = 5 * 60000;
+    if (config.focusMin * 60000 <= FIVE) return;
+    const delay = endsAt - FIVE - Date.now();
+    if (delay <= 0) return;
+    const t = setTimeout(() => { warnedRef.current = true; chime('warn'); }, delay);
+    return () => clearTimeout(t);
+  }, [phase, endsAt, config.focusMin]);
+
   function copy() {
     navigator.clipboard?.writeText(inviteLink);
     setCopied(true);
