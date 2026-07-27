@@ -1,16 +1,21 @@
 // One Durable Object per room. Holds live WebSocket sessions, runs the session
-// timer, relays WebRTC signaling + chat between the (max 4) peers. Nothing is
-// persisted: state lives in memory and dies when the room empties.
+// timer, relays WebRTC signaling + chat between the (max 4) peers.
+//
+// Per-person state (goals, camera prefs, ready/shared) is ephemeral and dies
+// when people leave. The SESSION itself (phase + timer + config) is persisted to
+// DO storage and PAUSED while the room is empty, so a rejoin — even both people
+// returning much later, or after an eviction/deploy — resumes from exactly where
+// it stopped instead of restarting at greet.
 //
 // Public rooms also report their occupants to the LobbyDO so they show up on the
 // landing-page directory. Private (invite-link) rooms never report.
 
 const MAX = 4;
 const HEARTBEAT_MS = 12000;
-// Grace window after the last person leaves before the running timer is torn
-// down. Lets a sole occupant who refreshes / locks their phone / blips offline
-// rejoin the SAME session instead of a fresh greet (issue #5).
-const GRACE_MS = 90000;
+const SESSION_KEY = 'sess'; // persisted session blob (survives eviction/deploy)
+// A room left empty this long is genuinely abandoned — wipe its stored session
+// so storage doesn't accumulate ghost rooms forever.
+const ABANDON_MS = 6 * 60 * 60 * 1000; // 6h
 
 function clampInt(v, def, min, max) {
   const n = parseInt(v, 10);
@@ -29,13 +34,64 @@ export class RoomDO {
     this.shared = new Set(); // ids who confirmed they shared their goal (greet turn-taking)
     this.locked = false; // host can close the room to newcomers (mid-session join off)
     this.phase = 'greet'; // greet | focus | regroup
-    this.endsAt = null;
-    this.emptyAt = null; // set when the room drains; grace window before teardown
+    this.endsAt = null; // absolute ms while the timer runs; null when paused/greet
+    this.paused = false; // true while the room is empty — timer frozen
+    this.remainingMs = null; // ms left on the timer when it was paused
+    this.abandonAt = null; // wipe the stored session after this if still empty
+    this.configured = false; // has the session config (lengths/visibility) been set?
     this.focusMin = 50;
     this.regroupMin = 5;
     this.hostId = null;
     this.roomId = null; // path segment, for lobby registration
     this.isPublic = false;
+
+    // Restore the persisted session before any request or alarm is handled, so an
+    // evicted/redeployed room resumes instead of starting fresh at greet.
+    this._restore = state.blockConcurrencyWhile(async () => {
+      const s = await state.storage.get(SESSION_KEY);
+      if (!s) return;
+      this.phase = s.phase; this.endsAt = s.endsAt ?? null;
+      this.paused = !!s.paused; this.remainingMs = s.remainingMs ?? null;
+      this.abandonAt = s.abandonAt ?? null;
+      this.focusMin = s.focusMin; this.regroupMin = s.regroupMin;
+      this.isPublic = s.isPublic; this.locked = !!s.locked;
+      this.configured = true;
+    });
+  }
+
+  persist() {
+    return this.state.storage.put(SESSION_KEY, {
+      phase: this.phase, endsAt: this.endsAt, paused: this.paused, remainingMs: this.remainingMs,
+      abandonAt: this.abandonAt, focusMin: this.focusMin, regroupMin: this.regroupMin,
+      isPublic: this.isPublic, locked: this.locked,
+    });
+  }
+
+  // Everyone left: freeze the timer where it is and mark the room abandonable.
+  pauseSession() {
+    if (this.endsAt) { this.remainingMs = Math.max(0, this.endsAt - Date.now()); this.endsAt = null; }
+    this.paused = true;
+    this.hostId = null;
+    this.abandonAt = Date.now() + ABANDON_MS;
+    this.persist();
+    this.state.storage.setAlarm(this.abandonAt);
+  }
+
+  // Someone came back: un-freeze the timer from exactly where it stopped.
+  resumeSession() {
+    if (!this.paused) return;
+    this.endsAt = this.remainingMs != null ? Date.now() + this.remainingMs : null;
+    this.paused = false; this.remainingMs = null; this.abandonAt = null;
+    this.persist();
+  }
+
+  // A room sat empty past the abandon window — clear it for good.
+  wipe() {
+    this.phase = 'greet'; this.endsAt = null; this.paused = false; this.remainingMs = null;
+    this.abandonAt = null; this.hostId = null; this.locked = false; this.configured = false;
+    this.state.storage.delete(SESSION_KEY);
+    this.state.storage.deleteAlarm();
+    this.syncLobby();
   }
 
   async fetch(req) {
@@ -67,12 +123,14 @@ export class RoomDO {
     if (pathId) this.roomId = decodeURIComponent(pathId[1]);
 
     // First person in sets the session lengths and whether the room is listed.
-    // Only on a brand-new room, never on a resume within the grace window (that
-    // would clobber the config with the rejoiner's URL defaults).
-    if (this.hostId === null && this.endsAt === null && this.emptyAt === null) {
+    // Only on a brand-new room — never on a resume, which would clobber the
+    // config with the rejoiner's URL defaults.
+    if (!this.configured) {
       this.focusMin = clampInt(url.searchParams.get('focus'), 50, 1, 180);
       this.regroupMin = clampInt(url.searchParams.get('regroup'), 5, 0, 60);
       this.isPublic = url.searchParams.get('public') === '1';
+      this.configured = true;
+      this.persist();
     }
     const name = (url.searchParams.get('name') || 'Guest').slice(0, 32);
     const id = crypto.randomUUID();
@@ -82,7 +140,7 @@ export class RoomDO {
     server.accept();
 
     if (this.hostId === null) this.hostId = id;
-    this.emptyAt = null; // someone's back — cancel any pending grace teardown
+    this.resumeSession(); // someone's back — un-freeze the timer where it stopped
     this.sessions.set(id, { ws: server, name });
     server.addEventListener('message', (e) => this.onMessage(id, e));
     server.addEventListener('close', () => this.onClose(id));
@@ -167,6 +225,7 @@ export class RoomDO {
       case 'lock': // host opens/closes the room to newcomers
         if (id === this.hostId) {
           this.locked = !!m.locked;
+          this.persist();
           this.broadcast({ type: 'locked-state', locked: this.locked });
           this.syncLobby();
         }
@@ -187,34 +246,31 @@ export class RoomDO {
     this.phase = 'focus';
     this.endsAt = Date.now() + this.focusMin * 60000;
     this.ready.clear();
+    this.persist();
     this.broadcastPhase();
     this.syncLobby();
     this.scheduleTick();
   }
 
   async alarm() {
-    // The alarm ticks every HEARTBEAT_MS to keep the room fresh in the directory
-    // (all phases, not just greet), and fires the phase transition when the timer
-    // elapses. Without the tick, a focus room stops reporting and gets pruned
-    // from the lobby after ~30s, so ongoing sessions would vanish.
+    // The alarm ticks every HEARTBEAT_MS while occupied (to keep the room fresh in
+    // the directory and fire phase transitions), and once far in the future while
+    // empty (to wipe a genuinely abandoned room).
     const now = Date.now();
     if (this.sessions.size === 0) {
-      // Draining: the grace window has elapsed with nobody back — tear down now.
-      // (If someone rejoined, emptyAt was cleared and this alarm is a no-op.)
-      if (this.emptyAt && now >= this.emptyAt + GRACE_MS - 500) {
-        this.phase = 'greet';
-        this.endsAt = null;
-        this.emptyAt = null;
-        this.hostId = null;
-        this.state.storage.deleteAlarm();
-        this.syncLobby();
-      }
+      // Empty. If the DO was evicted while occupied (e.g. a deploy) and this alarm
+      // fired before anyone reconnected, the session isn't paused yet — pause it
+      // now so it resumes intact. Only wipe once the abandon window has passed.
+      if (!this.paused) { this.pauseSession(); return; }
+      if (this.abandonAt && now >= this.abandonAt - 500) this.wipe();
+      else this.state.storage.setAlarm(this.abandonAt || now + ABANDON_MS);
       return;
     }
     if (this.endsAt && now >= this.endsAt - 500) {
       if (this.phase === 'focus') {
         this.phase = 'regroup';
         this.endsAt = Date.now() + this.regroupMin * 60000;
+        this.persist();
         this.broadcastPhase();
       } else if (this.phase === 'regroup') {
         this.toGreet();
@@ -227,12 +283,8 @@ export class RoomDO {
   // Re-arm the alarm: the sooner of the next heartbeat and the phase-end, while
   // anyone is still here.
   scheduleTick() {
-    if (this.sessions.size === 0) {
-      // Draining: arm a single alarm at the end of the grace window so the
-      // teardown in alarm() runs if nobody comes back.
-      if (this.emptyAt) this.state.storage.setAlarm(this.emptyAt + GRACE_MS);
-      return;
-    }
+    // While empty the room is paused; onClose/pauseSession owns the abandon alarm.
+    if (this.sessions.size === 0) return;
     const now = Date.now();
     let next = now + HEARTBEAT_MS;
     if (this.endsAt && this.endsAt < next) next = this.endsAt;
@@ -244,6 +296,7 @@ export class RoomDO {
     this.endsAt = null;
     this.ready.clear();
     this.shared.clear();
+    this.persist();
     this.broadcastPhase();
     this.broadcast({ type: 'ready-state', ready: [] });
     this.broadcast({ type: 'shared-state', shared: [] });
@@ -290,16 +343,10 @@ export class RoomDO {
     this.broadcast({ type: 'shared-state', shared: [...this.shared] });
     this.broadcast({ type: 'order', order: [...this.sessions.keys()] });
     if (this.sessions.size === 0) {
-      // Don't nuke a running timer on the last leave — a sole occupant who
-      // refreshed / locked their phone / blipped offline should resume the same
-      // session. Keep phase/endsAt; start the grace window; hand host to whoever
-      // rejoins. Real teardown happens in alarm() if the window lapses empty.
-      // ponytail: phase/endsAt live in DO memory only. A DO eviction during the
-      // 90s grace loses them and the timer restarts (rare). Persist them to
-      // this.state.storage if that edge ever proves flaky.
-      this.emptyAt = Date.now();
-      this.hostId = null;
-      this.scheduleTick();
+      // Last person left: freeze the session where it is and persist it. A rejoin
+      // (a refresh, or both people returning much later, or after an eviction /
+      // deploy) resumes from exactly here instead of restarting at greet.
+      this.pauseSession();
     } else if (id === this.hostId) {
       this.hostId = [...this.sessions.keys()][0];
       this.broadcast({ type: 'host', id: this.hostId });
