@@ -326,6 +326,19 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   padding: 8px 12px; font-weight: 700; font-size: 14px; background: var(--orange); color: var(--ink);
 }
 
+/* Mid-session check-in card (#16): a gentle, dismissible prompt at the midpoint. */
+.checkin {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 55;
+  width: min(440px, calc(100vw - 32px));
+  background: #fff; color: var(--ink); border-radius: var(--r-lg); padding: 18px 20px;
+  box-shadow: var(--shadow); border: 1px solid var(--line); animation: toast-pop .3s var(--spring);
+}
+.checkin-head { display: flex; align-items: center; justify-content: space-between; }
+.checkin-head strong { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
+.checkin-q { margin: 6px 0 12px; font-family: var(--display); font-size: 19px; font-weight: 800; }
+.checkin-form { display: flex; gap: 8px; }
+.checkin-form input { border-radius: var(--r-pill); }
+
 /* In-room Home overlay: peek the home page without leaving the session. */
 .home-overlay {
   position: fixed; inset: 0; z-index: 60; overflow-y: auto;

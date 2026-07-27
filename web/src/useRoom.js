@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiBase, wsBase } from './config';
 import { liveTrackOf, mediaErrorMessage } from './media';
+import { chime } from './sound';
 
 // STUN by default; the /ice endpoint adds a TURN relay when configured so peers
 // behind strict NAT (different networks) can still connect.
@@ -211,6 +212,7 @@ export function useRoom(roomId, name, opts) {
           break;
         case 'peer-join':
           setPeers((p) => ({ ...p, [m.id]: { ...(p[m.id] || {}), name: m.name } }));
+          chime('join'); // someone new arrived (#12)
           break;
         case 'peer-leave': {
           const pc = pcMap.get(m.id);
