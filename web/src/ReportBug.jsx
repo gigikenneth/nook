@@ -14,7 +14,7 @@ export function ReportBug({ label = 'Report a bug' }) {
 
   async function submit(e) {
     e.preventDefault();
-    if (msg.trim().length < 5) return;
+    if (msg.trim().length < 5) { setState('short'); return; }
     setState('sending');
     try {
       const r = await fetch(`${apiBase}/report`, {
@@ -42,16 +42,17 @@ export function ReportBug({ label = 'Report a bug' }) {
               <form onSubmit={submit}>
                 <h3 className="panel-title">Report a bug</h3>
                 <p className="hint">What went wrong? No account needed.</p>
-                <textarea value={msg} onChange={(e) => setMsg(e.target.value)} rows={4}
+                <textarea value={msg} onChange={(e) => { setMsg(e.target.value); if (state === 'short' || state === 'error') setState('idle'); }} rows={4}
                   placeholder="Describe the bug — what you did and what happened…" maxLength={4000} autoFocus />
                 <input value={email} onChange={(e) => setEmail(e.target.value)} maxLength={120}
                   placeholder="Your email (optional, only if you want a reply)" />
                 <input className="hp-field" tabIndex={-1} autoComplete="off" aria-hidden="true"
                   value={hp} onChange={(e) => setHp(e.target.value)} />
+                {state === 'short' && <p className="hint err">Add a little more detail (a few words) so I can look into it.</p>}
                 {state === 'error' && <p className="hint err">Couldn't send. Try again in a moment.</p>}
                 <div className="report-actions">
                   <button type="button" className="ghost sm" onClick={close}>Cancel</button>
-                  <button type="submit" className="primary sm" disabled={state === 'sending' || msg.trim().length < 5}>
+                  <button type="submit" className="primary sm" disabled={state === 'sending'}>
                     {state === 'sending' ? 'Sending…' : 'Send report'}
                   </button>
                 </div>
