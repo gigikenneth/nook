@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRoom } from './useRoom';
 import { chime } from './sound';
+import { BUG_URL } from './config';
 import { Moon, ChatDoodle } from './graphics.jsx';
 
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
@@ -230,6 +231,9 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
           </aside>
         </div>
       </section>
+      <footer className="site-foot in-room">
+        <a href={BUG_URL} target="_blank" rel="noopener noreferrer">Report a bug</a>
+      </footer>
     </main>
   );
 }

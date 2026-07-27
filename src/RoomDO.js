@@ -103,7 +103,7 @@ export class RoomDO {
     this.broadcastExcept(id, { type: 'peer-join', id, name });
 
     this.syncLobby();
-    this.scheduleHeartbeat();
+    this.scheduleTick();
 
     return new Response(null, { status: 101, webSocket: client });
   }
@@ -170,35 +170,38 @@ export class RoomDO {
     this.phase = 'focus';
     this.endsAt = Date.now() + this.focusMin * 60000;
     this.ready.clear();
-    await this.state.storage.setAlarm(this.endsAt);
     this.broadcastPhase();
     this.syncLobby();
+    this.scheduleTick();
   }
 
   async alarm() {
-    // Phase timer end vs. greet-phase lobby heartbeat, disambiguated by state.
-    if (this.phase === 'focus' && this.endsAt) {
-      this.phase = 'regroup';
-      this.endsAt = Date.now() + this.regroupMin * 60000;
-      await this.state.storage.setAlarm(this.endsAt);
-      this.broadcastPhase();
-      this.syncLobby();
-      return;
+    // The alarm ticks every HEARTBEAT_MS to keep the room fresh in the directory
+    // (all phases, not just greet), and fires the phase transition when the timer
+    // elapses. Without the tick, a focus room stops reporting and gets pruned
+    // from the lobby after ~30s, so ongoing sessions would vanish.
+    const now = Date.now();
+    if (this.endsAt && now >= this.endsAt - 500) {
+      if (this.phase === 'focus') {
+        this.phase = 'regroup';
+        this.endsAt = Date.now() + this.regroupMin * 60000;
+        this.broadcastPhase();
+      } else if (this.phase === 'regroup') {
+        this.toGreet();
+      }
     }
-    if (this.phase === 'regroup' && this.endsAt) {
-      this.toGreet();
-      this.scheduleHeartbeat();
-      return;
-    }
-    // greet heartbeat: keep the room fresh in the directory while it waits
     this.syncLobby();
-    this.scheduleHeartbeat();
+    this.scheduleTick();
   }
 
-  scheduleHeartbeat() {
-    if (this.isPublic && this.phase === 'greet' && this.sessions.size > 0) {
-      this.state.storage.setAlarm(Date.now() + HEARTBEAT_MS);
-    }
+  // Re-arm the alarm: the sooner of the next heartbeat and the phase-end, while
+  // anyone is still here.
+  scheduleTick() {
+    if (this.sessions.size === 0) return;
+    const now = Date.now();
+    let next = now + HEARTBEAT_MS;
+    if (this.endsAt && this.endsAt < next) next = this.endsAt;
+    this.state.storage.setAlarm(next);
   }
 
   toGreet() {
@@ -210,18 +213,22 @@ export class RoomDO {
     this.broadcast({ type: 'ready-state', ready: [] });
     this.broadcast({ type: 'shared-state', shared: [] });
     this.syncLobby();
+    this.scheduleTick();
   }
 
   broadcastPhase() {
     this.broadcast({ type: 'phase', phase: this.phase, endsAt: this.endsAt, serverNow: Date.now() });
   }
 
-  // Tell the lobby who's here (or that we're gone). Private rooms stay invisible.
+  // Tell the lobby who's here (or that we're gone). Private rooms are reported
+  // too, but anonymously — the directory shows "a private session" + time-left,
+  // never names or goals.
   syncLobby() {
     if (!this.env || !this.roomId) return;
-    if (!this.isPublic) return;
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('global'));
-    const occupants = [...this.sessions].map(([pid, s]) => ({ name: s.name, goal: this.goals.get(pid) || '' }));
+    const occupants = this.isPublic
+      ? [...this.sessions].map(([pid, s]) => ({ name: s.name, goal: this.goals.get(pid) || '' }))
+      : [];
     lobby.fetch('https://lobby/update', {
       method: 'POST',
       body: JSON.stringify({
@@ -230,6 +237,7 @@ export class RoomDO {
         phase: this.phase,
         endsAt: this.endsAt,
         locked: this.locked,
+        isPublic: this.isPublic,
         occupants,
       }),
     }).catch(() => {});

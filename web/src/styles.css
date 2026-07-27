@@ -65,6 +65,21 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
 }
 .tagline { color: var(--cream); opacity: 0.92; margin: 6px 0 0; max-width: 34ch; font-weight: 500; font-size: 17px; }
 
+/* Subtle "beta" tag on the hero slab. */
+.beta-tag {
+  position: absolute; top: 18px; right: 20px; z-index: 2;
+  padding: 3px 10px; border-radius: var(--r-pill); background: var(--orange); color: var(--ink);
+  font-family: var(--body); font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
+}
+
+/* Quiet footer: beta note + report-a-bug link. */
+.site-foot {
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 16px;
+  text-align: center; padding: 14px 12px 4px; font-size: 13px; color: var(--muted);
+}
+.site-foot a { color: var(--olive); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.site-foot.in-room { padding: 10px; }
+
 /* First-open orientation: the three things you do, in order. */
 .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: center; }
 .steps li { display: flex; align-items: center; gap: 9px; font-weight: 700; color: var(--muted); font-size: 14px; }
@@ -255,6 +270,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   border: 2px solid #fff; margin-left: -9px;
 }
 .room-av:first-child { margin-left: 0; }
+.room-av.lock { background: var(--cream2); color: var(--ink); font-size: 16px; border: none; }
+.room-row.private { opacity: .8; }
+.room-row.private .room-people strong { color: var(--muted); font-weight: 700; }
 .room-people { display: grid; gap: 2px; min-width: 0; }
 .room-people strong { font-size: 15px; font-family: var(--display); font-weight: 700; }
 .room-people span { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

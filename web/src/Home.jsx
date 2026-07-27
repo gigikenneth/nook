@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { apiBase } from './config';
+import { apiBase, BUG_URL } from './config';
 import { useLobby } from './useLobby';
 import { Moon, Sparkles } from './graphics.jsx';
 
@@ -109,7 +109,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
       <main className="home">
         <Sparkles />
         <header className="brand">
-          <h1>Nook</h1>
+          <h1>Nook</h1><span className="beta-tag">beta</span>
           <p className="tagline">You've been invited. Add your name and what you're here to do.</p>
           <Moon size={40} />
         </header>
@@ -133,7 +133,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
         </div>
       )}
       <header className="brand">
-        <h1>Nook</h1>
+        <h1>Nook</h1><span className="beta-tag">beta</span>
         <p className="tagline">Your focus crew for the next 50 minutes. Show up, say what you're on, and get it done alongside a few other people.</p>
         <Moon size={40} />
       </header>
@@ -154,11 +154,26 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
         ) : (
           <ul className="room-list">
             {rooms.map((r) => {
+              // Live sessions show how long is left; refreshed each poll (~4s).
+              const minsLeft = r.endsAt ? Math.max(0, Math.round((r.endsAt - Date.now()) / 60000)) : null;
+              // Private sessions appear anonymously — visibility without exposure.
+              if (r.isPublic === false) {
+                return (
+                  <li key={r.roomId} className="room-row private">
+                    <div className="room-left">
+                      <span className="room-av lock" aria-hidden="true">🔒</span>
+                      <div className="room-people"><strong>Private session</strong></div>
+                    </div>
+                    <div className="room-meta">
+                      <span className={`badge badge-${r.phase}`}>{phaseLabel[r.phase]}</span>
+                      {minsLeft != null && <span className="time-left">~{minsLeft}m left</span>}
+                    </div>
+                  </li>
+                );
+              }
               const names = r.occupants.map((o) => o.name).join(', ');
               const goals = r.occupants.map((o) => o.goal).filter(Boolean).join(' · ');
               const full = r.count >= 4;
-              // Live sessions show how long is left; refreshed each poll (~4s).
-              const minsLeft = r.endsAt ? Math.max(0, Math.round((r.endsAt - Date.now()) / 60000)) : null;
               return (
                 <li key={r.roomId} className="room-row">
                   <div className="room-left">
@@ -232,6 +247,11 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
           </button>
         </div>
       </section>
+
+      <footer className="site-foot">
+        <span>Nook is in beta, and I'm actively tinkering with it.</span>
+        <a href={BUG_URL} target="_blank" rel="noopener noreferrer">Found a bug? Report it →</a>
+      </footer>
     </main>
   );
 

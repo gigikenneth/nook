@@ -32,10 +32,10 @@ export class LobbyDO {
     const url = new URL(req.url);
 
     if (req.method === 'POST' && url.pathname.endsWith('/update')) {
-      const { roomId, count, phase, endsAt, locked, occupants } = await req.json();
+      const { roomId, count, phase, endsAt, locked, isPublic, occupants } = await req.json();
       if (!roomId) return new Response('bad', { status: 400 });
       if (!count || count <= 0) this.rooms.delete(roomId);
-      else this.rooms.set(roomId, { count, phase, endsAt: endsAt || null, locked: !!locked, occupants: occupants || [], updated: Date.now() });
+      else this.rooms.set(roomId, { count, phase, endsAt: endsAt || null, locked: !!locked, isPublic: isPublic !== false, occupants: occupants || [], updated: Date.now() });
       return new Response('ok');
     }
 
@@ -44,14 +44,11 @@ export class LobbyDO {
     const list = [];
     for (const [roomId, r] of this.rooms) {
       if (now - r.updated > STALE_MS) { this.rooms.delete(roomId); continue; }
-      list.push({ roomId, count: r.count, phase: r.phase, endsAt: r.endsAt, locked: r.locked, occupants: r.occupants });
+      list.push({ roomId, count: r.count, phase: r.phase, endsAt: r.endsAt, locked: r.locked, isPublic: r.isPublic, occupants: r.occupants });
     }
-    // Greeting rooms with space float to the top.
-    list.sort((a, b) => {
-      const openA = a.phase === 'greet' && a.count < 4 ? 0 : 1;
-      const openB = b.phase === 'greet' && b.count < 4 ? 0 : 1;
-      return openA - openB;
-    });
+    // Actually-joinable rooms (public, unlocked, greeting, with space) float up.
+    const joinable = (r) => (r.isPublic && !r.locked && r.phase === 'greet' && r.count < 4 ? 0 : 1);
+    list.sort((a, b) => joinable(a) - joinable(b));
     return Response.json({ rooms: list });
   }
 
