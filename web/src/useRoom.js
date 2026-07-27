@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiBase, wsBase } from './config';
+import { liveTrackOf, mediaErrorMessage } from './media';
 
 // STUN by default; the /ice endpoint adds a TURN relay when configured so peers
 // behind strict NAT (different networks) can still connect.
@@ -36,6 +37,7 @@ export function useRoom(roomId, name, opts) {
   const camOn = useRef(false);
   const micOn = useRef(false);
   const [media, setMedia] = useState({ cam: false, mic: false });
+  const [mediaError, setMediaError] = useState(null); // last camera/mic problem, shown to the user
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const selfIdRef = useRef(null); // for renegotiation glare handling
@@ -63,26 +65,45 @@ export function useRoom(roomId, name, opts) {
     } catch { /* negotiation raced; the next signal recovers */ }
   }, [sendWs]);
 
+  // A live track died (device reclaimed, tab backgrounded): reflect it in the UI
+  // so the tile shows "off" and the next toggle re-acquires a fresh one (#6).
+  const onTrackEnded = useCallback((kind) => {
+    if (kind === 'video') { camOn.current = false; setMedia((m) => ({ ...m, cam: false })); }
+    else { micOn.current = false; setMedia((m) => ({ ...m, mic: false })); }
+  }, []);
+
   // Lazily acquire mic/camera only when the user turns it on — no permission
-  // prompt on join. Returns false if denied or no device, so the toggle can
-  // fall back to off instead of getting stuck. Wires the track to every peer.
+  // prompt on join. Returns false (and surfaces why) if it can't. Wires the track
+  // to every peer, reusing an existing sender so a re-acquired track actually
+  // reaches them instead of piling up dead senders.
   const ensureMedia = useCallback(async (kind) => {
     const cur = localStream.current;
-    if (cur && (kind === 'video' ? cur.getVideoTracks() : cur.getAudioTracks())[0]) return true;
+    if (liveTrackOf(cur, kind)) return true;
+    // Drop a dead track (ended camera/mic) so we get a fresh one.
+    if (cur) {
+      const dead = (kind === 'video' ? cur.getVideoTracks() : cur.getAudioTracks())[0];
+      if (dead) { try { dead.stop(); } catch {} cur.removeTrack(dead); }
+    }
     let got;
     try { got = await navigator.mediaDevices.getUserMedia(kind === 'video' ? { video: true } : { audio: true }); }
-    catch { return false; }
+    catch (e) { setMediaError(mediaErrorMessage(kind, e)); return false; }
     const track = got.getTracks()[0];
+    track.onended = () => onTrackEnded(kind);
     let stream = localStream.current;
     if (!stream) { stream = new MediaStream(); localStream.current = stream; }
     stream.addTrack(track);
     setLocal(stream);
     for (const [peerId, pc] of pcs.current) {
+      // Reuse the existing sender for this kind (seamless, no renegotiation);
+      // only a brand-new sender needs an offer/answer.
+      const sender = pc.getSenders().find((s) => (s.track ? s.track.kind : null) === track.kind);
+      if (sender) { try { await sender.replaceTrack(track); continue; } catch { /* fall through to addTrack */ } }
       pc.addTrack(track, stream);
       await renegotiate(peerId, pc);
     }
+    setMediaError(null);
     return true;
-  }, [renegotiate]);
+  }, [renegotiate, onTrackEnded]);
 
   useEffect(() => {
     let dead = false;
@@ -315,6 +336,7 @@ export function useRoom(roomId, name, opts) {
 
   return {
     selfId, hostId, peers, phase, endsAt, ready, shared, order, locked, goals, camPrefs, chat, config, status, local, media,
+    mediaError, dismissMediaError: () => setMediaError(null),
     shareGoal: () => sendWs({ type: 'shared' }),
     toggleLock: () => sendWs({ type: 'lock', locked: !locked }),
     toggleCam: async () => {

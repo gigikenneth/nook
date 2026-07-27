@@ -49,11 +49,17 @@ function Video({ stream, muted }) {
   return <video ref={ref} autoPlay playsInline muted={muted} />;
 }
 
-function Tile({ name, stream, self, camOff, isHost, canKick, onKick, media, onToggleCam, onToggleMic, pref, onCyclePref }) {
+function Tile({ name, stream, self, camOff, isHost, canKick, onKick, media, onToggleCam, onToggleMic, pref, onCyclePref, mediaError, onDismissError }) {
   const camShown = stream && !camOff && media?.cam !== false;
   return (
     <div className={`tile ${camOff ? 'camoff' : ''}`}>
       {camShown ? <Video stream={stream} muted={self} /> : <div className="avatar">{initials(name)}</div>}
+      {self && mediaError && (
+        <div className="media-error" role="alert">
+          <span>{mediaError}</span>
+          <button className="ghost x" onClick={onDismissError} aria-label="Dismiss">×</button>
+        </div>
+      )}
       {self && !camOff && (
         <div className="tile-controls">
           <button className={`mediabtn ${media?.cam ? '' : 'off'}`} onClick={onToggleCam}
@@ -193,6 +199,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         <div className={`grid grid-${count}`}>
           <Tile name={name} stream={local} self camOff={camOff} isHost={isHost}
             media={room.media} onToggleCam={room.toggleCam} onToggleMic={room.toggleMic}
+            mediaError={room.mediaError} onDismissError={room.dismissMediaError}
             pref={camPrefs[selfId]} onCyclePref={() => room.setCamPref(nextPref(camPrefs[selfId] || null))} />
           {peerIds.map((id) => (
             <Tile key={id} name={peers[id].name || 'Guest'} stream={peers[id].stream} camOff={camOff}
