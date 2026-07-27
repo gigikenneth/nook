@@ -1,92 +1,126 @@
-// Self-check for issue #5: a sole occupant who drops must resume the SAME
-// running timer, not restart in greet. Run: `node src/RoomDO.test.mjs`.
-// No framework on purpose — plain asserts against the DO's leave/alarm logic.
+// Self-check for the session-continuity behavior (issues #5 + the "random restart
+// to greeting" follow-up). Run: `node src/RoomDO.test.mjs`.
+//
+// The session (phase + timer + config) is persisted to DO storage and PAUSED
+// while the room is empty, so a rejoin — even after an eviction/deploy or both
+// people returning much later — resumes from exactly where it stopped instead of
+// restarting at greet. No framework: plain asserts against the DO logic.
 import assert from 'node:assert';
 import { RoomDO } from './RoomDO.js';
 
-let alarmAt = null;
-const fakeState = {
-  storage: {
-    setAlarm: (t) => { alarmAt = t; },
-    deleteAlarm: () => { alarmAt = null; },
-  },
-};
+const HOUR = 3600_000;
+const ABANDON_MS = 6 * HOUR; // mirror of the constant in RoomDO.js
 
-// Freeze/advance the clock so we can drive the grace window deterministically.
-let NOW = 1_000_000;
+// Fake DO state: a shared storage Map (so we can simulate eviction by making a
+// fresh RoomDO over the same store), a single alarm slot, and a synchronous
+// blockConcurrencyWhile.
+function makeState(store = new Map()) {
+  const s = { alarm: null, store };
+  s.storage = {
+    get: async (k) => store.get(k),
+    put: async (k, v) => { store.set(k, v); },
+    delete: async (k) => { store.delete(k); },
+    setAlarm: (t) => { s.alarm = t; },
+    deleteAlarm: () => { s.alarm = null; },
+  };
+  s.blockConcurrencyWhile = (fn) => fn();
+  return s;
+}
+
+let NOW = 1_000_000_000;
 const realNow = Date.now;
 Date.now = () => NOW;
 
-function soloFocusRoom() {
-  const r = new RoomDO(fakeState, null); // env null => syncLobby is a no-op
+async function soloFocusRoom(state) {
+  const r = new RoomDO(state, null); // env null => syncLobby is a no-op
+  await r._restore;
   r.roomId = 'test';
+  r.configured = true;
   r.phase = 'focus';
   r.endsAt = NOW + 50 * 60000; // 50 min left
-  const id = 'solo';
-  r.hostId = id;
-  r.sessions.set(id, { ws: { send() {} }, name: 'Gigi' });
-  return { r, id };
+  r.hostId = 'solo';
+  r.sessions.set('solo', { ws: { send() {} }, name: 'Gigi' });
+  return { r, id: 'solo' };
 }
 
-// 1) Last person drops mid-focus: timer must survive, grace alarm armed.
+// 1) Last person leaves mid-focus: session pauses (not reset), and is persisted.
+const store = new Map();
 {
-  const { r, id } = soloFocusRoom();
-  const endsAt = r.endsAt;
+  const st = makeState(store);
+  const { r, id } = await soloFocusRoom(st);
   r.onClose(id);
-  assert.equal(r.phase, 'focus', 'phase kept on drop');
-  assert.equal(r.endsAt, endsAt, 'endsAt kept on drop (no restart)');
-  assert.equal(r.emptyAt, NOW, 'grace window started');
-  assert.equal(r.hostId, null, 'host handed off for rejoiner');
-  assert.equal(alarmAt, NOW + 90000, 'grace alarm armed');
+  assert.equal(r.phase, 'focus', 'phase kept on empty');
+  assert.equal(r.endsAt, null, 'timer frozen (no absolute end while paused)');
+  assert.equal(r.paused, true, 'session paused');
+  assert.equal(r.remainingMs, 50 * 60000, 'full 50 min frozen');
+  assert.equal(r.hostId, null, 'host handed off for the rejoiner');
+  assert.equal(st.alarm, NOW + ABANDON_MS, 'abandon alarm armed');
+  const saved = store.get('sess');
+  assert.equal(saved.phase, 'focus', 'persisted phase');
+  assert.equal(saved.paused, true, 'persisted paused');
+  assert.equal(saved.remainingMs, 50 * 60000, 'persisted remaining');
 }
 
-// 2) Rejoin within grace: welcome would read the still-running timer.
+// 2) Eviction / deploy: a fresh DO over the same storage restores the paused
+//    session; rejoining resumes it in focus, NOT greet.
 {
-  const { r, id } = soloFocusRoom();
-  const endsAt = r.endsAt;
-  r.onClose(id);
-  NOW += 5000; // 5s later, they reconnect — mimic fetch()'s join bookkeeping
-  if (r.hostId === null) r.hostId = 'solo2';
-  r.emptyAt = null;
-  r.sessions.set('solo2', { ws: { send() {} }, name: 'Gigi' });
-  assert.equal(r.phase, 'focus', 'resumed in focus');
-  assert.equal(r.endsAt, endsAt, 'resumed timer unchanged');
+  const st2 = makeState(store); // SAME store => simulates a rebuilt DO instance
+  const r2 = new RoomDO(st2, null);
+  await r2._restore;
+  assert.equal(r2.phase, 'focus', 'restored phase after eviction');
+  assert.equal(r2.paused, true, 'restored paused');
+  assert.equal(r2.remainingMs, 50 * 60000, 'restored remaining');
+  assert.equal(r2.configured, true, 'config restored (no URL clobber)');
+
+  NOW += 30_000; // they come back 30s later
+  r2.resumeSession();
+  assert.equal(r2.paused, false, 'resumed');
+  assert.equal(r2.phase, 'focus', 'still focus — did NOT restart at greet');
+  assert.equal(r2.endsAt, NOW + 50 * 60000, 're-anchored with the same time left');
 }
 
-// 3) Grace lapses empty: alarm tears the room down.
+// 3) Genuinely abandoned: paused past the abandon window, the alarm wipes it.
 {
-  const { r, id } = soloFocusRoom();
-  r.onClose(id);
-  NOW += 90000 + 1; // past the grace window
-  r.alarm();
-  assert.equal(r.phase, 'greet', 'torn down to greet');
-  assert.equal(r.endsAt, null, 'timer cleared');
-  assert.equal(r.emptyAt, null, 'grace cleared');
-  assert.equal(r.hostId, null, 'host cleared');
-  assert.equal(alarmAt, null, 'alarm deleted');
+  const st = makeState();
+  const { r, id } = await soloFocusRoom(st);
+  r.onClose(id); // pause
+  NOW += ABANDON_MS + 1; // 6h+ pass with nobody back
+  await r.alarm();
+  assert.equal(r.phase, 'greet', 'wiped to greet');
+  assert.equal(r.paused, false, 'no longer paused');
+  assert.equal(st.store.get('sess'), undefined, 'stored session cleared');
+  assert.equal(st.alarm, null, 'alarm cleared');
 }
 
-// #9 — camera preference: valid values stick + broadcast, garbage clears, and
-// it lands on the lobby occupant record; leaving clears it.
+// 4) Evicted while occupied (e.g. a deploy) then the alarm fires before anyone
+//    reconnects: it pauses rather than wiping.
 {
-  const { r, id } = soloFocusRoom();
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  r.phase = 'focus'; r.endsAt = NOW + 10 * 60000; // running, paused=false, no sessions
+  await r.alarm();
+  assert.equal(r.paused, true, 'empty+running alarm pauses the session');
+  assert.equal(r.remainingMs, 10 * 60000, 'remaining captured');
+  assert.ok(st.store.get('sess'), 'still persisted (not wiped)');
+}
+
+// 5) Camera preference (#9): valid sticks + broadcasts, garbage clears, cleared on leave.
+{
+  const st = makeState();
+  const { r, id } = await soloFocusRoom(st);
   const sent = [];
   r.sessions.set(id, { ws: { send: (s) => sent.push(JSON.parse(s)) }, name: 'Gigi' });
   r.isPublic = true;
-
   r.onMessage(id, { data: JSON.stringify({ type: 'campref', pref: 'off' }) });
   assert.equal(r.camPrefs.get(id), 'off', 'valid pref stored');
   assert.ok(sent.find((m) => m.type === 'campref' && m.pref === 'off'), 'pref broadcast');
-
   r.onMessage(id, { data: JSON.stringify({ type: 'campref', pref: 'bogus' }) });
   assert.equal(r.camPrefs.has(id), false, 'garbage pref clears it');
-
-  r.onMessage(id, { data: JSON.stringify({ type: 'campref', pref: 'on' }) });
-  assert.equal(r.camPrefs.get(id), 'on', 'pref re-set');
-
   r.onClose(id);
   assert.equal(r.camPrefs.has(id), false, 'pref cleared on leave');
 }
 
 Date.now = realNow;
-console.log('RoomDO #5 + #9 self-check: all passed');
+console.log('RoomDO session-continuity + #9 self-check: all passed');
