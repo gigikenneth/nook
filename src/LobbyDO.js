@@ -60,6 +60,11 @@ export class LobbyDO {
         this.people.set(id, { ws, name: String(m.name || 'Someone').slice(0, 32) });
         this.broadcastRoster();
         break;
+      case 'watch': // peeking from inside a session: see the roster + able to ping,
+        // but stay off everyone else's list (you're busy, not available).
+        this.people.set(id, { ws, name: String(m.name || 'Someone').slice(0, 32), watching: true });
+        try { ws.send(JSON.stringify(this.rosterMsg())); } catch { /* dropped */ }
+        break;
       case 'rename': {
         const p = this.people.get(id);
         if (p) { p.name = String(m.name || 'Someone').slice(0, 32); this.broadcastRoster(); }
@@ -87,9 +92,17 @@ export class LobbyDO {
     if (this.people.delete(id)) this.broadcastRoster();
   }
 
+  // Visible roster excludes watchers (people peeking from a session), but the
+  // message still goes out to everyone connected — watchers included, so they
+  // see who's around.
+  rosterMsg() {
+    const people = [...this.people]
+      .filter(([, p]) => !p.watching)
+      .map(([id, p]) => ({ id, name: p.name }));
+    return { type: 'roster', people };
+  }
   broadcastRoster() {
-    const people = [...this.people].map(([id, p]) => ({ id, name: p.name }));
-    const msg = JSON.stringify({ type: 'roster', people });
+    const msg = JSON.stringify(this.rosterMsg());
     for (const p of this.people.values()) {
       try { p.ws.send(msg); } catch { /* dropped socket; its close handler prunes it */ }
     }

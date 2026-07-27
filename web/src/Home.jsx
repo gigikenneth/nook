@@ -9,23 +9,39 @@ const phaseLabel = { greet: 'greeting', focus: 'focusing', regroup: 'regrouping'
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
 const AV = ['#3e5ad5', '#10124e', '#1f97bf', '#5a7d2a']; // blue, indigo, teal, moss — readable with white text
 
-export default function Home({ pendingRoom, onEnter, embedded = false, initialName = '', onClose }) {
+export default function Home({ pendingRoom, onEnter, embedded = false, initialName = '', currentRoomId = null, onClose }) {
   const [name, setName] = useState(initialName);
   const [todos, setTodos] = useState(['']);
   const [focusMin, setFocusMin] = useState(50);
   const [regroupMin, setRegroupMin] = useState(5);
   const [rooms, setRooms] = useState([]);
+  const [pinged, setPinged] = useState(() => new Set()); // people just invited (for button feedback)
 
   const cleanTodos = () => todos.map((t) => t.trim()).filter(Boolean);
   const canGo = name.trim().length > 0;
 
   // Presence: you're "around" as soon as you have a name (no extra opt-in step).
-  // Not while shown as an in-room overlay — you're already in a session.
-  const online = canGo && !pendingRoom && !embedded;
-  const { roster, selfId, invite, dismissInvite, ping } = useLobby(online, name.trim());
+  // In the in-room overlay you connect as a *watcher*: you see who's around and
+  // can pull them into your room, but you stay off everyone else's list.
+  const active = canGo && !pendingRoom;      // hold a lobby socket at all
+  const online = active && !embedded;        // listed + pingable on the home screen
+  const watching = active && embedded;       // peeking from a session
+  const { roster, selfId, invite, dismissInvite, ping } = useLobby(active, name.trim(), embedded ? 'watch' : 'here');
   const others = roster.filter((p) => p.id !== selfId);
 
+  // From the overlay you can only invite into your current room when it has a
+  // free seat and isn't locked — read that off the directory we already poll.
+  const myRoom = watching ? rooms.find((r) => r.roomId === currentRoomId) : null;
+  const canInvite = !!myRoom && myRoom.count < 4 && !myRoom.locked;
+
   function pingPerson(p) {
+    if (watching) {
+      // Already in a room — pull them in here, stay put.
+      ping(p.id, currentRoomId);
+      setPinged((s) => new Set(s).add(p.id));
+      setTimeout(() => setPinged((s) => { const n = new Set(s); n.delete(p.id); return n; }), 4000);
+      return;
+    }
     const roomId = uid();
     ping(p.id, roomId); // invite them into a room we're about to open
     go(roomId, true);
@@ -206,31 +222,41 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
 
       {identity}
 
-      {!embedded && (
+      {(!embedded || active) && (
       <section className="card presence">
         <div className="panel-head">
           <h2 className="panel-title">Around now</h2>
-          {online && <span className="live-dot" title="you're visible here" />}
+          {active && <span className="live-dot" title={watching ? 'invite people into your room' : "you're visible here"} />}
         </div>
-        {online ? (
-          others.length === 0 ? (
-            <p className="chat-empty">You're here. When others show up you'll see them, and they can ping you to cowork.</p>
-          ) : (
-            <ul className="people-list">
-              {others.map((p, i) => (
-                <li key={p.id} className="person-row">
-                  <span className="goal-chip" style={{ background: AV[i % AV.length] }}>{initials(p.name)}</span>
-                  <strong>{p.name}</strong>
-                  <button className="primary sm" onClick={() => pingPerson(p)}>Ping to cowork</button>
-                </li>
-              ))}
-            </ul>
-          )
-        ) : (
+        {!active ? (
           <p className="hint">
             <button className="link-btn inline" onClick={() => { const el = document.getElementById('nook-name'); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus(); }}>Add your name</button>
             {' '}above to see who's around and let people invite you.
           </p>
+        ) : others.length === 0 ? (
+          <p className="chat-empty">
+            {watching
+              ? "Nobody else is around right now. When someone shows up you can invite them into your room."
+              : "You're here. When others show up you'll see them, and they can ping you to cowork."}
+          </p>
+        ) : (
+          <ul className="people-list">
+            {others.map((p, i) => (
+              <li key={p.id} className="person-row">
+                <span className="goal-chip" style={{ background: AV[i % AV.length] }}>{initials(p.name)}</span>
+                <strong>{p.name}</strong>
+                {watching ? (
+                  <button className="primary sm" disabled={!canInvite || pinged.has(p.id)}
+                    title={canInvite ? '' : (myRoom?.locked ? 'Unlock your room to invite' : myRoom ? 'Your room is full' : '')}
+                    onClick={() => pingPerson(p)}>
+                    {pinged.has(p.id) ? 'Invited ✓' : 'Ping to join me'}
+                  </button>
+                ) : (
+                  <button className="primary sm" onClick={() => pingPerson(p)}>Ping to cowork</button>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </section>
       )}
