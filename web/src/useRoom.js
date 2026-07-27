@@ -220,7 +220,11 @@ export function useRoom(roomId, name, opts) {
           setGoals((g) => ({ ...g, [m.id]: m.text }));
           break;
         case 'chat':
-          setChat((c) => [...c, { id: m.id, name: m.name, text: m.text, t: m.t }]);
+          // Freeze whether this is my own message now, against the selfId that's
+          // current at receive time. selfId is per-connection and changes on every
+          // reconnect, so comparing m.id === selfId at render time would flip all
+          // my past messages to "not mine" (grey, left-aligned) after a reconnect.
+          setChat((c) => [...c, { id: m.id, name: m.name, text: m.text, t: m.t, mine: m.id === selfIdRef.current }]);
           break;
         case 'host':
           setHostId(m.id);
