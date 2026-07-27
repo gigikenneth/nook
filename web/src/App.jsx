@@ -53,7 +53,7 @@ export default function App() {
       <>
         <Room {...session} onLeave={leave} onBrowse={() => setBrowsing(true)} />
         {browsing && (
-          <Home embedded initialName={session.name} onClose={() => setBrowsing(false)} onEnter={switchRoom} />
+          <Home embedded initialName={session.name} currentRoomId={session.roomId} onClose={() => setBrowsing(false)} onEnter={switchRoom} />
         )}
       </>
     );

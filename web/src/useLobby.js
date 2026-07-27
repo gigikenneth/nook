@@ -4,7 +4,11 @@ import { wsBase } from './config';
 // Presence for the home screen: while you're opted in, hold a WebSocket to the
 // LobbyDO so you appear in "who's around" and can be pinged to cowork. Closing
 // the socket (leaving home, opting out) drops you from everyone's roster.
-export function useLobby(enabled, name) {
+//
+// mode 'watch' (used by the in-room Home overlay) still receives the roster and
+// can ping, but stays off everyone else's list — you're in a session, not
+// available to be pulled elsewhere.
+export function useLobby(enabled, name, mode = 'here') {
   const [roster, setRoster] = useState([]);
   const [selfId, setSelfId] = useState(null);
   const [invite, setInvite] = useState(null); // { fromName, roomId }
@@ -16,7 +20,7 @@ export function useLobby(enabled, name) {
     if (!enabled) return;
     const socket = new WebSocket(`${wsBase}/lobby/ws`);
     ws.current = socket;
-    socket.onopen = () => socket.send(JSON.stringify({ type: 'hello', name: nameRef.current }));
+    socket.onopen = () => socket.send(JSON.stringify({ type: mode === 'watch' ? 'watch' : 'hello', name: nameRef.current }));
     socket.onmessage = (ev) => {
       const m = JSON.parse(ev.data);
       if (m.type === 'welcome') setSelfId(m.id);
@@ -29,7 +33,7 @@ export function useLobby(enabled, name) {
       setRoster([]);
       setSelfId(null);
     };
-  }, [enabled]);
+  }, [enabled, mode]);
 
   // Push name edits to the roster while connected.
   useEffect(() => {
