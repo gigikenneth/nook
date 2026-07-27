@@ -29,4 +29,16 @@ const feed = (lobby, id, ws, msg) => lobby.onPresence(id, ws, { data: JSON.strin
   assert.equal(invite.fromName, 'Bob', 'invite names the watcher');
 }
 
-console.log('LobbyDO watch-mode self-check: all passed');
+// 3) Camera preference travels in the roster; garbage is dropped; live updates apply.
+{
+  const lobby = new LobbyDO();
+  feed(lobby, 'alice', fakeWs(), { type: 'hello', name: 'Alice', pref: 'off' });
+  feed(lobby, 'bob', fakeWs(), { type: 'hello', name: 'Bob', pref: 'bogus' });
+  const roster = lobby.rosterMsg().people;
+  assert.equal(roster.find((p) => p.name === 'Alice').pref, 'off', 'Alice pref in roster');
+  assert.equal(roster.find((p) => p.name === 'Bob').pref, null, 'garbage pref dropped');
+  feed(lobby, 'alice', null, { type: 'pref', pref: 'on' });
+  assert.equal(lobby.rosterMsg().people.find((p) => p.name === 'Alice').pref, 'on', 'live pref update');
+}
+
+console.log('LobbyDO watch-mode + camera-pref self-check: all passed');

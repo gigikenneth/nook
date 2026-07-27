@@ -24,6 +24,7 @@ export class RoomDO {
     this.env = env;
     this.sessions = new Map(); // id -> { ws, name }
     this.goals = new Map(); // id -> goal text
+    this.camPrefs = new Map(); // id -> 'on' | 'off' — stated camera preference (signal only)
     this.ready = new Set();
     this.shared = new Set(); // ids who confirmed they shared their goal (greet turn-taking)
     this.locked = false; // host can close the room to newcomers (mid-session join off)
@@ -105,6 +106,7 @@ export class RoomDO {
       shared: [...this.shared],
       order: [...this.sessions.keys()],
       goals: Object.fromEntries(this.goals),
+      camPrefs: Object.fromEntries(this.camPrefs),
       locked: this.locked,
     });
     this.broadcast({ type: 'order', order: [...this.sessions.keys()] });
@@ -128,6 +130,13 @@ export class RoomDO {
         const text = String(m.text || '').slice(0, 200);
         this.goals.set(id, text);
         this.broadcast({ type: 'goal', id, text });
+        this.syncLobby();
+        break;
+      }
+      case 'campref': { // stated camera preference (signal only — never touches tracks)
+        const pref = m.pref === 'on' || m.pref === 'off' ? m.pref : null;
+        if (pref) this.camPrefs.set(id, pref); else this.camPrefs.delete(id);
+        this.broadcast({ type: 'campref', id, pref });
         this.syncLobby();
         break;
       }
@@ -253,7 +262,7 @@ export class RoomDO {
     if (!this.env || !this.roomId) return;
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('global'));
     const occupants = this.isPublic
-      ? [...this.sessions].map(([pid, s]) => ({ name: s.name, goal: this.goals.get(pid) || '' }))
+      ? [...this.sessions].map(([pid, s]) => ({ name: s.name, goal: this.goals.get(pid) || '', pref: this.camPrefs.get(pid) || null }))
       : [];
     lobby.fetch('https://lobby/update', {
       method: 'POST',
@@ -275,6 +284,7 @@ export class RoomDO {
     this.ready.delete(id);
     this.shared.delete(id);
     this.goals.delete(id);
+    this.camPrefs.delete(id);
     this.broadcast({ type: 'peer-leave', id });
     this.broadcast({ type: 'ready-state', ready: [...this.ready] });
     this.broadcast({ type: 'shared-state', shared: [...this.shared] });

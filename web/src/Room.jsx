@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useRoom } from './useRoom';
 import { chime } from './sound';
 import { ReportBug } from './ReportBug.jsx';
-import { Moon, ChatDoodle } from './graphics.jsx';
+import { Moon, ChatDoodle, CamBadge } from './graphics.jsx';
+
+// Camera-preference cycle: unset -> up for camera -> camera-shy -> unset.
+const nextPref = (p) => (p === 'on' ? 'off' : p === 'off' ? null : 'on');
 
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
 const CHIP = ['#29bcee', '#a5d67b', '#6be492', '#171a6b']; // cyan, lime, green, indigo (Groove complements)
@@ -38,7 +41,7 @@ function Video({ stream, muted }) {
   return <video ref={ref} autoPlay playsInline muted={muted} />;
 }
 
-function Tile({ name, stream, self, camOff, isHost, canKick, onKick, media, onToggleCam, onToggleMic }) {
+function Tile({ name, stream, self, camOff, isHost, canKick, onKick, media, onToggleCam, onToggleMic, pref, onCyclePref }) {
   const camShown = stream && !camOff && media?.cam !== false;
   return (
     <div className={`tile ${camOff ? 'camoff' : ''}`}>
@@ -53,6 +56,12 @@ function Tile({ name, stream, self, camOff, isHost, canKick, onKick, media, onTo
       )}
       <div className="tile-bar">
         <span className="tile-name">{name}{self ? ' (you)' : ''}{isHost ? ' · host' : ''}</span>
+        {self ? (
+          <button className="cam-pref-btn" onClick={onCyclePref}
+            title="Signal whether you'd rather be on or off camera (tap to change)">
+            {pref ? <CamBadge pref={pref} compact /> : <span className="cam-set">＋ camera pref</span>}
+          </button>
+        ) : <CamBadge pref={pref} compact />}
         {canKick && <button className="ghost kick" onClick={onKick}>Remove</button>}
       </div>
     </div>
@@ -74,9 +83,9 @@ function Timer({ endsAt, label }) {
   );
 }
 
-export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, onLeave, onBrowse }) {
+export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, camPref, onLeave, onBrowse }) {
   const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
-  const { selfId, hostId, peers, phase, endsAt, ready, shared, order, locked, goals, chat, status, local } = room;
+  const { selfId, hostId, peers, phase, endsAt, ready, shared, order, locked, goals, camPrefs, chat, status, local } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
   // Personal, editable task list (browser-only, never synced). Stable ids so
@@ -96,10 +105,14 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   const inviteLink = `${window.location.origin}${window.location.pathname}#room/${encodeURIComponent(roomId)}`;
   const camOff = phase === 'focus';
 
-  // Send the pre-typed goal once connected.
+  // Send the pre-typed goal + camera preference once connected.
   const sentGoal = useRef(false);
   useEffect(() => {
     if (selfId && goal.trim() && !sentGoal.current) { room.sendGoal(goal.trim()); sentGoal.current = true; }
+  }, [selfId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sentPref = useRef(false);
+  useEffect(() => {
+    if (selfId && camPref && !sentPref.current) { room.setCamPref(camPref); sentPref.current = true; }
   }, [selfId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Chimes on phase transitions.
@@ -171,10 +184,12 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       <section className="stage">
         <div className={`grid grid-${count}`}>
           <Tile name={name} stream={local} self camOff={camOff} isHost={isHost}
-            media={room.media} onToggleCam={room.toggleCam} onToggleMic={room.toggleMic} />
+            media={room.media} onToggleCam={room.toggleCam} onToggleMic={room.toggleMic}
+            pref={camPrefs[selfId]} onCyclePref={() => room.setCamPref(nextPref(camPrefs[selfId] || null))} />
           {peerIds.map((id) => (
             <Tile key={id} name={peers[id].name || 'Guest'} stream={peers[id].stream} camOff={camOff}
-              isHost={id === hostId} canKick={isHost && id !== selfId} onKick={() => room.kick(id)} />
+              isHost={id === hostId} canKick={isHost && id !== selfId} onKick={() => room.kick(id)}
+              pref={camPrefs[id]} />
           ))}
         </div>
 
