@@ -151,17 +151,24 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
           </div>
         </div>
       )}
-      <header className="brand">
-        <h1>Nook</h1><span className="beta-tag">beta</span>
-        <p className="tagline">Your focus crew for the next 50 minutes. Show up, say what you're on, and get it done alongside a few other people.</p>
-        <Moon size={40} />
-      </header>
+      {/* Peeking from a session: skip the hero/steps and everything below the two
+          directory sections — you're already in a room, so all that's useful is
+          seeing who's coworking and who's around. */}
+      {!embedded && (
+        <>
+          <header className="brand">
+            <h1>Nook</h1><span className="beta-tag">beta</span>
+            <p className="tagline">Your focus crew for the next 50 minutes. Show up, say what you're on, and get it done alongside a few other people.</p>
+            <Moon size={40} />
+          </header>
 
-      <ol className="steps">
-        <li><span>1</span> Add your name</li>
-        <li><span>2</span> Join a room or open your own</li>
-        <li><span>3</span> Focus together, then regroup</li>
-      </ol>
+          <ol className="steps">
+            <li><span>1</span> Add your name</li>
+            <li><span>2</span> Join a room or open your own</li>
+            <li><span>3</span> Focus together, then regroup</li>
+          </ol>
+        </>
+      )}
 
       <section className="directory card">
         <div className="panel-head">
@@ -227,7 +234,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
         )}
       </section>
 
-      {identity}
+      {!embedded && identity}
 
       {(!embedded || active) && (
       <section className="card presence">
@@ -269,25 +276,29 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
       </section>
       )}
 
-      <section className="card start-card">
-        <h2 className="panel-title">Start your own</h2>
-        <div className="actions two">
-          <button className="primary" disabled={!canGo} onClick={() => go(uid(), true)}>
-            Open room
-            <small>Anyone can join, listed above</small>
-          </button>
-          <button className="secondary" disabled={!canGo} onClick={() => go(uid(), false)}>
-            Invite only
-            <small>Private, share the link yourself</small>
-          </button>
-        </div>
-      </section>
+      {!embedded && (
+        <section className="card start-card">
+          <h2 className="panel-title">Start your own</h2>
+          <div className="actions two">
+            <button className="primary" disabled={!canGo} onClick={() => go(uid(), true)}>
+              Open room
+              <small>Anyone can join, listed above</small>
+            </button>
+            <button className="secondary" disabled={!canGo} onClick={() => go(uid(), false)}>
+              Invite only
+              <small>Private, share the link yourself</small>
+            </button>
+          </div>
+        </section>
+      )}
 
-      <footer className="site-foot">
-        <span>Nook is in beta, and I'm actively tinkering with it.</span>
-        <span>Found a bug? <ReportBug label="Report it" /></span>
-        <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>.</span>
-      </footer>
+      {!embedded && (
+        <footer className="site-foot">
+          <span>Nook is in beta, and I'm actively tinkering with it.</span>
+          <span>Found a bug? <ReportBug label="Report it" /></span>
+          <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>.</span>
+        </footer>
+      )}
     </main>
   );
 
