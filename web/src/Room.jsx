@@ -233,6 +233,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       </section>
       <footer className="site-foot in-room">
         <ReportBug />
+        <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>.</span>
       </footer>
     </main>
   );
