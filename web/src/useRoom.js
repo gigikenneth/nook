@@ -86,6 +86,7 @@ export function useRoom(roomId, name, opts) {
   useEffect(() => {
     let dead = false;
     const pcMap = pcs.current;
+    const cleanups = []; // listeners to remove on unmount
 
     function makePc(peerId) {
       const pc = new RTCPeerConnection(iceRef.current);
@@ -241,7 +242,7 @@ export function useRoom(roomId, name, opts) {
       // upfront permission prompt and a dead toggle if you decline it.
       const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}`;
       let attempts = 0;
-      const MAX_RETRIES = 6;
+      const MAX_RETRIES = 10;
 
       function connect() {
         const socket = new WebSocket(`${wsBase}/room/${encodeURIComponent(roomId)}/ws?${qs}`);
@@ -267,6 +268,25 @@ export function useRoom(roomId, name, opts) {
           setTimeout(() => { if (!dead) connect(); }, Math.min(1000 * 2 ** (attempts - 1), 8000));
         };
       }
+
+      // Phones suspend the tab (lock / app-switch / sleep), which drops the socket
+      // AND freezes the backoff timer. Reconnect the moment the tab is visible or
+      // the network returns, with a fresh retry budget — this is the main mobile fix.
+      function reconnectNow() {
+        if (dead) return;
+        const s = ws.current;
+        if (s && (s.readyState === 0 || s.readyState === 1)) return; // connecting/open
+        attempts = 0;
+        connect();
+      }
+      const onVisible = () => { if (document.visibilityState === 'visible') reconnectNow(); };
+      window.addEventListener('online', reconnectNow);
+      document.addEventListener('visibilitychange', onVisible);
+      cleanups.push(() => {
+        window.removeEventListener('online', reconnectNow);
+        document.removeEventListener('visibilitychange', onVisible);
+      });
+
       connect();
     }
 
@@ -274,6 +294,7 @@ export function useRoom(roomId, name, opts) {
 
     return () => {
       dead = true;
+      cleanups.forEach((fn) => fn());
       try { ws.current && ws.current.close(); } catch {}
       pcMap.forEach((pc) => pc.close());
       pcMap.clear();
