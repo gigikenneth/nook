@@ -5,7 +5,7 @@
 ### Your focus crew for the next 50 minutes.
 
 Show up, say what you're on, and get it done alongside a few other people. Rooms
-of up to four. No account, no downloads, nothing saved. Inspired by Groove.
+of up to four. No account, no downloads, no personal data saved. Inspired by Groove.
 
 **[→ Open Nook](https://nook.gigikenneth.workers.dev)**
 
@@ -38,7 +38,18 @@ A session moves through three short phases, together, on a shared timer:
 | 🟣 **Regroup** | On | See what got done. Run another round, or head out. |
 
 You control your **own mic and camera** at any time, and you can **add, edit,
-check off, or delete tasks** on your list mid-session.
+check off, or delete tasks** on your list mid-session. You can also flag a
+**camera preference** — "up for camera" 📷 or "camera-shy" 🙈 — so the group knows
+the vibe without it ever forcing your camera on or off.
+
+A few gentle touches keep you in the flow: a soft chime when someone new joins, a
+**5-minute warning** before focus ends, an optional **mid-session check-in** you
+can share to the chat, the countdown mirrored into your **browser tab title**,
+and a **screen wake lock** so a phone left open doesn't sleep.
+
+**Pick up where you left off.** If your connection blips, you refresh, or even if
+everyone steps away and comes back later, the session is waiting exactly where it
+was — same phase, same countdown. It doesn't restart from the top.
 
 <table>
 <tr>
@@ -72,7 +83,7 @@ the list the moment you're in a session.
 
 <table>
 <tr>
-<td width="50%"><img src="docs/images/presence.png" alt="Around now list showing who has opted in to cowork, each with a Ping button"><br><em>See who's around and ping them.</em></td>
+<td width="50%"><img src="docs/images/presence.png" alt="Around now list showing who is around to cowork, each with a Ping button"><br><em>See who's around and ping them.</em></td>
 <td width="50%"><img src="docs/images/invite.png" alt="An incoming cowork invite toast with Join and Dismiss"><br><em>Get pinged, join with one tap.</em></td>
 </tr>
 </table>
@@ -80,9 +91,9 @@ the list the moment you're in a session.
 ## Peek without leaving
 
 In a session and curious what else is happening? Tap **Home** in the room header
-to open the full home screen as an overlay — browse the directory, see who's
-around — while your session keeps running underneath. Close it and you're right
-back in.
+for a quick overlay — just **who's coworking now** and **who's around** — while
+your session keeps running underneath. You can even ping someone from there to
+pull them into the room you're already in. Close it and you're right back in.
 
 <div align="center">
 <img src="docs/images/overlay.png" alt="The home screen open as an overlay over a running session" width="640">
@@ -90,12 +101,15 @@ back in.
 
 ## Your privacy
 
-Nook stores **nothing**. No account, no database, no analytics.
+No account, no database, no analytics — and **none of your personal data is
+stored**.
 
-- Your name and to-do list live only in your browser and in the room's memory.
+- Your name and to-do list live only in your browser and in the room's live memory.
 - Chat is relayed live and never saved — the history disappears when the room does.
 - Video is **peer-to-peer** (it never touches a server).
-- When everyone leaves, the room simply ceases to exist.
+- The only thing kept is the room's own **session state** — its phase and
+  countdown — so you can pick up a session where you left off. It holds no names,
+  goals, or messages, and it's wiped after a room sits empty for a while.
 
 ## FAQ
 
@@ -104,9 +118,12 @@ Nook stores **nothing**. No account, no database, no analytics.
 **Is my video recorded?** No. Video is a direct peer-to-peer connection between
 the people in the room. Nothing is stored or passed through a server.
 
-**What if my camera won't connect?** Nook uses a public STUN server and no TURN
-relay yet, so a small number of people on strict networks won't get video
-through. Presence, the timer, chat, and your list all still work.
+**What if my camera won't connect?** Nook uses STUN, and a TURN relay when the
+host has configured one (see the deployment guide), which lets cameras connect
+across most networks. Without TURN, a small number of people on strict networks
+won't get video through — but presence, the timer, chat, and your list all still
+work. If your own camera won't start, Nook now tells you why (blocked, no device,
+or in use by another app) instead of silently doing nothing.
 
 **Can more than four people join?** No — four is the cap, by design.
 

@@ -48,9 +48,11 @@ nook/
 ├── wrangler.toml            # Cloudflare config: Worker entry, assets, DO bindings
 ├── package.json             # root: wrangler dev/deploy scripts
 ├── src/                     # the Cloudflare Worker (server side)
-│   ├── worker.js            #   HTTP router: serves app, /rooms, /room/:id/ws
-│   ├── RoomDO.js            #   Durable Object — one per room (state, timer, signaling)
-│   └── LobbyDO.js           #   Durable Object — global directory of public rooms
+│   ├── worker.js            #   HTTP router: serves app, /rooms, /ice, /report, WS routes
+│   ├── RoomDO.js            #   Durable Object — one per room (state, persistence, timer, signaling)
+│   ├── LobbyDO.js           #   Durable Object — global directory + presence hub
+│   ├── RoomDO.test.mjs      #   node self-check: session persist/pause/resume + camera pref
+│   └── LobbyDO.test.mjs     #   node self-check: watch-mode roster + camera pref
 └── web/                     # the React + Vite front end
     ├── index.html           #   fonts + root
     ├── vite.config.js
@@ -58,12 +60,17 @@ nook/
     └── src/
         ├── main.jsx         #   React entry
         ├── App.jsx          #   top level: shows Home or Room based on session
-        ├── Home.jsx         #   landing: live directory + create/join form
-        ├── Room.jsx         #   the session UI: tiles, phases, tasks, chat
+        ├── Home.jsx         #   landing: live directory + "around now" + create/join form
+        ├── Room.jsx         #   the session UI: tiles, phases, tasks, chat, check-in
         ├── useRoom.js       #   the WebSocket + WebRTC mesh hook (the core client logic)
+        ├── useLobby.js      #   presence socket: roster, ping, watch mode, camera pref
+        ├── useWakeLock.js   #   Screen Wake Lock while in a room
+        ├── media.js         #   pure camera/mic helpers (live-track check, error messages)
+        ├── media.test.mjs   #   node self-check for the media helpers
         ├── config.js        #   resolves the API / WebSocket origin
-        ├── graphics.jsx     #   Twemoji-based decorations
-        ├── sound.js         #   phase chimes (Web Audio, no files)
+        ├── graphics.jsx     #   Twemoji decorations + CamBadge / CamPrefPicker
+        ├── sound.js         #   chimes: phases, join, 5-min warning (Web Audio, no files)
+        ├── ReportBug.jsx    #   in-app bug report form (POSTs /report)
         └── styles.css       #   all styling
 ```
 
@@ -105,12 +112,22 @@ Web (`web/package.json`):
 - **Session lengths** are per room, chosen by whoever creates it (the "Session
   length" fields on the home screen), not global config.
 - **Room constants** live in `src/RoomDO.js`: `MAX = 4` (people per room),
-  `HEARTBEAT_MS` (lobby refresh cadence). `STALE_MS` (directory pruning) is in
-  `src/LobbyDO.js`.
+  `HEARTBEAT_MS` (lobby refresh cadence), `SESSION_KEY` (persisted-session storage
+  key), `ABANDON_MS` (empty-room wipe delay, 6h). `STALE_MS` (directory pruning)
+  and `PING_COOLDOWN_MS` are in `src/LobbyDO.js`.
 
 ## Testing
 
-Nook currently relies on manual, multi-tab testing (open a room in two profiles
+There's no test framework. A few pieces of pure server/client logic have plain
+`node`-runnable self-checks (Node's `assert`, no deps) — run them directly:
+
+```bash
+node src/RoomDO.test.mjs     # session persist / pause / resume / abandon + camera pref
+node src/LobbyDO.test.mjs    # presence watch-mode roster + camera pref
+node web/src/media.test.mjs  # dead-track detection + getUserMedia error messages
+```
+
+Everything else relies on manual, multi-tab testing (open a room in two profiles
 and exercise the flow). When adding non-trivial logic, verify at minimum:
 
 - Two people can join, see each other, and both video tiles appear in greet.
@@ -122,8 +139,10 @@ and exercise the flow). When adding non-trivial logic, verify at minimum:
 ## Contributing
 
 1. Branch off `main`.
-2. Keep the ethos: **no database, no accounts, nothing persisted, four-person
-   rooms.** Features that break those are out of scope by design.
+2. Keep the ethos: **no database, no accounts, no personal-data persistence,
+   four-person rooms.** (The only thing persisted is a room's session state so it
+   can resume — no names, goals, or messages.) Features that break those are out
+   of scope by design.
 3. Match the existing style — small, plain modules; comments that explain *why*,
    not *what*.
 4. Test the multi-tab flow above before opening a PR.
