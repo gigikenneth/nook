@@ -221,7 +221,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .tally { font-family: var(--wordmark); font-size: 36px; margin: 0; color: var(--olive); }
 
 /* ---------- Chat ---------- */
-.chat-log { display: grid; gap: 8px; overflow-y: auto; align-content: start; padding-right: 4px; min-height: 90px; max-height: 34vh; }
+.chat-log { display: grid; gap: 8px; overflow-y: auto; align-content: start; padding-right: 4px; min-height: 140px; max-height: 34vh; }
 .chat-msg { display: grid; gap: 1px; background: var(--cream); padding: 8px 12px; border-radius: 14px; justify-self: start; max-width: 90%; }
 .chat-msg.mine { background: var(--pink); justify-self: end; }
 .chat-msg .who { font-size: 11px; font-weight: 800; color: var(--olive); text-transform: uppercase; letter-spacing: .04em; }

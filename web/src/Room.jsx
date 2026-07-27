@@ -6,6 +6,14 @@ import { Moon, ChatDoodle } from './graphics.jsx';
 
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
 const CHIP = ['#29bcee', '#a5d67b', '#6be492', '#171a6b']; // cyan, lime, green, indigo (Groove complements)
+// Light tints so each other person's chat bubbles read as their own colour.
+// Keyed by name (stable across reconnects, unlike the per-connection id).
+const CHAT_TINT = ['#dbe4ff', '#d4f3e0', '#e6f0cf', '#cdeefb']; // pale blue, mint, lime, cyan
+const chatColor = (name) => {
+  let h = 0;
+  for (const c of name || '') h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return CHAT_TINT[h % CHAT_TINT.length];
+};
 
 let taskSeq = 0;
 const nextTaskId = () => ++taskSeq;
@@ -214,8 +222,9 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
               {chat.length === 0 ? (
                 <div className="chat-empty"><ChatDoodle /><p>Say something. Messages vanish when the room does.</p></div>
               ) : chat.map((m, i) => (
-                <div key={i} className={`chat-msg ${m.id === selfId ? 'mine' : ''}`}>
-                  <span className="who">{m.id === selfId ? 'You' : m.name}</span>
+                <div key={i} className={`chat-msg ${m.mine ? 'mine' : ''}`}
+                  style={m.mine ? undefined : { background: chatColor(m.name) }}>
+                  <span className="who">{m.mine ? 'You' : m.name}</span>
                   <span className="body">{m.text}</span>
                 </div>
               ))}
