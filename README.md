@@ -65,10 +65,10 @@ or **Download chat** if you want to keep anything.
 
 ## Find someone to cowork
 
-Flip on **"I'm around to cowork"** and you'll show up in the **Around now** list
-for anyone else who's opted in. See someone you'd like to work alongside? **Ping**
-them: it opens a room and sends them an invite they can join with one tap. It's
-opt-in only, and you drop off the list the moment you're in a session.
+Add your name and you'll show up in the **Around now** list for anyone else on
+the home screen. See someone you'd like to work alongside? **Ping** them: it
+opens a room and sends them an invite they can join with one tap. You drop off
+the list the moment you're in a session.
 
 <table>
 <tr>

@@ -14,14 +14,13 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   const [focusMin, setFocusMin] = useState(50);
   const [regroupMin, setRegroupMin] = useState(5);
   const [rooms, setRooms] = useState([]);
-  const [available, setAvailable] = useState(false); // opt in to "who's around"
 
   const cleanTodos = () => todos.map((t) => t.trim()).filter(Boolean);
   const canGo = name.trim().length > 0;
 
-  // Presence: only connect when opted in and named. Not while shown as an
-  // in-room overlay — you're already in a session, so you're not "around".
-  const online = available && canGo && !pendingRoom && !embedded;
+  // Presence: you're "around" as soon as you have a name (no extra opt-in step).
+  // Not while shown as an in-room overlay — you're already in a session.
+  const online = canGo && !pendingRoom && !embedded;
   const { roster, selfId, invite, dismissInvite, ping } = useLobby(online, name.trim());
   const others = roster.filter((p) => p.id !== selfId);
 
@@ -195,24 +194,11 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
       <section className="card presence">
         <div className="panel-head">
           <h2 className="panel-title">Around now</h2>
-          <label className="avail-toggle">
-            <input type="checkbox" checked={available} disabled={!canGo}
-              onChange={(e) => setAvailable(e.target.checked)} />
-            <span
-              className={!canGo ? 'link-like' : undefined}
-              onClick={!canGo ? (e) => {
-                e.preventDefault();
-                const el = document.getElementById('nook-name');
-                el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-                el?.focus();
-              } : undefined}>
-              {canGo ? "I'm around to cowork" : 'Add your name to appear'}
-            </span>
-          </label>
+          {online && <span className="live-dot" title="you're visible here" />}
         </div>
         {online ? (
           others.length === 0 ? (
-            <p className="chat-empty">No one else around yet. Anyone who opts in can see you and invite you.</p>
+            <p className="chat-empty">You're here. When others show up you'll see them, and they can ping you to cowork.</p>
           ) : (
             <ul className="people-list">
               {others.map((p, i) => (
@@ -224,10 +210,11 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
               ))}
             </ul>
           )
-        ) : !canGo ? (
-          <p className="hint">Add your name above, then tick <strong>I'm around to cowork</strong> to see who else is here.</p>
         ) : (
-          <p className="hint">Tick <strong>I'm around to cowork</strong> to see who's here and let people invite you.</p>
+          <p className="hint">
+            <button className="link-btn inline" onClick={() => { const el = document.getElementById('nook-name'); el?.scrollIntoView({ block: 'center', behavior: 'smooth' }); el?.focus(); }}>Add your name</button>
+            {' '}above to see who's around and let people invite you.
+          </p>
         )}
       </section>
       )}
