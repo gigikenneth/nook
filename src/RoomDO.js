@@ -7,6 +7,10 @@
 
 const MAX = 4;
 const HEARTBEAT_MS = 12000;
+// Grace window after the last person leaves before the running timer is torn
+// down. Lets a sole occupant who refreshes / locks their phone / blips offline
+// rejoin the SAME session instead of a fresh greet (issue #5).
+const GRACE_MS = 90000;
 
 function clampInt(v, def, min, max) {
   const n = parseInt(v, 10);
@@ -25,6 +29,7 @@ export class RoomDO {
     this.locked = false; // host can close the room to newcomers (mid-session join off)
     this.phase = 'greet'; // greet | focus | regroup
     this.endsAt = null;
+    this.emptyAt = null; // set when the room drains; grace window before teardown
     this.focusMin = 50;
     this.regroupMin = 5;
     this.hostId = null;
@@ -61,7 +66,9 @@ export class RoomDO {
     if (pathId) this.roomId = decodeURIComponent(pathId[1]);
 
     // First person in sets the session lengths and whether the room is listed.
-    if (this.hostId === null) {
+    // Only on a brand-new room, never on a resume within the grace window (that
+    // would clobber the config with the rejoiner's URL defaults).
+    if (this.hostId === null && this.endsAt === null && this.emptyAt === null) {
       this.focusMin = clampInt(url.searchParams.get('focus'), 50, 1, 180);
       this.regroupMin = clampInt(url.searchParams.get('regroup'), 5, 0, 60);
       this.isPublic = url.searchParams.get('public') === '1';
@@ -74,6 +81,7 @@ export class RoomDO {
     server.accept();
 
     if (this.hostId === null) this.hostId = id;
+    this.emptyAt = null; // someone's back — cancel any pending grace teardown
     this.sessions.set(id, { ws: server, name });
     server.addEventListener('message', (e) => this.onMessage(id, e));
     server.addEventListener('close', () => this.onClose(id));
@@ -181,6 +189,19 @@ export class RoomDO {
     // elapses. Without the tick, a focus room stops reporting and gets pruned
     // from the lobby after ~30s, so ongoing sessions would vanish.
     const now = Date.now();
+    if (this.sessions.size === 0) {
+      // Draining: the grace window has elapsed with nobody back — tear down now.
+      // (If someone rejoined, emptyAt was cleared and this alarm is a no-op.)
+      if (this.emptyAt && now >= this.emptyAt + GRACE_MS - 500) {
+        this.phase = 'greet';
+        this.endsAt = null;
+        this.emptyAt = null;
+        this.hostId = null;
+        this.state.storage.deleteAlarm();
+        this.syncLobby();
+      }
+      return;
+    }
     if (this.endsAt && now >= this.endsAt - 500) {
       if (this.phase === 'focus') {
         this.phase = 'regroup';
@@ -197,7 +218,12 @@ export class RoomDO {
   // Re-arm the alarm: the sooner of the next heartbeat and the phase-end, while
   // anyone is still here.
   scheduleTick() {
-    if (this.sessions.size === 0) return;
+    if (this.sessions.size === 0) {
+      // Draining: arm a single alarm at the end of the grace window so the
+      // teardown in alarm() runs if nobody comes back.
+      if (this.emptyAt) this.state.storage.setAlarm(this.emptyAt + GRACE_MS);
+      return;
+    }
     const now = Date.now();
     let next = now + HEARTBEAT_MS;
     if (this.endsAt && this.endsAt < next) next = this.endsAt;
@@ -254,10 +280,16 @@ export class RoomDO {
     this.broadcast({ type: 'shared-state', shared: [...this.shared] });
     this.broadcast({ type: 'order', order: [...this.sessions.keys()] });
     if (this.sessions.size === 0) {
-      this.phase = 'greet';
-      this.endsAt = null;
+      // Don't nuke a running timer on the last leave — a sole occupant who
+      // refreshed / locked their phone / blipped offline should resume the same
+      // session. Keep phase/endsAt; start the grace window; hand host to whoever
+      // rejoins. Real teardown happens in alarm() if the window lapses empty.
+      // ponytail: phase/endsAt live in DO memory only. A DO eviction during the
+      // 90s grace loses them and the timer restarts (rare). Persist them to
+      // this.state.storage if that edge ever proves flaky.
+      this.emptyAt = Date.now();
       this.hostId = null;
-      this.state.storage.deleteAlarm();
+      this.scheduleTick();
     } else if (id === this.hostId) {
       this.hostId = [...this.sessions.keys()][0];
       this.broadcast({ type: 'host', id: this.hostId });
