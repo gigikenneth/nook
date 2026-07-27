@@ -129,6 +129,20 @@ npx wrangler deploy
 Any standard TURN server works too — point the `/ice` endpoint in
 `src/worker.js` at it instead.
 
+## In-app bug reports (optional)
+
+The app has a "Report a bug" form that POSTs `/report`; the Worker files a GitHub
+issue so reporters need no GitHub account. It's off until you set a token:
+
+```bash
+npx wrangler secret put GH_TOKEN   # fine-grained PAT with Issues: write on your repo
+# optional: which repo the issues land in (default gigikenneth/nook)
+printf 'you/your-repo' | npx wrangler secret put GH_REPO
+```
+
+Without `GH_TOKEN`, `/report` returns a friendly 503 and the form says bug
+reporting isn't set up. A honeypot field and a minimum-length check keep out bots.
+
 ## Cost
 
 Everything fits inside free tiers:
