@@ -7,6 +7,7 @@ const TUNES = {
   end: [783.99, 587.33, 392.0],    // G5 D5 G4, falling — focus timer done
   regroup: [587.33, 880.0],         // D5 A5, two-note ping — come back
   join: [659.25, 987.77],           // E5 B5, light rise — someone new joined
+  warn: [698.46, 587.33],           // F5 D5, soft two-note — 5 min left, wrap up
 };
 
 export function chime(kind) {
