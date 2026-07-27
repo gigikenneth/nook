@@ -6,6 +6,7 @@ const TUNES = {
   start: [523.25, 659.25, 783.99], // C5 E5 G5, rising — a session begins
   end: [783.99, 587.33, 392.0],    // G5 D5 G4, falling — focus timer done
   regroup: [587.33, 880.0],         // D5 A5, two-note ping — come back
+  join: [659.25, 987.77],           // E5 B5, light rise — someone new joined
 };
 
 export function chime(kind) {
