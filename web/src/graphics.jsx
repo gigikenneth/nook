@@ -28,3 +28,39 @@ export function Sparkles() {
     </div>
   );
 }
+
+// Camera-preference signal (issue #9): a stated, social hint — it never touches
+// the real camera. Native emoji, matching the in-tile media buttons.
+export const CAM_PREFS = {
+  on: { emoji: '📷', label: 'up for camera' },
+  off: { emoji: '🙈', label: 'camera-shy' },
+};
+
+// A read-only badge. `compact` shows just the emoji (for tight rows), with the
+// label as a tooltip.
+export function CamBadge({ pref, compact = false }) {
+  const p = CAM_PREFS[pref];
+  if (!p) return null;
+  return (
+    <span className={`cam-badge ${pref}`} title={p.label}>
+      <span aria-hidden="true">{p.emoji}</span>{!compact && <span>{p.label}</span>}
+    </span>
+  );
+}
+
+// Three-way picker: on / off / unset. Clicking the selected option clears it.
+export function CamPrefPicker({ value, onChange }) {
+  return (
+    <div className="field">
+      <span>Camera preference</span>
+      <div className="cam-picker" role="group" aria-label="Camera preference">
+        {['on', 'off'].map((k) => (
+          <button key={k} type="button" className={`cam-opt ${value === k ? 'sel' : ''}`}
+            aria-pressed={value === k} onClick={() => onChange(value === k ? null : k)}>
+            <span aria-hidden="true">{CAM_PREFS[k].emoji}</span> {CAM_PREFS[k].label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

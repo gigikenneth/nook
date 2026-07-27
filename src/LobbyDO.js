@@ -6,6 +6,7 @@
 
 const STALE_MS = 30000;
 const PING_COOLDOWN_MS = 4000; // ignore repeat pings to the same person
+const prefOf = (v) => (v === 'on' || v === 'off' ? v : null); // camera preference, else unset
 
 export class LobbyDO {
   constructor() {
@@ -57,7 +58,7 @@ export class LobbyDO {
     try { m = JSON.parse(e.data); } catch { return; }
     switch (m.type) {
       case 'hello': // opt in: announce yourself and appear in the roster
-        this.people.set(id, { ws, name: String(m.name || 'Someone').slice(0, 32) });
+        this.people.set(id, { ws, name: String(m.name || 'Someone').slice(0, 32), pref: prefOf(m.pref) });
         this.broadcastRoster();
         break;
       case 'watch': // peeking from inside a session: see the roster + able to ping,
@@ -68,6 +69,11 @@ export class LobbyDO {
       case 'rename': {
         const p = this.people.get(id);
         if (p) { p.name = String(m.name || 'Someone').slice(0, 32); this.broadcastRoster(); }
+        break;
+      }
+      case 'pref': { // camera-preference signal, shown next to the name in "Around now"
+        const p = this.people.get(id);
+        if (p) { p.pref = prefOf(m.pref); this.broadcastRoster(); }
         break;
       }
       case 'ping': { // "come cowork with me" -> deliver an invite to one person
@@ -98,7 +104,7 @@ export class LobbyDO {
   rosterMsg() {
     const people = [...this.people]
       .filter(([, p]) => !p.watching)
-      .map(([id, p]) => ({ id, name: p.name }));
+      .map(([id, p]) => ({ id, name: p.name, pref: p.pref || null }));
     return { type: 'roster', people };
   }
   broadcastRoster() {

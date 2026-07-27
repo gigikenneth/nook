@@ -147,6 +147,20 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .sm { padding: 9px 16px; font-size: 14px; }
 .hint { color: var(--muted); font-size: 13px; margin: 0; font-weight: 500; }
 
+/* Camera-preference signal (#9): a stated social hint, never controls the camera. */
+.cam-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--r-pill);
+  font-size: 11px; font-weight: 800; line-height: 1.6; white-space: nowrap; }
+.cam-badge.on { background: rgba(41, 188, 238, 0.18); color: var(--olive); }   /* cyan tint — up for camera */
+.cam-badge.off { background: rgba(88, 104, 106, 0.16); color: var(--muted); }  /* grey tint — camera-shy */
+.cam-badges { display: inline-flex; gap: 4px; margin-top: 2px; }
+/* Home identity picker: two toggles, either selected = your preference, neither = unset. */
+.cam-picker { display: flex; gap: 8px; flex-wrap: wrap; }
+.cam-opt { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; background: var(--cream); color: var(--ink); border: 2px solid transparent; }
+.cam-opt.sel { background: var(--orange); border-color: var(--orange); }
+/* Self tile: tap the badge to cycle your preference. */
+.cam-pref-btn { padding: 2px 8px; background: rgba(255, 255, 255, 0.14); border-radius: var(--r-pill); }
+.cam-pref-btn .cam-set { font-size: 11px; font-weight: 700; color: #fff; opacity: 0.85; }
+
 /* ---------- Room ---------- */
 .room { max-width: 1120px; margin: 0 auto; padding: 22px; display: grid; gap: 18px; }
 .room-head { display: flex; justify-content: space-between; align-items: center; }

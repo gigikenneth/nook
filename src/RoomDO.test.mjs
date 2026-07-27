@@ -66,5 +66,27 @@ function soloFocusRoom() {
   assert.equal(alarmAt, null, 'alarm deleted');
 }
 
+// #9 — camera preference: valid values stick + broadcast, garbage clears, and
+// it lands on the lobby occupant record; leaving clears it.
+{
+  const { r, id } = soloFocusRoom();
+  const sent = [];
+  r.sessions.set(id, { ws: { send: (s) => sent.push(JSON.parse(s)) }, name: 'Gigi' });
+  r.isPublic = true;
+
+  r.onMessage(id, { data: JSON.stringify({ type: 'campref', pref: 'off' }) });
+  assert.equal(r.camPrefs.get(id), 'off', 'valid pref stored');
+  assert.ok(sent.find((m) => m.type === 'campref' && m.pref === 'off'), 'pref broadcast');
+
+  r.onMessage(id, { data: JSON.stringify({ type: 'campref', pref: 'bogus' }) });
+  assert.equal(r.camPrefs.has(id), false, 'garbage pref clears it');
+
+  r.onMessage(id, { data: JSON.stringify({ type: 'campref', pref: 'on' }) });
+  assert.equal(r.camPrefs.get(id), 'on', 'pref re-set');
+
+  r.onClose(id);
+  assert.equal(r.camPrefs.has(id), false, 'pref cleared on leave');
+}
+
 Date.now = realNow;
-console.log('RoomDO #5 self-check: all passed');
+console.log('RoomDO #5 + #9 self-check: all passed');

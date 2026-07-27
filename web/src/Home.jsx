@@ -2,18 +2,19 @@ import { useEffect, useState } from 'react';
 import { apiBase } from './config';
 import { useLobby } from './useLobby';
 import { ReportBug } from './ReportBug.jsx';
-import { Moon, Sparkles } from './graphics.jsx';
+import { Moon, Sparkles, CamBadge, CamPrefPicker } from './graphics.jsx';
 
 const uid = () => crypto.randomUUID();
 const phaseLabel = { greet: 'greeting', focus: 'focusing', regroup: 'regrouping' };
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
 const AV = ['#3e5ad5', '#10124e', '#1f97bf', '#5a7d2a']; // blue, indigo, teal, moss — readable with white text
 
-export default function Home({ pendingRoom, onEnter, embedded = false, initialName = '', currentRoomId = null, onClose }) {
+export default function Home({ pendingRoom, onEnter, embedded = false, initialName = '', initialCamPref = null, currentRoomId = null, onClose }) {
   const [name, setName] = useState(initialName);
   const [todos, setTodos] = useState(['']);
   const [focusMin, setFocusMin] = useState(50);
   const [regroupMin, setRegroupMin] = useState(5);
+  const [camPref, setCamPref] = useState(initialCamPref); // 'on' | 'off' | null — camera-preference signal
   const [rooms, setRooms] = useState([]);
   const [pinged, setPinged] = useState(() => new Set()); // people just invited (for button feedback)
 
@@ -26,7 +27,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   const active = canGo && !pendingRoom;      // hold a lobby socket at all
   const online = active && !embedded;        // listed + pingable on the home screen
   const watching = active && embedded;       // peeking from a session
-  const { roster, selfId, invite, dismissInvite, ping } = useLobby(active, name.trim(), embedded ? 'watch' : 'here');
+  const { roster, selfId, invite, dismissInvite, ping } = useLobby(active, name.trim(), embedded ? 'watch' : 'here', camPref);
   const others = roster.filter((p) => p.id !== selfId);
 
   // From the overlay you can only invite into your current room when it has a
@@ -49,7 +50,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   function acceptInvite() {
     const roomId = invite.roomId;
     dismissInvite();
-    onEnter({ roomId, name: name.trim(), todos: cleanTodos(), focusMin, regroupMin, isPublic: false });
+    onEnter({ roomId, name: name.trim(), todos: cleanTodos(), focusMin, regroupMin, isPublic: false, camPref });
   }
 
   // Poll the live directory of open rooms.
@@ -87,7 +88,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   }
 
   function go(roomId, isPublic) {
-    onEnter({ roomId, name: name.trim(), todos: cleanTodos(), focusMin, regroupMin, isPublic });
+    onEnter({ roomId, name: name.trim(), todos: cleanTodos(), focusMin, regroupMin, isPublic, camPref });
   }
 
   const identity = (
@@ -118,6 +119,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
             <input type="number" min="0" max="60" value={regroupMin} onChange={(e) => setRegroupMin(Number(e.target.value))} /></label>
         </div>
       </div>
+      <CamPrefPicker value={camPref} onChange={setCamPref} />
     </div>
   );
 
@@ -202,6 +204,11 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
                     <div className="room-people">
                       <strong>{names || 'Someone'}</strong>
                       {goals && <span>{goals}</span>}
+                      {r.occupants.some((o) => o.pref) && (
+                        <span className="cam-badges">
+                          {r.occupants.filter((o) => o.pref).map((o, i) => <CamBadge key={i} pref={o.pref} compact />)}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="room-meta">
@@ -245,6 +252,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
               <li key={p.id} className="person-row">
                 <span className="goal-chip" style={{ background: AV[i % AV.length] }}>{initials(p.name)}</span>
                 <strong>{p.name}</strong>
+                <CamBadge pref={p.pref} compact />
                 {watching ? (
                   <button className="primary sm" disabled={!canInvite || pinged.has(p.id)}
                     title={canInvite ? '' : (myRoom?.locked ? 'Unlock your room to invite' : myRoom ? 'Your room is full' : '')}

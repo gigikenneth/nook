@@ -19,6 +19,7 @@ export function useRoom(roomId, name, opts) {
   const [order, setOrder] = useState([]); // join order — drives the greet turn frame
   const [locked, setLocked] = useState(false); // host closed the room to newcomers
   const [goals, setGoals] = useState({}); // id -> text
+  const [camPrefs, setCamPrefs] = useState({}); // id -> 'on' | 'off' (stated camera preference)
   const [chat, setChat] = useState([]); // { id, name, text, t } — never persisted
   const [config, setConfig] = useState({ focusMin: opts.focusMin, regroupMin: opts.regroupMin });
   const [status, setStatus] = useState('connecting');
@@ -173,6 +174,7 @@ export function useRoom(roomId, name, opts) {
           setLocked(m.locked || false);
           setConfig({ focusMin: m.focusMin, regroupMin: m.regroupMin });
           if (m.goals) setGoals(m.goals);
+          if (m.camPrefs) setCamPrefs(m.camPrefs);
           applyPhaseToTracks(m.phase);
           setPeers((p) => {
             const n = { ...p };
@@ -194,6 +196,7 @@ export function useRoom(roomId, name, opts) {
           if (pc) { pc.close(); pcMap.delete(m.id); }
           setPeers((p) => { const n = { ...p }; delete n[m.id]; return n; });
           setGoals((g) => { const n = { ...g }; delete n[m.id]; return n; });
+          setCamPrefs((c) => { const n = { ...c }; delete n[m.id]; return n; });
           break;
         }
         case 'signal':
@@ -218,6 +221,9 @@ export function useRoom(roomId, name, opts) {
           break;
         case 'goal':
           setGoals((g) => ({ ...g, [m.id]: m.text }));
+          break;
+        case 'campref':
+          setCamPrefs((c) => { const n = { ...c }; if (m.pref) n[m.id] = m.pref; else delete n[m.id]; return n; });
           break;
         case 'chat':
           // Freeze whether this is my own message now, against the selfId that's
@@ -308,7 +314,7 @@ export function useRoom(roomId, name, opts) {
   }, [roomId]);
 
   return {
-    selfId, hostId, peers, phase, endsAt, ready, shared, order, locked, goals, chat, config, status, local, media,
+    selfId, hostId, peers, phase, endsAt, ready, shared, order, locked, goals, camPrefs, chat, config, status, local, media,
     shareGoal: () => sendWs({ type: 'shared' }),
     toggleLock: () => sendWs({ type: 'lock', locked: !locked }),
     toggleCam: async () => {
@@ -326,6 +332,7 @@ export function useRoom(roomId, name, opts) {
     kick: (id) => sendWs({ type: 'kick', id }),
     restart: () => sendWs({ type: 'restart' }),
     sendGoal: (text) => sendWs({ type: 'goal', text }),
+    setCamPref: (pref) => sendWs({ type: 'campref', pref }),
     sendChat: (text) => sendWs({ type: 'chat', text }),
   };
 }
