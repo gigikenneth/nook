@@ -318,6 +318,20 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   background: #fff; color: var(--ink); font-size: 22px; line-height: 1; box-shadow: var(--shadow);
 }
 
+/* In-app bug report modal */
+.report-overlay {
+  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px;
+  background: rgba(16, 18, 78, 0.45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+}
+.report-card {
+  background: #fff; border-radius: var(--r-lg); padding: 24px; width: 100%; max-width: 420px;
+  box-shadow: var(--shadow); display: grid; gap: 12px;
+}
+.report-card textarea { min-height: 92px; resize: vertical; }
+.report-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.hint.err { color: #c0392b; font-weight: 700; }
+.hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+
 .badge { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 4px 10px; border-radius: var(--r-pill); background: var(--cream2); color: var(--muted); }
 .badge-greet { background: var(--pink); color: var(--ink); }
 .badge-focus { background: var(--olive); color: var(--cream); }

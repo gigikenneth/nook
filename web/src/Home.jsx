@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { apiBase, BUG_URL } from './config';
+import { apiBase } from './config';
 import { useLobby } from './useLobby';
+import { ReportBug } from './ReportBug.jsx';
 import { Moon, Sparkles } from './graphics.jsx';
 
 const uid = () => crypto.randomUUID();
@@ -250,7 +251,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
 
       <footer className="site-foot">
         <span>Nook is in beta, and I'm actively tinkering with it.</span>
-        <a href={BUG_URL} target="_blank" rel="noopener noreferrer">Found a bug? Report it →</a>
+        <span>Found a bug? <ReportBug label="Report it" /></span>
       </footer>
     </main>
   );
