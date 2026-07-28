@@ -157,7 +157,8 @@ Small ambient helpers that live entirely in the browser (no server involvement):
 
 ## The signaling protocol
 
-The client opens one WebSocket to `/room/:id/ws?name=…&focus=…&regroup=…&public=…`.
+The client opens one WebSocket to `/room/:id/ws?name=…&focus=…&regroup=…&public=…&cid=…`
+(`cid` is a stable per-tab id used to recognise a reconnecting connection).
 The Worker routes it to the room's Durable Object, which relays JSON messages.
 Video and audio never go over this socket — it carries only WebRTC signaling and
 room state. The actual media flows peer-to-peer over WebRTC.
@@ -182,7 +183,7 @@ room state. The actual media flows peer-to-peer over WebRTC.
 | `type` | Payload | Meaning |
 |:--|:--|:--|
 | `welcome` | `selfId`, `hostId`, `peers`, `phase`, `endsAt`, `serverNow`, `focusMin`, `regroupMin`, `ready`, `shared`, `order`, `goals`, `camPrefs`, `locked` | Sent once on join: your id and the full room snapshot. On a resumed session `phase`/`endsAt` reflect where it left off. |
-| `peer-join` | `id`, `name` | Someone joined. |
+| `peer-join` | `id`, `name`, `reconnect` | Someone joined. `reconnect: true` means a returning tab (matched by `cid`) — the client skips the join chime and the server restores their goal/camera pref. |
 | `peer-leave` | `id` | Someone left (kick, disconnect, or refresh). |
 | `order` | `order` | The join-order list of ids (drives the greet turn frame). |
 | `signal` | `from`, `data` | A relayed WebRTC signal from a peer. |

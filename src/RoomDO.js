@@ -13,6 +13,10 @@
 const MAX = 4;
 const HEARTBEAT_MS = 12000;
 const SESSION_KEY = 'sess'; // persisted session blob (survives eviction/deploy)
+// A tab that returns within this window (matched by its stable client id) is a
+// reconnect, not a new arrival — so we don't chime a "someone joined" and we
+// restore their goal/camera pref instead of rebuilding from scratch (#30).
+const RECONNECT_TTL_MS = 60000;
 // A room left empty this long is genuinely abandoned — wipe its stored session
 // so storage doesn't accumulate ghost rooms forever.
 const ABANDON_MS = 6 * 60 * 60 * 1000; // 6h
@@ -30,6 +34,7 @@ export class RoomDO {
     this.sessions = new Map(); // id -> { ws, name }
     this.goals = new Map(); // id -> goal text
     this.camPrefs = new Map(); // id -> 'on' | 'off' — stated camera preference (signal only)
+    this.recentLeavers = new Map(); // clientId -> { at, goal, pref } — for reconnect detection
     this.ready = new Set();
     this.shared = new Set(); // ids who confirmed they shared their goal (greet turn-taking)
     this.locked = false; // host can close the room to newcomers (mid-session join off)
@@ -134,6 +139,15 @@ export class RoomDO {
     }
     const name = (url.searchParams.get('name') || 'Guest').slice(0, 32);
     const id = crypto.randomUUID();
+    // A stable per-tab client id lets us recognise a returning connection.
+    const cid = url.searchParams.get('cid') || null;
+    const prevLeave = cid ? this.recentLeavers.get(cid) : null;
+    const reconnecting = !!(prevLeave && Date.now() - prevLeave.at < RECONNECT_TTL_MS);
+    if (reconnecting) {
+      this.recentLeavers.delete(cid);
+      if (prevLeave.goal) this.goals.set(id, prevLeave.goal);
+      if (prevLeave.pref) this.camPrefs.set(id, prevLeave.pref);
+    }
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
@@ -141,7 +155,7 @@ export class RoomDO {
 
     if (this.hostId === null) this.hostId = id;
     this.resumeSession(); // someone's back — un-freeze the timer where it stopped
-    this.sessions.set(id, { ws: server, name });
+    this.sessions.set(id, { ws: server, name, cid });
     server.addEventListener('message', (e) => this.onMessage(id, e));
     server.addEventListener('close', () => this.onClose(id));
     server.addEventListener('error', () => this.onClose(id));
@@ -168,7 +182,12 @@ export class RoomDO {
       locked: this.locked,
     });
     this.broadcast({ type: 'order', order: [...this.sessions.keys()] });
-    this.broadcastExcept(id, { type: 'peer-join', id, name });
+    this.broadcastExcept(id, { type: 'peer-join', id, name, reconnect: reconnecting });
+    // On a reconnect, replay the restored goal/pref so peers see them again.
+    if (reconnecting) {
+      if (this.goals.has(id)) this.broadcast({ type: 'goal', id, text: this.goals.get(id) });
+      if (this.camPrefs.has(id)) this.broadcast({ type: 'campref', id, pref: this.camPrefs.get(id) });
+    }
 
     this.syncLobby();
     this.scheduleTick();
@@ -333,6 +352,13 @@ export class RoomDO {
 
   onClose(id) {
     if (!this.sessions.has(id)) return;
+    // Remember this tab briefly so a quick return is recognised as a reconnect
+    // (no join chime) and keeps its goal + camera pref.
+    const s = this.sessions.get(id);
+    if (s && s.cid) {
+      this.recentLeavers.set(s.cid, { at: Date.now(), goal: this.goals.get(id) || '', pref: this.camPrefs.get(id) || null });
+      for (const [k, v] of this.recentLeavers) if (Date.now() - v.at > RECONNECT_TTL_MS) this.recentLeavers.delete(k);
+    }
     this.sessions.delete(id);
     this.ready.delete(id);
     this.shared.delete(id);

@@ -122,5 +122,23 @@ const store = new Map();
   assert.equal(r.camPrefs.has(id), false, 'pref cleared on leave');
 }
 
+// 6) Reconnect detection (#30): a leaver's client id, goal, and camera pref are
+//    stashed briefly so a quick return is recognised (no join chime) and restored.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true; r.isPublic = true;
+  const id = 'p1';
+  r.sessions.set(id, { ws: { send() {} }, name: 'Gigi', cid: 'tab-xyz' });
+  r.goals.set(id, 'ship the fix');
+  r.camPrefs.set(id, 'off');
+  r.onClose(id);
+  const stash = r.recentLeavers.get('tab-xyz');
+  assert.ok(stash, 'leaver remembered by client id');
+  assert.equal(stash.goal, 'ship the fix', 'goal kept for the return');
+  assert.equal(stash.pref, 'off', 'camera pref kept for the return');
+}
+
 Date.now = realNow;
-console.log('RoomDO session-continuity + #9 self-check: all passed');
+console.log('RoomDO session-continuity + #9 + #30 self-check: all passed');
