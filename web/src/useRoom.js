@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiBase, wsBase } from './config';
 import { liveTrackOf, mediaErrorMessage } from './media';
-import { chime } from './sound';
 
 // STUN by default; the /ice endpoint adds a TURN relay when configured so peers
 // behind strict NAT (different networks) can still connect.
 const DEFAULT_ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-// A join within this long of a leave is treated as a reconnect, not a new
-// arrival — so a flapping peer doesn't spam the join chime (#30).
-const RECONNECT_WINDOW_MS = 6000;
 
 // Mesh WebRTC over a Durable Object WebSocket. The newcomer offers to every
 // existing peer; existing peers only answer. That one-directional rule avoids
@@ -45,7 +41,6 @@ export function useRoom(roomId, name, opts) {
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
   const selfIdRef = useRef(null); // for renegotiation glare handling
-  const lastLeaveRef = useRef(0); // when a peer last left — fallback reconnect signal (#30)
   // Stable per-tab id so the server can recognise a returning connection (a
   // refresh or phone-lock reconnect keeps it; a new tab gets a fresh one).
   const cidRef = useRef(null);
@@ -226,21 +221,10 @@ export function useRoom(roomId, name, opts) {
           break;
         case 'peer-join':
           setPeers((p) => ({ ...p, [m.id]: { ...(p[m.id] || {}), name: m.name } }));
-          // Only chime for a genuinely new arrival, not a reconnecting peer whose
-          // flaky internet flaps them in and out (#30). Trust the server's
-          // reconnect flag (it matches the returning tab by its stable client id);
-          // fall back to a timing guess only if an older server didn't send one.
-          {
-            const isReconnect = m.reconnect !== undefined
-              ? m.reconnect
-              : Date.now() - lastLeaveRef.current <= RECONNECT_WINDOW_MS;
-            if (!isReconnect) chime('join');
-          }
-          break;
+          break; // no join sound — people found it noisy (#32)
         case 'peer-leave': {
           const pc = pcMap.get(m.id);
           if (pc) { pc.close(); pcMap.delete(m.id); }
-          lastLeaveRef.current = Date.now();
           setPeers((p) => { const n = { ...p }; delete n[m.id]; return n; });
           setGoals((g) => { const n = { ...g }; delete n[m.id]; return n; });
           setCamPrefs((c) => { const n = { ...c }; delete n[m.id]; return n; });

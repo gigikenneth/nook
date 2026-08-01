@@ -8,7 +8,6 @@ const TUNES = {
   // deliberately more noticeable than the short chimes so it catches attention.
   end: [783.99, 659.25, 523.25, 392.0, 261.63], // G5 E5 C5 G4 C4
   regroup: [587.33, 880.0],         // D5 A5, two-note ping — come back
-  join: [659.25, 987.77],           // E5 B5, light rise — someone new joined
   warn: [698.46, 587.33],           // F5 D5, soft two-note — 5 min left, wrap up
 };
 
