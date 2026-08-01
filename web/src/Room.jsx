@@ -111,7 +111,7 @@ function Timer({ endsAt, label }) {
 
 export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, camPref, onLeave, onBrowse }) {
   const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
-  const { selfId, hostId, peers, phase, endsAt, ready, shared, order, locked, goals, camPrefs, chat, config, status, local } = room;
+  const { selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status, local } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
   // Personal, editable task list (browser-only, never synced). Stable ids so
@@ -136,6 +136,15 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   useEffect(() => {
     if (selfId && goal.trim() && !sentGoal.current) { room.sendGoal(goal.trim()); sentGoal.current = true; }
   }, [selfId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Carry the greet goal into your task list when focus starts, even if you never
+  // clicked "I've shared my goal" — otherwise a goal typed in greet just vanishes
+  // when the session begins.
+  useEffect(() => {
+    if (phase !== 'focus') return;
+    const g = goal.trim();
+    if (g) setTasks((ts) => (ts.some((t) => t.text === g) ? ts : [{ id: nextTaskId(), text: g, done: false }, ...ts]));
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
   const sentPref = useRef(false);
   useEffect(() => {
     if (selfId && camPref && !sentPref.current) { room.setCamPref(camPref); sentPref.current = true; }
@@ -185,13 +194,18 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   const [checkin, setCheckin] = useState(null);
   const checkinDone = useRef(false);
   useEffect(() => { if (phase !== 'focus') checkinDone.current = false; }, [phase]);
+  // The question is chosen from a server-picked seed so everyone in the room gets
+  // the same check-in. Read it via a ref so the timeout uses the latest value.
+  const checkinSeedRef = useRef(checkinSeed);
+  checkinSeedRef.current = checkinSeed;
   useEffect(() => {
     if (phase !== 'focus' || !endsAt || checkinDone.current) return;
     const delay = endsAt - (config.focusMin * 60000) / 2 - Date.now();
     if (delay <= 0) return; // already past the midpoint (e.g. joined late) — skip
     const t = setTimeout(() => {
       checkinDone.current = true;
-      setCheckin(CHECKINS[Math.floor(Math.random() * CHECKINS.length)]);
+      const seed = checkinSeedRef.current ?? Math.random();
+      setCheckin(CHECKINS[Math.floor(seed * CHECKINS.length)]);
     }, delay);
     return () => clearTimeout(t);
   }, [phase, endsAt, config.focusMin]);
@@ -413,7 +427,7 @@ function GreetPanel({ selfId, selfName, goal, setGoal, onShareGoal, onShared, go
           <p className="hint">Everyone’s shared. Focus begins when everyone’s ready.</p>
         </>
       )}
-      {isHost && <button className="link-btn" onClick={onStart}>Start now (don’t wait)</button>}
+      <button className="link-btn" onClick={onStart}>Start now (don’t wait)</button>
     </>
   );
 }
@@ -470,7 +484,7 @@ function CheckIn({ question, onShare, onClose }) {
   return (
     <div className="checkin" role="dialog" aria-label="Mid-session check-in">
       <div className="checkin-head">
-        <strong>Quick check-in</strong>
+        <strong>Mid-session check-in</strong>
         <button className="ghost x" onClick={onClose} aria-label="Dismiss">×</button>
       </div>
       <p className="checkin-q">{question}</p>
