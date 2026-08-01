@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRoom } from './useRoom';
 import { useWakeLock } from './useWakeLock';
+import { usePipTimer } from './usePipTimer';
 import { chime } from './sound';
 import { ReportBug } from './ReportBug.jsx';
 import { Moon, ChatDoodle, CamBadge } from './graphics.jsx';
@@ -159,6 +160,11 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   // Keep the phone/desktop screen awake while you're in a room (#17).
   useWakeLock(true);
 
+  // Optional pop-out timer (Document PiP) so the countdown stays visible when the
+  // tab is minimised on desktop (#34). Feed it the current phase + timer.
+  const pip = usePipTimer();
+  useEffect(() => { pip.setData(endsAt, phase); }, [endsAt, phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Show the live countdown in the browser tab title (#18), so a glance at the
   // tab shows the time left even when Nook isn't the foreground app.
   useEffect(() => {
@@ -253,6 +259,12 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
             </button>
           )}
           {onBrowse && <button className="ghost sm" onClick={onBrowse}>Home</button>}
+          {pip.supported && (
+            <button className="ghost sm" onClick={() => (pip.isOpen ? pip.close() : pip.open())}
+              title="Keep the timer visible when this tab is minimised">
+              {pip.isOpen ? 'Close timer' : '⧉ Pop out timer'}
+            </button>
+          )}
           <button className="secondary sm" onClick={copy}>{copied ? 'Link copied' : 'Copy invite link'}</button>
           <button className="primary sm" onClick={onLeave}>Leave</button>
         </div>
