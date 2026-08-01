@@ -65,6 +65,36 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
 }
 .tagline { color: var(--cream); opacity: 0.92; margin: 6px 0 0; max-width: 34ch; font-weight: 500; font-size: 17px; }
 
+/* "How it works / what's new" button on the hero slab, and its panel. */
+.help-btn {
+  position: absolute; top: 18px; left: 20px; z-index: 2;
+  padding: 4px 12px; border-radius: var(--r-pill);
+  background: rgba(255, 255, 255, 0.14); color: var(--cream); font-size: 12px; font-weight: 700;
+}
+.help-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.26); transform: none; }
+.help-card {
+  background: #fff; border-radius: var(--r-lg); width: min(460px, calc(100vw - 32px));
+  max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow);
+}
+.help-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 4px; }
+.help-tabs { display: flex; gap: 6px; }
+.help-tabs button { padding: 8px 14px; font-size: 14px; font-weight: 700; background: var(--cream); color: var(--muted); border-radius: var(--r-pill); }
+.help-tabs button.sel { background: var(--olive); color: var(--cream); }
+.help-body { padding: 6px 24px 26px; overflow-y: auto; }
+.help-body h3 { margin-bottom: 6px; }
+.help-steps { margin: 8px 0; padding-left: 20px; display: grid; gap: 7px; }
+.help-phases { list-style: none; margin: 6px 0 14px; padding: 0; display: grid; gap: 8px; }
+.help-new { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 9px; }
+.help-steps li, .help-phases li, .help-new li { line-height: 1.4; }
+.help-release { margin: 4px 0 18px; }
+.help-date { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 4px; }
+.help-end { text-align: center; color: var(--muted); font-size: 12px; font-weight: 700;
+  padding-top: 12px; margin: 6px 0 0; border-top: 1px solid var(--line); }
+.help-subhead { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 8px; }
+.help-tips { margin: 0 0 12px; padding: 0; list-style: none; display: grid; gap: 9px; }
+.help-tips li { line-height: 1.45; padding-left: 16px; position: relative; }
+.help-tips li::before { content: '·'; position: absolute; left: 4px; color: var(--olive); font-weight: 800; }
+
 /* Subtle "beta" tag on the hero slab. */
 .beta-tag {
   position: absolute; top: 18px; right: 20px; z-index: 2;

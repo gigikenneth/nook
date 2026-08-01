@@ -15,6 +15,7 @@ export function useRoom(roomId, name, opts) {
   const [peers, setPeers] = useState({}); // id -> { name, stream }
   const [phase, setPhase] = useState('greet');
   const [endsAt, setEndsAt] = useState(null);
+  const [checkinSeed, setCheckinSeed] = useState(null); // server-picked, so the room shares one check-in
   const [ready, setReady] = useState([]);
   const [shared, setShared] = useState([]); // ids who confirmed sharing their goal
   const [order, setOrder] = useState([]); // join order — drives the greet turn frame
@@ -204,6 +205,7 @@ export function useRoom(roomId, name, opts) {
           setOrder(m.order || []);
           setLocked(m.locked || false);
           setConfig({ focusMin: m.focusMin, regroupMin: m.regroupMin });
+          setCheckinSeed(m.checkinSeed ?? null);
           if (m.goals) setGoals(m.goals);
           if (m.camPrefs) setCamPrefs(m.camPrefs);
           applyPhaseToTracks(m.phase);
@@ -236,6 +238,7 @@ export function useRoom(roomId, name, opts) {
         case 'phase':
           setPhase(m.phase);
           setEndsAt(m.endsAt);
+          setCheckinSeed(m.checkinSeed ?? null);
           // Entering focus clears your camera/mic intent, so they don't spring
           // back on by themselves at regroup — every phase starts off until you
           // turn it on (#35). (Greet is already off-by-default on join.)
@@ -352,7 +355,7 @@ export function useRoom(roomId, name, opts) {
   }, [roomId]);
 
   return {
-    selfId, hostId, peers, phase, endsAt, ready, shared, order, locked, goals, camPrefs, chat, config, status, local, media,
+    selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status, local, media,
     mediaError, dismissMediaError: () => setMediaError(null),
     shareGoal: () => sendWs({ type: 'shared' }),
     toggleLock: () => sendWs({ type: 'lock', locked: !locked }),

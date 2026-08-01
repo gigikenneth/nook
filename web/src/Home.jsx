@@ -3,6 +3,7 @@ import { apiBase } from './config';
 import { useLobby } from './useLobby';
 import { ReportBug } from './ReportBug.jsx';
 import { Moon, Sparkles, CamBadge, CamPrefPicker } from './graphics.jsx';
+import { HelpModal } from './HelpModal.jsx';
 
 const uid = () => crypto.randomUUID();
 const phaseLabel = { greet: 'greeting', focus: 'focusing', regroup: 'regrouping' };
@@ -15,6 +16,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   const [focusMin, setFocusMin] = useState(50);
   const [regroupMin, setRegroupMin] = useState(5);
   const [camPref, setCamPref] = useState(initialCamPref); // 'on' | 'off' | null — camera-preference signal
+  const [helpOpen, setHelpOpen] = useState(false); // "how it works / what's new" panel
   const [rooms, setRooms] = useState([]);
   const [pinged, setPinged] = useState(() => new Set()); // people just invited (for button feedback)
 
@@ -140,6 +142,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
 
   const wide = (
     <main className={`home wide${embedded ? ' embedded' : ''}`}>
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
       {embedded && <button className="overlay-close" onClick={onClose} aria-label="Close">×</button>}
       <Sparkles />
       {!embedded && invite && (
@@ -158,6 +161,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
         <>
           <header className="brand">
             <h1>Nook</h1><span className="beta-tag">beta</span>
+            <button className="help-btn" onClick={() => setHelpOpen(true)} aria-label="How Nook works and what's new">? How it works</button>
             <p className="tagline">Your focus crew for the next 50 minutes. Show up, say what you're on, and get it done alongside a few other people.</p>
             <Moon size={40} />
           </header>
