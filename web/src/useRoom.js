@@ -236,6 +236,13 @@ export function useRoom(roomId, name, opts) {
         case 'phase':
           setPhase(m.phase);
           setEndsAt(m.endsAt);
+          // Entering focus clears your camera/mic intent, so they don't spring
+          // back on by themselves at regroup — every phase starts off until you
+          // turn it on (#35). (Greet is already off-by-default on join.)
+          if (m.phase === 'focus') {
+            camOn.current = false; micOn.current = false;
+            setMedia({ cam: false, mic: false });
+          }
           applyPhaseToTracks(m.phase);
           break;
         case 'ready-state':
