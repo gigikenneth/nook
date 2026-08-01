@@ -308,7 +308,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
                 onRemove={removeTask} />
             )}
             {phase === 'regroup' && (
-              <RegroupPanel tasks={tasks} endsAt={endsAt} isHost={isHost} onRestart={room.restart} />
+              <RegroupPanel tasks={tasks} isHost={isHost} onRestart={room.restart} />
             )}
           </aside>
 
@@ -447,8 +447,9 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove }) {
   );
 }
 
-function RegroupPanel({ tasks, endsAt, isHost, onRestart }) {
+function RegroupPanel({ tasks, isHost, onRestart }) {
   const finished = tasks.filter((t) => t.done).length;
+  // The countdown lives in the phase banner (heading); no second timer here.
   return (
     <>
       <h3 className="panel-title">How it went</h3>
@@ -458,7 +459,6 @@ function RegroupPanel({ tasks, endsAt, isHost, onRestart }) {
           <li key={t.id} className={t.done ? 'done' : ''}><span>{t.done ? '✓' : '·'} {t.text}</span></li>
         ))}
       </ul>
-      <Timer endsAt={endsAt} label="regroup ends in" />
       {isHost && <button className="secondary" onClick={onRestart}>Run another session</button>}
     </>
   );
