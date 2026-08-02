@@ -35,7 +35,10 @@ export default function App() {
   }
 
   function leave() {
+    const room = roomFromHash();
     sessionStorage.removeItem(KEY);
+    // Drop this room's recovered task list + chat when you deliberately leave.
+    if (room) { sessionStorage.removeItem(`nook.tasks.${room}`); sessionStorage.removeItem(`nook.chat.${room}`); }
     window.location.hash = '';
     setSession(null);
     setBrowsing(false);

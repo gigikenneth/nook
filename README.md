@@ -104,8 +104,8 @@ pull them into the room you're already in. Close it and you're right back in.
 No account, no database, no analytics — and **none of your personal data is
 stored**.
 
-- Your name and to-do list live only in your browser and in the room's live memory.
-- Chat is relayed live and never saved — the history disappears when the room does.
+- Your name, to-do list, and chat live only in your browser and in the room's live memory. A copy of your list and chat is kept in your own browser tab so a refresh or a dropped connection can restore them; it never leaves your device and clears when you close the tab.
+- Chat is relayed live and is never stored on a server — the shared history disappears when the room does.
 - Video is **peer-to-peer** (it never touches a server).
 - The only thing kept is the room's own **session state** — its phase and
   countdown — so you can pick up a session where you left off. It holds no names,
