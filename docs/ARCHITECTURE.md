@@ -1,10 +1,11 @@
 # Architecture
 
 Nook is a login-free, serverless coworking app — no accounts, no always-on box,
-and no database to provision (the only stored state is a tiny per-room session
-blob in Durable Object storage). This document explains how the whole thing fits
-together: the pieces, the session state machine, the signaling protocol, and the
-data model.
+and no database to provision. The only server-side state is two small,
+anonymous things in Durable Object storage: a per-room session blob, and the
+ignore/block graph (pairs of opaque per-browser ids). This document explains how
+the whole thing fits together: the pieces, the session state machine, the
+signaling protocol, and the data model.
 
 ## Design goals
 
@@ -12,10 +13,12 @@ data model.
    Everything lives inside free tiers.
 2. **No personal data stored.** Names, to-do lists, chat, and video are ephemeral
    — never written to disk, never passed through a server (video is peer-to-peer).
-   No accounts, no analytics. The one thing that *is* persisted is the room's
-   **session state** (phase + countdown + lengths), kept in that room's Durable
-   Object storage so a session survives reconnects and deploys and you can pick up
-   exactly where you left off. See [Session persistence](#session-persistence).
+   No accounts, no analytics. Two things *are* persisted, and neither identifies a
+   person: the room's **session state** (phase + countdown + lengths), kept in that
+   room's Durable Object storage so a session survives reconnects and deploys; and
+   the **block graph** for ignore (#28), kept in the singleton lobby's storage as
+   pairs of anonymous per-browser `did`s — no names, no accounts. See
+   [Session persistence](#session-persistence) and [On-device id + blocking](#on-device-id--blocking).
 3. **Small rooms.** Four people maximum, which keeps video peer-to-peer (a mesh)
    and avoids the need for a media server.
 
@@ -57,7 +60,9 @@ same place and can be relayed to each other directly.
 > (`new_sqlite_classes` in `wrangler.toml`). `RoomDO` uses that storage for one
 > small thing — the persisted session blob (see [Session persistence](#session-persistence)).
 > All live per-person state (sockets, goals, ready/shared, camera prefs) stays in
-> plain in-memory JavaScript; `LobbyDO` persists nothing.
+> plain in-memory JavaScript. `LobbyDO` persists one small thing too — the ignore
+> **block graph** (see [On-device id + blocking](#on-device-id--blocking)); its
+> room directory and presence roster stay in memory.
 
 ## The session state machine
 
@@ -157,8 +162,10 @@ Small ambient helpers that live entirely in the browser (no server involvement):
 
 ## The signaling protocol
 
-The client opens one WebSocket to `/room/:id/ws?name=…&focus=…&regroup=…&public=…&cid=…`
-(`cid` is a stable per-tab id used to recognise a reconnecting connection).
+The client opens one WebSocket to `/room/:id/ws?name=…&focus=…&regroup=…&public=…&cid=…&did=…`
+(`cid` is a stable per-tab id; `did` is a persistent per-browser id that survives
+a full tab close. The room uses whichever is present to recognise a reconnecting
+connection — see [On-device id + blocking](#on-device-id--blocking)).
 The Worker routes it to the room's Durable Object, which relays JSON messages.
 Video and audio never go over this socket — it carries only WebRTC signaling and
 room state. The actual media flows peer-to-peer over WebRTC.
@@ -183,7 +190,7 @@ room state. The actual media flows peer-to-peer over WebRTC.
 | `type` | Payload | Meaning |
 |:--|:--|:--|
 | `welcome` | `selfId`, `hostId`, `peers`, `phase`, `endsAt`, `serverNow`, `focusMin`, `regroupMin`, `ready`, `shared`, `order`, `goals`, `camPrefs`, `locked` | Sent once on join: your id and the full room snapshot. On a resumed session `phase`/`endsAt` reflect where it left off. |
-| `peer-join` | `id`, `name`, `reconnect` | Someone joined. `reconnect: true` means a returning tab (matched by `cid`) — the client skips the join chime and the server restores their goal/camera pref. |
+| `peer-join` | `id`, `name`, `reconnect` | Someone joined. `reconnect: true` means a returning browser (matched by `did`, or `cid` for a same-tab refresh) — the client skips the join chime and the server restores their goal/camera pref. |
 | `peer-leave` | `id` | Someone left (kick, disconnect, or refresh). |
 | `order` | `order` | The join-order list of ids (drives the greet turn frame). |
 | `signal` | `from`, `data` | A relayed WebRTC signal from a peer. |
@@ -280,6 +287,9 @@ else is around ("around now") and ping each other to start a session.
   in `hello`/`pref` and shows next to your name in "Around now".
 - **Spam guard.** Repeat pings to the same person within `PING_COOLDOWN_MS` (4s)
   are dropped server-side.
+- **Ignore (#28).** Ignoring someone hides you both from each other's "around
+  now" and blocks pings between you. Durable and mutual — see
+  [On-device id + blocking](#on-device-id--blocking).
 
 ### Presence protocol (`/lobby/ws`)
 
@@ -287,23 +297,58 @@ Client → lobby:
 
 | `type` | Payload | Effect |
 |:--|:--|:--|
-| `hello` | `name`, `pref` | Appear in the roster (home screen). |
-| `watch` | `name` | Receive the roster + ping, but stay off it (in-room overlay). |
+| `hello` | `name`, `pref`, `did` | Appear in the roster (home screen). `did` is client→server only, never re-broadcast. |
+| `watch` | `name`, `did` | Receive the roster + ping, but stay off it (in-room overlay). |
 | `rename` | `name` | Update your displayed name. |
 | `pref` | `pref` | Update your camera preference shown in the roster. |
-| `ping` | `toId`, `roomId` | Invite one person to cowork in `roomId`. |
+| `ping` | `toId`, `roomId` | Invite one person to cowork in `roomId` (dropped if you've blocked each other). |
+| `block` | `toId` | Ignore that person: server resolves their `did` and records a mutual, durable block. |
+| `unblock` | `did` | Un-ignore (by the `did` your client cached). |
 
 Lobby → client:
 
 | `type` | Payload | Meaning |
 |:--|:--|:--|
 | `welcome` | `id` | Your presence id (so you can exclude yourself from the roster). |
-| `roster` | `people: [{id, name, pref}]` | The current set of available people (watchers excluded). Re-sent on every change. |
+| `roster` | `people: [{id, name, pref}]` | Available people, **filtered for you** (watchers and anyone you've blocked excluded). Re-sent on every change. `did`s are never included. |
 | `invite` | `fromId`, `fromName`, `roomId` | Someone pinged you to cowork. |
+| `blocked` | `did`, `name` | Ack of a `block` — your client caches `{did, name}` for the un-ignore list. |
+| `blocked-list` | `dids` | On connect, the authoritative list of `did`s you've blocked, so un-ignore survives a cleared localStorage. |
+| `unblocked` | `did` | Ack of an `unblock`. |
 
 > **Scale ceiling:** a single global `LobbyDO` holds every presence socket. That's
 > fine for dozens of concurrent people; scaling to thousands would need sharding
 > the lobby. Noted, not built — Nook is a niche tool.
+
+## On-device id + blocking
+
+Nook has no accounts, so to let someone **ignore** a person durably (issue #28)
+it needs a stable way to recognise a returning browser. That's the `did`.
+
+- **`did` — an anonymous per-browser id.** A `crypto.randomUUID()` created once
+  and kept in `localStorage` (`nook.did`). It's the persistent sibling of the
+  per-tab `cid`. Sent to the server on the room join query and the lobby `hello`,
+  **client→server only** — it never appears in a roster or any peer-facing
+  message, so blocking never makes an id visible to other people.
+- **Smoother return.** Because `did` outlives a full tab close (where `cid`, in
+  `sessionStorage`, does not), the room's reconnect logic keys on `did || cid`,
+  so "pick up where you left off" survives a close, not just a refresh.
+- **Block graph.** Blocking is **mutual** and **durable** (Level 3). The lobby
+  stores a symmetric graph keyed by `did` (`block:<did>` → set of `did`s) in DO
+  storage under the `blocks` key. When A ignores B, the client sends B's
+  ephemeral presence id; the server resolves it to B's `did` and records the pair
+  both ways. Enforcement: the roster is built **per viewer** (`rosterFor(did)`
+  drops anyone in the viewer's block set), and pings across a blocked pair are
+  dropped. All filtering happens server-side on the *other* person's `did`.
+- **Scope.** Blocking governs lobby discovery only — "around now" visibility and
+  pings. It is not offered inside a room and never ejects a live session.
+- **Honest ceiling.** A `did` is per-browser. Incognito, cleared storage, another
+  browser, or another device yields a fresh `did`, so a determined person
+  reappears. It stops casual and repeat encounters; it is not a hard wall — the
+  limit every account-free system hits.
+
+See `docs/superpowers/specs/2026-08-02-on-device-id-design.md` for the full
+decision record.
 
 ## Data model
 
@@ -315,7 +360,7 @@ Most state is in memory and dies with the live socket; the room's **session**
 
 | Field | Type | Notes |
 |:--|:--|:--|
-| `sessions` | `Map<id, {ws, name}>` | Live WebSocket connections. Insertion order = turn order. In-memory. |
+| `sessions` | `Map<id, {ws, name, rkey}>` | Live WebSocket connections. Insertion order = turn order. `rkey` (= `did` or `cid`) is the reconnect key. In-memory. |
 | `goals` | `Map<id, text>` | Each person's "what I'm working on". In-memory. |
 | `camPrefs` | `Map<id, 'on' \| 'off'>` | Each person's camera preference (signal only). In-memory. |
 | `ready` | `Set<id>` | Who has marked ready. In-memory. |
@@ -331,12 +376,16 @@ Most state is in memory and dies with the live socket; the room's **session**
 
 The persisted fields are stored together under the `sess` key.
 
-**Per lobby (`LobbyDO`, all in memory):** `rooms: Map<roomId, {count, phase,
+**Per lobby (`LobbyDO`):** in memory — `rooms: Map<roomId, {count, phase,
 endsAt, locked, isPublic, occupants, updated}>` (occupants carry `{name, goal,
-pref}`) and `people: Map<id, {ws, name, pref, watching}>`.
+pref}`) and `people: Map<id, {ws, name, pref, watching, did}>`. **Persisted** under
+the `blocks` key — the block graph, `Map<did, Set<did>>`, symmetric (see
+[On-device id + blocking](#on-device-id--blocking)).
 
-**Client-only (never sent to the server):** your to-do list. Tasks are
-`{id, text, done}` objects held in React state and are personal to you.
+**Client-only (localStorage, never sent to peers):** `nook.did` (persistent
+per-browser id), `nook.prefs` (remembered name + camera preference), and
+`nook.blocks` (`[{did, name}]`, your ignore list's display cache). Your to-do
+list is React-only — `{id, text, done}` objects personal to you.
 
 ## Trade-offs and known limits
 
@@ -348,7 +397,9 @@ pref}`) and `people: Map<id, {ws, name, pref, watching}>`.
 - **Mesh caps at 4.** The four-person limit is what keeps video serverless; going
   higher would require an SFU and change the cost model entirely.
 - **Ephemeral *personal* data.** No accounts, no history of who was there, no chat
-  archive — names, lists, chat, and video are never stored. Only the room's
-  session state persists (so you can resume it), and it's wiped after 6h empty.
+  archive — names, lists, chat, and video are never stored. Two anonymous things
+  persist: the room's session state (so you can resume it), wiped after 6h empty;
+  and the ignore block graph, pairs of opaque per-browser ids with no names
+  attached (see [On-device id + blocking](#on-device-id--blocking)).
 - **One global lobby.** Every presence socket lands on a single `LobbyDO`; fine
   for dozens of concurrent people, would need sharding for thousands.

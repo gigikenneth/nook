@@ -140,9 +140,10 @@ and exercise the flow). When adding non-trivial logic, verify at minimum:
 
 1. Branch off `main`.
 2. Keep the ethos: **no database, no accounts, no personal-data persistence,
-   four-person rooms.** (The only thing persisted is a room's session state so it
-   can resume — no names, goals, or messages.) Features that break those are out
-   of scope by design.
+   four-person rooms.** Two things persist, and neither identifies a person: a
+   room's session state (so it can resume — no names, goals, or messages) and the
+   anonymous ignore block graph (pairs of opaque per-browser ids). Features that
+   break those are out of scope by design.
 3. Match the existing style — small, plain modules; comments that explain *why*,
    not *what*.
 4. Test the multi-tab flow above before opening a PR.

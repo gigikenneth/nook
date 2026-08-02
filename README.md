@@ -107,9 +107,13 @@ stored**.
 - Your name, to-do list, and chat live only in your browser and in the room's live memory. A copy of your list and chat is kept in your own browser tab so a refresh or a dropped connection can restore them; it never leaves your device and clears when you close the tab.
 - Chat is relayed live and is never stored on a server — the shared history disappears when the room does.
 - Video is **peer-to-peer** (it never touches a server).
-- The only thing kept is the room's own **session state** — its phase and
-  countdown — so you can pick up a session where you left off. It holds no names,
-  goals, or messages, and it's wiped after a room sits empty for a while.
+- Two small pieces of state are kept on the server, and neither identifies you:
+  - The room's own **session state** — its phase and countdown — so you can pick
+    up a session where you left off. It holds no names, goals, or messages, and
+    it's wiped after a room sits empty for a while.
+  - If you **ignore** someone, an anonymous **block record** so it keeps holding
+    on your next visit. It's a pair of random per-browser ids — no names, no
+    accounts, nothing that says who either of you is.
 
 ## FAQ
 
@@ -124,6 +128,13 @@ across most networks. Without TURN, a small number of people on strict networks
 won't get video through — but presence, the timer, chat, and your list all still
 work. If your own camera won't start, Nook now tells you why (blocked, no device,
 or in use by another app) instead of silently doing nothing.
+
+**Can I stop seeing someone?** Yes. Hit **Ignore** next to a person in "Around
+now" and neither of you shows up for the other there, and you can't pull each
+other into a room. It sticks across visits. Because there are no accounts it's
+tied to your browser, so someone determined can come back on another browser or
+device — it stops casual and repeat run-ins, not a hard block. Un-ignore anytime
+from the "Ignored" list on the home screen.
 
 **Can more than four people join?** No — four is the cap, by design.
 
