@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import Home from './Home.jsx';
 import Room from './Room.jsx';
+import { savePrefs } from './device';
 
 // Invite links are #room/<id>. No router lib — one hash check is enough.
 function roomFromHash() {
@@ -28,6 +29,7 @@ export default function App() {
   const pendingRoom = roomFromHash();
 
   function enter(s) {
+    savePrefs({ name: s.name, camPref: s.camPref }); // remember for next visit
     sessionStorage.setItem(KEY, JSON.stringify(s));
     window.location.hash = `room/${encodeURIComponent(s.roomId)}`;
     setSession(s);

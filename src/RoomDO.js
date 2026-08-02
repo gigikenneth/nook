@@ -142,11 +142,14 @@ export class RoomDO {
     const name = (url.searchParams.get('name') || 'Guest').slice(0, 32);
     const id = crypto.randomUUID();
     // A stable per-tab client id lets us recognise a returning connection.
-    const cid = url.searchParams.get('cid') || null;
-    const prevLeave = cid ? this.recentLeavers.get(cid) : null;
+    // Reconnect key: prefer the persistent `did` (survives a full tab close),
+    // fall back to the per-tab `cid` (covers a refresh when localStorage is
+    // blocked). Either way it's an opaque, anonymous id — nothing relational.
+    const rkey = (url.searchParams.get('did') || url.searchParams.get('cid')) || null;
+    const prevLeave = rkey ? this.recentLeavers.get(rkey) : null;
     const reconnecting = !!(prevLeave && Date.now() - prevLeave.at < RECONNECT_TTL_MS);
     if (reconnecting) {
-      this.recentLeavers.delete(cid);
+      this.recentLeavers.delete(rkey);
       if (prevLeave.goal) this.goals.set(id, prevLeave.goal);
       if (prevLeave.pref) this.camPrefs.set(id, prevLeave.pref);
     }
@@ -157,7 +160,7 @@ export class RoomDO {
 
     if (this.hostId === null) this.hostId = id;
     this.resumeSession(); // someone's back — un-freeze the timer where it stopped
-    this.sessions.set(id, { ws: server, name, cid });
+    this.sessions.set(id, { ws: server, name, rkey });
     server.addEventListener('message', (e) => this.onMessage(id, e));
     server.addEventListener('close', () => this.onClose(id));
     server.addEventListener('error', () => this.onClose(id));
@@ -359,8 +362,8 @@ export class RoomDO {
     // Remember this tab briefly so a quick return is recognised as a reconnect
     // (no join chime) and keeps its goal + camera pref.
     const s = this.sessions.get(id);
-    if (s && s.cid) {
-      this.recentLeavers.set(s.cid, { at: Date.now(), goal: this.goals.get(id) || '', pref: this.camPrefs.get(id) || null });
+    if (s && s.rkey) {
+      this.recentLeavers.set(s.rkey, { at: Date.now(), goal: this.goals.get(id) || '', pref: this.camPrefs.get(id) || null });
       for (const [k, v] of this.recentLeavers) if (Date.now() - v.at > RECONNECT_TTL_MS) this.recentLeavers.delete(k);
     }
     this.sessions.delete(id);
