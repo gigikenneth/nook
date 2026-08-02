@@ -4,6 +4,7 @@ import { useLobby } from './useLobby';
 import { ReportBug } from './ReportBug.jsx';
 import { Moon, Sparkles, CamBadge, CamPrefPicker } from './graphics.jsx';
 import { HelpModal } from './HelpModal.jsx';
+import { loadPrefs } from './device';
 
 const uid = () => crypto.randomUUID();
 const phaseLabel = { greet: 'greeting', focus: 'focusing', regroup: 'regrouping' };
@@ -11,11 +12,14 @@ const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
 const AV = ['#3e5ad5', '#10124e', '#1f97bf', '#5a7d2a']; // blue, indigo, teal, moss — readable with white text
 
 export default function Home({ pendingRoom, onEnter, embedded = false, initialName = '', initialCamPref = null, currentRoomId = null, onClose }) {
-  const [name, setName] = useState(initialName);
+  // Fresh Home (no session handed in) prefills from remembered prefs so a
+  // returning regular doesn't re-type their name / camera choice.
+  const remembered = embedded ? { name: '', camPref: null } : loadPrefs();
+  const [name, setName] = useState(initialName || remembered.name);
   const [todos, setTodos] = useState(['']);
   const [focusMin, setFocusMin] = useState(50);
   const [regroupMin, setRegroupMin] = useState(5);
-  const [camPref, setCamPref] = useState(initialCamPref); // 'on' | 'off' | null — camera-preference signal
+  const [camPref, setCamPref] = useState(initialCamPref ?? remembered.camPref); // 'on' | 'off' | null — camera-preference signal
   const [helpOpen, setHelpOpen] = useState(false); // "how it works / what's new" panel
   const [rooms, setRooms] = useState([]);
   const [pinged, setPinged] = useState(() => new Set()); // people just invited (for button feedback)

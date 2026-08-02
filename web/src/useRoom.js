@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiBase, wsBase } from './config';
 import { liveTrackOf, mediaErrorMessage } from './media';
+import { getDid } from './device';
 
 // STUN by default; the /ice endpoint adds a TURN relay when configured so peers
 // behind strict NAT (different networks) can still connect.
@@ -66,6 +67,11 @@ export function useRoom(roomId, name, opts) {
       cidRef.current = c;
     } catch { cidRef.current = crypto.randomUUID(); }
   }
+  // Persistent per-browser id: survives a full tab close, so the server can
+  // recognise a returning browser (not just a same-tab refresh, which `cid`
+  // already covers). Sent only to our own server, never to peers.
+  const didRef = useRef(null);
+  if (!didRef.current) didRef.current = getDid();
 
   const applyTracks = useCallback((phOverride) => {
     const s = localStream.current;
@@ -305,7 +311,7 @@ export function useRoom(roomId, name, opts) {
       // No camera/mic prompt on join — you appear as an avatar and acquire media
       // only when you turn it on (see ensureMedia). This avoids a confusing
       // upfront permission prompt and a dead toggle if you decline it.
-      const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}&cid=${encodeURIComponent(cidRef.current)}`;
+      const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}&cid=${encodeURIComponent(cidRef.current)}&did=${encodeURIComponent(didRef.current)}`;
       let attempts = 0;
       const MAX_RETRIES = 10;
 

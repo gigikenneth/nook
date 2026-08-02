@@ -130,12 +130,15 @@ const store = new Map();
   await r._restore;
   r.roomId = 'test'; r.configured = true; r.isPublic = true;
   const id = 'p1';
-  r.sessions.set(id, { ws: { send() {} }, name: 'Gigi', cid: 'tab-xyz' });
+  // rkey = the durable reconnect key (did if present, else cid). Survives a
+  // full tab close so "pick up where you left off" works past a close, not
+  // just a refresh.
+  r.sessions.set(id, { ws: { send() {} }, name: 'Gigi', rkey: 'dev-abc' });
   r.goals.set(id, 'ship the fix');
   r.camPrefs.set(id, 'off');
   r.onClose(id);
-  const stash = r.recentLeavers.get('tab-xyz');
-  assert.ok(stash, 'leaver remembered by client id');
+  const stash = r.recentLeavers.get('dev-abc');
+  assert.ok(stash, 'leaver remembered by reconnect key');
   assert.equal(stash.goal, 'ship the fix', 'goal kept for the return');
   assert.equal(stash.pref, 'off', 'camera pref kept for the return');
 }
