@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { apiBase } from './config';
 import { useLobby } from './useLobby';
 import { ReportBug } from './ReportBug.jsx';
@@ -33,8 +33,31 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   const active = canGo && !pendingRoom;      // hold a lobby socket at all
   const online = active && !embedded;        // listed + pingable on the home screen
   const watching = active && embedded;       // peeking from a session
-  const { roster, selfId, invite, dismissInvite, ping } = useLobby(active, name.trim(), embedded ? 'watch' : 'here', camPref);
-  const others = roster.filter((p) => p.id !== selfId);
+  const { roster, selfId, invite, dismissInvite, ping, blocks, block, unblock } = useLobby(active, name.trim(), embedded ? 'watch' : 'here', camPref);
+  const [hiddenIds, setHiddenIds] = useState(() => new Set()); // optimistically hidden while the undo window is open
+  const undoTimers = useRef(new Map()); // id -> timeout, so Undo can cancel the pending block
+  const [undoBlock, setUndoBlock] = useState(null); // { id, name } — the "Ignored X · Undo" toast
+  const others = roster.filter((p) => p.id !== selfId && !hiddenIds.has(p.id));
+
+  // Ignore is reversible: hide them now, actually send the block after a short
+  // window. Undo within it and nothing is sent — no server churn on a misclick.
+  function ignorePerson(p) {
+    setHiddenIds((s) => new Set(s).add(p.id));
+    setUndoBlock({ id: p.id, name: p.name });
+    const t = setTimeout(() => {
+      block(p.id); // commit the durable mutual block
+      undoTimers.current.delete(p.id);
+      setUndoBlock((u) => (u && u.id === p.id ? null : u));
+    }, 4000);
+    undoTimers.current.set(p.id, t);
+  }
+  function undoIgnore(id) {
+    const t = undoTimers.current.get(id);
+    if (t) clearTimeout(t);
+    undoTimers.current.delete(id);
+    setHiddenIds((s) => { const n = new Set(s); n.delete(id); return n; });
+    setUndoBlock(null);
+  }
 
   // From the overlay you can only invite into your current room when it has a
   // free seat and isn't locked — read that off the directory we already poll.
@@ -277,9 +300,28 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
                 ) : (
                   <button className="primary sm" onClick={() => pingPerson(p)}>Ping to cowork</button>
                 )}
+                <button className="ghost sm" title="Ignore — you won't see each other around" onClick={() => ignorePerson(p)}>Ignore</button>
               </li>
             ))}
           </ul>
+        )}
+        {undoBlock && (
+          <div className="undo-toast">
+            Ignored {undoBlock.name}. <button className="linky" onClick={() => undoIgnore(undoBlock.id)}>Undo</button>
+          </div>
+        )}
+        {blocks.length > 0 && (
+          <details className="ignored-manager">
+            <summary>Ignored ({blocks.length})</summary>
+            <ul className="people-list">
+              {blocks.map((b) => (
+                <li key={b.did} className="person-row">
+                  <strong>{b.name}</strong>
+                  <button className="ghost sm" onClick={() => unblock(b.did)}>Un-ignore</button>
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
       </section>
       )}

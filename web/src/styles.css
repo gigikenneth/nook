@@ -338,6 +338,21 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .person-row strong { font-size: 15px; font-family: var(--display); font-weight: 700; }
 /* Ping stands out from the indigo header/hero: use the bright live-accent (cyan). */
 .person-row .primary { margin-left: auto; background: var(--orange); color: var(--ink); }
+/* Ignore sits after the ping/invite button; no auto-margin so it hugs it. */
+
+/* Ignore / un-ignore (issue #28) */
+.undo-toast {
+  margin-top: 12px; padding: 10px 16px; border-radius: var(--r-pill);
+  background: var(--panel, #eef0f6); color: var(--muted); font-size: 14px;
+}
+.linky {
+  background: none; border: none; padding: 0; margin-left: 6px;
+  color: var(--olive); font-weight: 700; text-decoration: underline; cursor: pointer;
+}
+.ignored-manager { margin-top: 14px; }
+.ignored-manager summary { cursor: pointer; color: var(--muted); font-size: 14px; font-weight: 700; }
+.ignored-manager .people-list { margin-top: 10px; }
+.ignored-manager .person-row .ghost { margin-left: auto; }
 .invite-toast {
   position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 50;
   display: flex; align-items: center; gap: 16px; max-width: calc(100vw - 32px);
