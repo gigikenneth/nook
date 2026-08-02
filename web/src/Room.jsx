@@ -75,9 +75,15 @@ function Tile({ name, stream, self, camOff, isHost, canKick, onKick, media, onTo
       {self && !camOff && (
         <div className="tile-controls">
           <button className={`mediabtn ${media?.cam ? '' : 'off'}`} onClick={onToggleCam}
-            aria-pressed={!media?.cam}>{media?.cam ? '📷 Camera on' : '🚫 Camera off'}</button>
+            aria-pressed={!media?.cam} aria-label={media?.cam ? 'Camera on' : 'Camera off'}>
+            <span aria-hidden="true">{media?.cam ? '📷' : '🚫'}</span>
+            <span className="mb-label">{media?.cam ? 'Camera on' : 'Camera off'}</span>
+          </button>
           <button className={`mediabtn ${media?.mic ? '' : 'off'}`} onClick={onToggleMic}
-            aria-pressed={!media?.mic}>{media?.mic ? '🎙 Mic on' : '🔇 Mic off'}</button>
+            aria-pressed={!media?.mic} aria-label={media?.mic ? 'Mic on' : 'Mic off'}>
+            <span aria-hidden="true">{media?.mic ? '🎙' : '🔇'}</span>
+            <span className="mb-label">{media?.mic ? 'Mic on' : 'Mic off'}</span>
+          </button>
         </div>
       )}
       <div className="tile-bar">
