@@ -37,3 +37,29 @@ export function savePrefs({ name, camPref }) {
     localStorage.setItem(PREFS_KEY, JSON.stringify({ name: (name || '').trim(), camPref: camPref ?? null }));
   } catch { /* ignore */ }
 }
+
+// Your ignore list, as [{ did, name }]. The server is authoritative for
+// enforcement (it holds the mutual, durable block graph); this local cache just
+// keeps names for the un-ignore UI. did = the one id per blocked person the
+// server hands back when you block them.
+const BLOCKS_KEY = 'nook.blocks';
+
+export function loadBlocks() {
+  try {
+    const b = JSON.parse(localStorage.getItem(BLOCKS_KEY) || '[]');
+    return Array.isArray(b) ? b.filter((x) => x && x.did) : [];
+  } catch { return []; }
+}
+
+export function addBlock(did, name) {
+  const list = loadBlocks();
+  if (did && !list.some((x) => x.did === did)) list.push({ did, name: name || 'Someone' });
+  try { localStorage.setItem(BLOCKS_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+  return list;
+}
+
+export function removeBlock(did) {
+  const list = loadBlocks().filter((x) => x.did !== did);
+  try { localStorage.setItem(BLOCKS_KEY, JSON.stringify(list)); } catch { /* ignore */ }
+  return list;
+}

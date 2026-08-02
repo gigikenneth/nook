@@ -4,8 +4,7 @@ Status: **not built. Decision pending.** Captured 2026-08-02 so a future session
 can pick it up cold. Nothing here is implemented yet.
 
 Origin: GitHub issue **#28** ("an 'ignore' button would be nice, so you can't see
-a certain person and they can't see you"). Reporter left an email:
-sarahmak888@gmail.com. A draft reply to Sarah is at the bottom of this doc.
+a certain person and they can't see you").
 
 ## The problem
 
@@ -112,35 +111,3 @@ stored" (still anonymous, but relational + durable).
 3. Ship the cheap client-only wins (remember name/prefs, smoother return) on
    their own, independent of blocking?
 4. Privacy copy + README updates if any block state lives server-side.
-
-## Draft reply to Sarah (issue #28)
-
-> Hey Sarah, thanks so much for this. It's a thoughtful ask, and feeling
-> comfortable about who can see you matters a lot in a space like this.
->
-> I want to be honest about where it lands, though. Nook is deliberately
-> login-free: no accounts, and nothing about you is stored. That's great for
-> privacy, but it's also the exact reason a real "ignore" is hard to build. To
-> reliably block a certain person and keep them from seeing you, the app would
-> need a stable way to recognise that person every time, and without accounts
-> there isn't one. Names aren't unique, and anyone can rejoin with a different
-> name or a fresh tab and show up again. So a block would only really hold within
-> a single session, and I don't want to ship something that looks like it protects
-> you but quietly doesn't.
->
-> A few things that do help today:
-> - Rooms are capped at four. You can start one as Invite only (private, kept off
->   the public list) and lock it, so you fully control who's in with you.
-> - You're only listed as "around" while you're on the home screen. The moment
->   you're in a session, you drop off that list.
->
-> Longer term, if I add an optional local identity (a private, on-device id, still
-> no account), a proper mutual block becomes possible, and this is near the top of
-> the list for that. I'll keep this issue open as a known gap so it doesn't get
-> forgotten.
->
-> Really appreciate you flagging it, and I'm open to ideas on how you'd want it to
-> feel.
->
-> Thanks,
-> Gigi
