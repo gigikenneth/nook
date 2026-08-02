@@ -209,29 +209,42 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     return () => { clearInterval(t); document.title = base; };
   }, [endsAt]);
 
-  // Mid-session check-in (#16): once, at the focus midpoint, a fresh question.
+  // Mid-session check-in (#16). The question comes from a server-picked seed so
+  // everyone in the room sees the same one; read via a ref for the latest value.
   const [checkin, setCheckin] = useState(null);
-  const checkinDone = useRef(false);
-  useEffect(() => { if (phase !== 'focus') checkinDone.current = false; }, [phase]);
-  // The question is chosen from a server-picked seed so everyone in the room gets
-  // the same check-in. Read it via a ref so the timeout uses the latest value.
+  const [checkinDraft, setCheckinDraft] = useState(() => {
+    try { return sessionStorage.getItem(`nook.checkin.draft.${roomId}`) || ''; } catch { return ''; }
+  });
   const checkinSeedRef = useRef(checkinSeed);
   checkinSeedRef.current = checkinSeed;
+  // "done" is persisted per focus block (keyed by endsAt) so a refresh re-shows an
+  // UNanswered check-in — immediately if the midpoint already passed while you
+  // were away — but never re-nags one you've answered or dismissed.
+  const checkinDone = () => {
+    try { const s = JSON.parse(sessionStorage.getItem(`nook.checkin.${roomId}`) || 'null'); return !!(s && s.endsAt === endsAt && s.done); }
+    catch { return false; }
+  };
+  const finishCheckin = () => {
+    try { sessionStorage.setItem(`nook.checkin.${roomId}`, JSON.stringify({ endsAt, done: true })); sessionStorage.removeItem(`nook.checkin.draft.${roomId}`); } catch { /* ignore */ }
+    setCheckin(null); setCheckinDraft('');
+  };
+  useEffect(() => { if (phase !== 'focus') setCheckin(null); }, [phase]); // no lingering card past focus
   useEffect(() => {
-    if (phase !== 'focus' || !endsAt || checkinDone.current) return;
+    if (phase !== 'focus' || !endsAt || checkinDone()) return;
+    const show = () => setCheckin(CHECKINS[Math.floor((checkinSeedRef.current ?? Math.random()) * CHECKINS.length)]);
     const delay = endsAt - (config.focusMin * 60000) / 2 - Date.now();
-    if (delay <= 0) return; // already past the midpoint (e.g. joined late) — skip
-    const t = setTimeout(() => {
-      checkinDone.current = true;
-      const seed = checkinSeedRef.current ?? Math.random();
-      setCheckin(CHECKINS[Math.floor(seed * CHECKINS.length)]);
-    }, delay);
+    if (delay <= 0) { if (checkinSeedRef.current != null) show(); return; } // past the midpoint (e.g. after a refresh)
+    const t = setTimeout(show, delay);
     return () => clearTimeout(t);
-  }, [phase, endsAt, config.focusMin]);
+  }, [phase, endsAt, config.focusMin, roomId, checkinSeed]); // eslint-disable-line react-hooks/exhaustive-deps
   function shareCheckin(text) {
     const t = text.trim();
     if (t) room.sendChat(`check-in — ${t}`);
-    setCheckin(null);
+    finishCheckin();
+  }
+  function onCheckinDraft(text) {
+    setCheckinDraft(text);
+    try { sessionStorage.setItem(`nook.checkin.draft.${roomId}`, text); } catch { /* ignore */ }
   }
 
   // Five-minutes-left warning chime during focus (#23). Skipped for sessions that
@@ -276,7 +289,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   return (
     <main className="room">
       {status === 'reconnecting' && <div className="reconnecting" role="status">Reconnecting…</div>}
-      {checkin && <CheckIn question={checkin} onShare={shareCheckin} onClose={() => setCheckin(null)} />}
+      {checkin && <CheckIn question={checkin} initialText={checkinDraft} onDraft={onCheckinDraft} onShare={shareCheckin} onClose={finishCheckin} />}
       <header className="room-head">
         <div className="room-id">
           <Moon size={26} className="small" /><span>Nook</span>
@@ -498,8 +511,8 @@ function RegroupPanel({ tasks, isHost, onRestart }) {
 }
 
 // Mid-session check-in card (#16): optional, dismissible. Share posts to chat.
-function CheckIn({ question, onShare, onClose }) {
-  const [text, setText] = useState('');
+function CheckIn({ question, initialText = '', onDraft, onShare, onClose }) {
+  const [text, setText] = useState(initialText);
   return (
     <div className="checkin" role="dialog" aria-label="Mid-session check-in">
       <div className="checkin-head">
@@ -508,7 +521,7 @@ function CheckIn({ question, onShare, onClose }) {
       </div>
       <p className="checkin-q">{question}</p>
       <form className="checkin-form" onSubmit={(e) => { e.preventDefault(); onShare(text); }}>
-        <input value={text} onChange={(e) => setText(e.target.value)} maxLength={200}
+        <input value={text} onChange={(e) => { setText(e.target.value); onDraft && onDraft(e.target.value); }} maxLength={200}
           placeholder="Share a line with the room (optional)…" autoFocus />
         <button className="primary sm" type="submit" disabled={!text.trim()}>Share</button>
       </form>
