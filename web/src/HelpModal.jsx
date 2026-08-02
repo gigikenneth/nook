@@ -5,6 +5,14 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'August 2, 2026',
+    items: [
+      'Your to-do list and chat now come back after a refresh or a dropped connection, kept only in your own browser',
+      'Camera and mic controls are icon-only on phones so they don’t cover the screen',
+      'Anyone can start the session, not just the host, in case the host drops',
+    ],
+  },
+  {
     date: 'August 1, 2026',
     items: [
       'Pop-out timer so the countdown stays visible when you minimise the tab (desktop)',

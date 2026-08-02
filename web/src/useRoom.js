@@ -22,10 +22,24 @@ export function useRoom(roomId, name, opts) {
   const [locked, setLocked] = useState(false); // host closed the room to newcomers
   const [goals, setGoals] = useState({}); // id -> text
   const [camPrefs, setCamPrefs] = useState({}); // id -> 'on' | 'off' (stated camera preference)
-  const [chat, setChat] = useState([]); // { id, name, text, t } — never persisted
+  // Chat is relayed live and never stored on the server. We keep a copy in this
+  // tab's own storage so a refresh or a phone reclaiming the tab can restore it;
+  // sessionStorage is per-tab and clears when the tab closes.
+  const [chat, setChat] = useState(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(`nook.chat.${roomId}`) || 'null');
+      if (Array.isArray(saved)) return saved;
+    } catch { /* ignore */ }
+    return [];
+  });
   const [config, setConfig] = useState({ focusMin: opts.focusMin, regroupMin: opts.regroupMin });
   const [status, setStatus] = useState('connecting');
   const [local, setLocal] = useState(null);
+
+  // Mirror the chat into this tab's storage so a reload can restore it.
+  useEffect(() => {
+    try { sessionStorage.setItem(`nook.chat.${roomId}`, JSON.stringify(chat)); } catch { /* full/blocked */ }
+  }, [chat, roomId]);
 
   const ws = useRef(null);
   const pcs = useRef(new Map()); // peerId -> RTCPeerConnection

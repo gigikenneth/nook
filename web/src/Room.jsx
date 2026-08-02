@@ -30,8 +30,8 @@ const chatColor = (name) => {
   return CHAT_TINT[h % CHAT_TINT.length];
 };
 
-let taskSeq = 0;
-const nextTaskId = () => ++taskSeq;
+// UUID ids so restored-from-storage tasks never collide with newly added ones.
+const nextTaskId = () => crypto.randomUUID();
 
 function download(filename, text) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
@@ -120,9 +120,22 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   const { selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status, local } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
-  // Personal, editable task list (browser-only, never synced). Stable ids so
-  // add/edit/delete works mid-session without index shuffling.
-  const [tasks, setTasks] = useState(() => todos.map((t) => ({ id: nextTaskId(), text: t, done: false })));
+  // Personal, editable task list (browser-only, never synced). Restored from this
+  // tab's own storage first, so a refresh or a phone reclaiming the tab doesn't
+  // wipe your list; falls back to the goals you joined with.
+  const [tasks, setTasks] = useState(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(`nook.tasks.${roomId}`) || 'null');
+      if (Array.isArray(saved) && saved.length) return saved;
+    } catch { /* ignore */ }
+    return todos.map((t) => ({ id: nextTaskId(), text: t, done: false }));
+  });
+  // Keep the tab's copy in step so it survives a reload. sessionStorage is per-tab
+  // and clears when the tab closes, so nothing outlives the session or leaves the
+  // device.
+  useEffect(() => {
+    try { sessionStorage.setItem(`nook.tasks.${roomId}`, JSON.stringify(tasks)); } catch { /* full/blocked */ }
+  }, [tasks, roomId]);
   const addTask = (text) => setTasks((ts) => [...ts, { id: nextTaskId(), text, done: false }]);
   const editTask = (id, text) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, text } : t)));
   const toggleTask = (id) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
@@ -335,7 +348,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
           <aside className="panel chat-panel">
             <div className="panel-head">
               <h3 className="panel-title">Chat</h3>
-              <span className="hint">not saved</span>
+              <span className="hint" title="Never stored on a server. A copy stays in your browser so a refresh can restore it, and it clears when you close the tab.">not on our servers</span>
             </div>
             <div className="chat-log" ref={logRef}>
               {chat.length === 0 ? (
