@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 
-// A pop-out timer using the Document Picture-in-Picture API (#34): a tiny
-// always-on-top window showing just the countdown, so it stays visible when you
-// switch tabs or minimise on desktop. Desktop Chrome/Edge only; browsers require
-// a user gesture to open it, so this is wired to a button (not auto-on-minimise).
+// A pop-out timer showing just the countdown, so it stays visible when you
+// switch tabs or minimise on desktop (#34, #48). Two backends:
+//   - Document Picture-in-Picture (Chrome/Edge): a true always-on-top mini window.
+//   - A plain popup window (everyone else, incl. Safari, which has no Document-PiP):
+//     a separate window that stays visible across tabs, just not always-on-top.
+// Both need a user gesture, so this is wired to a button (not auto-on-minimise).
 const PHASE_LABEL = { greet: 'Greet', focus: 'Focus', regroup: 'Regroup' };
 
 export function usePipTimer() {
-  const supported = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
+  const hasDocPip = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
+  // Pop-out works everywhere now: Document-PiP where present, a popup window
+  // otherwise. window.open is universal, so the button always shows.
+  const supported = typeof window !== 'undefined';
   const [isOpen, setIsOpen] = useState(false);
   const winRef = useRef(null);
   const dataRef = useRef({ endsAt: null, phase: 'greet' }); // latest values for the redraw loop
@@ -39,10 +44,18 @@ export function usePipTimer() {
   };
 
   const open = async () => {
-    if (!supported || winRef.current) return;
+    if (winRef.current) return;
     let w;
-    try { w = await window.documentPictureInPicture.requestWindow({ width: 200, height: 112 }); }
-    catch { return; } // denied / no gesture
+    if (hasDocPip) {
+      try { w = await window.documentPictureInPicture.requestWindow({ width: 200, height: 112 }); }
+      catch { return; } // denied / no gesture
+    } else {
+      // Popup fallback (Safari et al.): a small separate window. Opened from a
+      // click, so it isn't popup-blocked. Returns null if the browser blocks it.
+      w = window.open('', 'nook-timer', 'width=220,height=132,menubar=no,toolbar=no,location=no,status=no,resizable=yes');
+      if (!w) return;
+      w.document.title = 'Nook timer';
+    }
     winRef.current = w;
     w.document.body.style.cssText = 'margin:0;height:100vh;display:grid;place-items:center;background:#10124e;color:#fff;font-family:system-ui,sans-serif;';
     w.document.body.innerHTML =
@@ -51,8 +64,8 @@ export function usePipTimer() {
       '<div id="pip-clock" style="font-family:ui-monospace,monospace;font-size:46px;font-weight:800;letter-spacing:2px">--:--</div>' +
       '</div>';
     draw();
-    w.setInterval(draw, 500); // tied to the PiP window; dies when it closes
-    // The user closing the PiP window (or the browser reclaiming it) fires pagehide.
+    w.setInterval(draw, 500); // tied to the pop-out window; dies when it closes
+    // The user closing the window (or the browser reclaiming it) fires pagehide.
     w.addEventListener('pagehide', () => { winRef.current = null; setIsOpen(false); }, { once: true });
     setIsOpen(true);
   };
