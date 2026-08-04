@@ -169,5 +169,25 @@ const store = new Map();
   assert.ok(!r.lists.has('A'), 'leaving clears the shared list');
 }
 
+// 8) Restart is for everyone (#55): a non-host can start the next round from
+//    regroup, but nobody can restart out from under a live focus block.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  r.hostId = 'host';
+  r.sessions.set('host', { ws: { send() {} }, name: 'Host', rkey: 'h' });
+  r.sessions.set('guest', { ws: { send() {} }, name: 'Guest', rkey: 'g' });
+  // Non-host restart during regroup -> back to greet.
+  r.phase = 'regroup';
+  r.onMessage('guest', { data: JSON.stringify({ type: 'restart' }) });
+  assert.equal(r.phase, 'greet', 'a non-host can run the next session from regroup');
+  // Restart during focus is ignored (no resetting a live session).
+  r.phase = 'focus';
+  r.onMessage('guest', { data: JSON.stringify({ type: 'restart' }) });
+  assert.equal(r.phase, 'focus', 'restart is ignored mid-focus');
+}
+
 Date.now = realNow;
-console.log('RoomDO session-continuity + #9 + #30 + #47 self-check: all passed');
+console.log('RoomDO session-continuity + #9 + #30 + #47 + #55 self-check: all passed');
