@@ -73,12 +73,35 @@ export function useRoom(roomId, name, opts) {
   const didRef = useRef(null);
   if (!didRef.current) didRef.current = getDid();
 
+  // Audio mutes via `enabled` (instant, device stays open for a quick unmute —
+  // the usual mute behaviour). Video is different: `enabled = false` still keeps
+  // the camera hardware running (and its light on), which is not what "off"
+  // should mean (#46). Camera off/on actually releases and re-acquires the
+  // device — see releaseVideo / toggleCam.
   const applyTracks = useCallback((phOverride) => {
     const s = localStream.current;
     if (!s) return;
     const mediaOn = (phOverride || phaseRef.current) !== 'focus';
     s.getVideoTracks().forEach((t) => { t.enabled = mediaOn && camOn.current; });
     s.getAudioTracks().forEach((t) => { t.enabled = mediaOn && micOn.current; });
+  }, []);
+
+  // Actually stop the camera so the device (and its indicator light) goes off.
+  // The video RTP sender is kept but its track set to null, so re-acquiring
+  // later just replaceTrack()s into the same sender — no renegotiation, and no
+  // pile-up of dead senders.
+  const releaseVideo = useCallback(() => {
+    const s = localStream.current;
+    const track = s && s.getVideoTracks()[0];
+    if (track) {
+      try { track.stop(); } catch {}
+      s.removeTrack(track);
+      setLocal(new MediaStream(s.getTracks()));
+    }
+    for (const [, pc] of pcs.current) {
+      const sender = pc._videoSender || pc.getSenders().find((snd) => snd.track && snd.track.kind === 'video');
+      if (sender) { try { sender.replaceTrack(null); } catch {} }
+    }
   }, []);
 
   const sendWs = useCallback((obj) => {
@@ -99,9 +122,9 @@ export function useRoom(roomId, name, opts) {
   // A live track died (device reclaimed, tab backgrounded): reflect it in the UI
   // so the tile shows "off" and the next toggle re-acquires a fresh one (#6).
   const onTrackEnded = useCallback((kind) => {
-    if (kind === 'video') { camOn.current = false; setMedia((m) => ({ ...m, cam: false })); }
+    if (kind === 'video') { camOn.current = false; setMedia((m) => ({ ...m, cam: false })); releaseVideo(); }
     else { micOn.current = false; setMedia((m) => ({ ...m, mic: false })); }
-  }, []);
+  }, [releaseVideo]);
 
   // Lazily acquire mic/camera only when the user turns it on — no permission
   // prompt on join. Returns false (and surfaces why) if it can't. Wires the track
@@ -126,10 +149,17 @@ export function useRoom(roomId, name, opts) {
     setLocal(stream);
     for (const [peerId, pc] of pcs.current) {
       // Reuse the existing sender for this kind (seamless, no renegotiation);
-      // only a brand-new sender needs an offer/answer.
-      const sender = pc.getSenders().find((s) => (s.track ? s.track.kind : null) === track.kind);
-      if (sender) { try { await sender.replaceTrack(track); continue; } catch { /* fall through to addTrack */ } }
-      pc.addTrack(track, stream);
+      // only a brand-new sender needs an offer/answer. For video, a released
+      // camera left the sender with a null track (see releaseVideo), so match it
+      // by the remembered `_videoSender` too.
+      let sender = pc.getSenders().find((s) => (s.track ? s.track.kind : null) === track.kind);
+      if (!sender && track.kind === 'video') sender = pc._videoSender || null;
+      if (sender) {
+        try { await sender.replaceTrack(track); if (track.kind === 'video') pc._videoSender = sender; continue; }
+        catch { /* fall through to addTrack */ }
+      }
+      const added = pc.addTrack(track, stream);
+      if (track.kind === 'video') pc._videoSender = added;
       await renegotiate(peerId, pc);
     }
     setMediaError(null);
@@ -144,8 +174,12 @@ export function useRoom(roomId, name, opts) {
     function makePc(peerId) {
       const pc = new RTCPeerConnection(iceRef.current);
       pc._pendingCands = []; // ICE candidates that arrive before the remote description
+      pc._videoSender = null; // the one video RTP sender, kept stable across camera off/on
       if (localStream.current) {
-        localStream.current.getTracks().forEach((t) => pc.addTrack(t, localStream.current));
+        localStream.current.getTracks().forEach((t) => {
+          const snd = pc.addTrack(t, localStream.current);
+          if (t.kind === 'video') pc._videoSender = snd;
+        });
       }
       pc.onicecandidate = (e) => {
         if (e.candidate) sendWs({ type: 'signal', to: peerId, data: { candidate: e.candidate } });
@@ -153,6 +187,15 @@ export function useRoom(roomId, name, opts) {
       pc.ontrack = (e) => {
         const [stream] = e.streams;
         setPeers((p) => ({ ...p, [peerId]: { ...(p[peerId] || {}), stream } }));
+        // When a peer releases their camera (#46), our incoming video track goes
+        // muted. Track it so the tile drops to their avatar instead of freezing
+        // on the last frame.
+        if (e.track.kind === 'video') {
+          const upd = (live) => setPeers((p) => (p[peerId] ? { ...p, [peerId]: { ...p[peerId], camLive: live } } : p));
+          upd(!e.track.muted);
+          e.track.onmute = () => upd(false);
+          e.track.onunmute = () => upd(true);
+        }
       };
       // Recover from a dropped connection: one side (deterministic by id) restarts
       // ICE. Without this, an intermittent first-attempt failure never recovers.
@@ -173,8 +216,10 @@ export function useRoom(roomId, name, opts) {
     }
 
     // Reconcile tracks whenever the phase changes (focus forces media off);
-    // manual mic/cam intent is honored via applyTracks.
-    const applyPhaseToTracks = (ph) => applyTracks(ph);
+    // manual mic/cam intent is honored via applyTracks. Focus also clears the
+    // camera intent (#35), so release the device there too — no live camera (or
+    // its light) during a heads-down focus block (#46).
+    const applyPhaseToTracks = (ph) => { if (ph === 'focus') releaseVideo(); applyTracks(ph); };
 
     async function onSignal(from, data) {
       let pc = pcMap.get(from);
@@ -382,7 +427,9 @@ export function useRoom(roomId, name, opts) {
     toggleCam: async () => {
       const on = !camOn.current;
       if (on && !(await ensureMedia('video'))) return; // denied/no device — stay off
-      camOn.current = on; setMedia((m) => ({ ...m, cam: on })); applyTracks();
+      camOn.current = on; setMedia((m) => ({ ...m, cam: on }));
+      if (!on) releaseVideo(); // off = actually free the camera + its light (#46)
+      applyTracks();
     },
     toggleMic: async () => {
       const on = !micOn.current;

@@ -61,8 +61,8 @@ function Video({ stream, muted }) {
   return <video ref={ref} autoPlay playsInline muted={muted} />;
 }
 
-function Tile({ name, stream, self, camOff, isHost, canKick, onKick, media, onToggleCam, onToggleMic, pref, onCyclePref, mediaError, onDismissError }) {
-  const camShown = stream && !camOff && media?.cam !== false;
+function Tile({ name, stream, self, camOff, isHost, canKick, onKick, media, onToggleCam, onToggleMic, pref, onCyclePref, mediaError, onDismissError, videoMuted }) {
+  const camShown = stream && !camOff && media?.cam !== false && !videoMuted;
   return (
     <div className={`tile ${camOff ? 'camoff' : ''}`}>
       {camShown ? <Video stream={stream} muted={self} /> : <div className="avatar">{initials(name)}</div>}
@@ -327,7 +327,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
           {peerIds.map((id) => (
             <Tile key={id} name={peers[id].name || 'Guest'} stream={peers[id].stream} camOff={camOff}
               isHost={id === hostId} canKick={isHost && id !== selfId} onKick={() => room.kick(id)}
-              pref={camPrefs[id]} />
+              pref={camPrefs[id]} videoMuted={peers[id].camLive === false} />
           ))}
         </div>
 
