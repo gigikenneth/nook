@@ -276,7 +276,10 @@ export class RoomDO {
         }
         break;
       case 'restart':
-        if (id === this.hostId) this.toGreet();
+        // Anyone can start the next round (#55), like 'start' — so it doesn't
+        // stall if the host dropped. Only from regroup, so no one can reset the
+        // room out from under a live focus block.
+        if (this.phase === 'regroup') this.toGreet();
         break;
     }
   }
