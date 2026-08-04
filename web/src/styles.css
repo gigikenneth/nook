@@ -270,6 +270,16 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .todo-check li.done .task-text { text-decoration: line-through; color: var(--muted); }
 .tally { font-family: var(--wordmark); font-size: 36px; margin: 0; color: var(--olive); }
 
+/* Share-your-list toggle + roommates' shared lists (#47) */
+.list-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.share-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); font-weight: 700; cursor: pointer; white-space: nowrap; }
+.share-toggle input { margin: 0; }
+.shared-lists { gap: 12px; }
+.shared-list strong { font-size: 14px; font-family: var(--display); }
+.shared-list .todo-check.readonly { margin-top: 4px; }
+.shared-list .todo-check.readonly li { font-size: 14px; color: var(--ink); }
+.shared-list .todo-check.readonly li.done span { text-decoration: line-through; color: var(--muted); }
+
 /* ---------- Chat ---------- */
 .chat-log { display: grid; gap: 8px; overflow-y: auto; align-content: start; padding-right: 4px; min-height: 140px; max-height: 34vh; }
 .chat-msg { display: grid; gap: 1px; background: var(--cream); padding: 8px 12px; border-radius: 14px; justify-self: start; max-width: 90%; }

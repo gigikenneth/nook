@@ -140,6 +140,18 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   const editTask = (id, text) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, text } : t)));
   const toggleTask = (id) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
   const removeTask = (id) => setTasks((ts) => ts.filter((t) => t.id !== id));
+
+  // Opt-in: share your list with the room for accountability (#47). Off by
+  // default (private, as before). While on, broadcast the list (debounced) on
+  // every change; turning off clears it for everyone. Relayed, never stored.
+  const [listShared, setListShared] = useState(false);
+  const toggleShareList = () => setListShared((s) => { const on = !s; if (!on) room.shareList(null); return on; });
+  useEffect(() => {
+    if (!listShared) return;
+    const t = setTimeout(() => room.shareList(tasks.map((x) => ({ text: x.text, done: x.done }))), 400);
+    return () => clearTimeout(t);
+  }, [listShared, tasks]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [copied, setCopied] = useState(false);
   const [draft, setDraft] = useState('');
 
@@ -351,12 +363,29 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
             )}
             {phase === 'focus' && (
               <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
-                onRemove={removeTask} />
+                onRemove={removeTask} shared={listShared} onToggleShare={toggleShareList} />
             )}
             {phase === 'regroup' && (
               <RegroupPanel tasks={tasks} isHost={isHost} onRestart={room.restart} />
             )}
           </aside>
+
+          {/* Roommates who opted to share their list (#47), read-only. */}
+          {peerIds.some((id) => Array.isArray(peers[id].list) && peers[id].list.length) && (
+            <aside className="panel shared-lists">
+              <h3 className="panel-title">Room lists</h3>
+              {peerIds.filter((id) => Array.isArray(peers[id].list) && peers[id].list.length).map((id) => (
+                <div key={id} className="shared-list">
+                  <strong>{peers[id].name || 'Someone'}</strong>
+                  <ul className="todo-check readonly">
+                    {peers[id].list.map((t, i) => (
+                      <li key={i} className={t.done ? 'done' : ''}><span>{t.done ? '✓' : '·'} {t.text}</span></li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </aside>
+          )}
 
           <aside className="panel chat-panel">
             <div className="panel-head">
@@ -464,7 +493,7 @@ function GreetPanel({ selfId, selfName, goal, setGoal, onShareGoal, onShared, go
   );
 }
 
-function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove }) {
+function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, shared, onToggleShare }) {
   const [draft, setDraft] = useState('');
   function add(e) {
     e.preventDefault();
@@ -473,7 +502,13 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove }) {
   }
   return (
     <>
-      <h3 className="panel-title">Your list</h3>
+      <div className="list-head">
+        <h3 className="panel-title">Your list</h3>
+        <label className="share-toggle" title="Let the room see your list, for accountability. Off keeps it private.">
+          <input type="checkbox" checked={shared} onChange={onToggleShare} />
+          <span>{shared ? 'Sharing' : 'Share with room'}</span>
+        </label>
+      </div>
       {tasks.length === 0 && <p className="hint">Nothing yet. Add a task below.</p>}
       <ul className="todo-check">
         {tasks.map((t) => (
