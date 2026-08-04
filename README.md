@@ -129,6 +129,24 @@ won't get video through — but presence, the timer, chat, and your list all sti
 work. If your own camera won't start, Nook now tells you why (blocked, no device,
 or in use by another app) instead of silently doing nothing.
 
+**Why is the video sometimes fuzzy or laggy?** Because there's no server in the
+middle. Nook just introduces people and then steps away — the video runs
+straight from your browser to each other person's, like cups on a string. That
+keeps it private and free, but it means a few string-related wobbles:
+
+- **Everyone holds their own strings.** In a room of four, your browser sends
+  your camera to all three other people at once. If your upload is weak, the
+  strings get shaky and the picture goes fuzzy or freezes.
+- **Quality is set by the weaker connection.** Each direct link is only as good
+  as the slower of the two people on it — there's no server to even it out.
+- **A string can slip.** A network hiccup, or another app grabbing your camera,
+  can drop a connection for a moment until it reconnects.
+
+Big platforms fix this with a server that relays everyone's video (an SFU), but
+that costs money every month. Nook skips it on purpose to stay free forever —
+the trade is occasional wobble. Presence, the timer, chat, and your list keep
+working even when video struggles.
+
 **Can I stop seeing someone?** Yes. Hit **Ignore** next to a person in "Around
 now" and neither of you shows up for the other there, and you can't pull each
 other into a room. It sticks across visits. Because there are no accounts it's
