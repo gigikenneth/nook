@@ -33,6 +33,7 @@ export class RoomDO {
     this.env = env;
     this.sessions = new Map(); // id -> { ws, name }
     this.goals = new Map(); // id -> goal text
+    this.lists = new Map(); // id -> [{ text, done }] — opt-in shared to-do list (#47), in-memory, never persisted
     this.camPrefs = new Map(); // id -> 'on' | 'off' — stated camera preference (signal only)
     this.recentLeavers = new Map(); // clientId -> { at, goal, pref } — for reconnect detection
     this.ready = new Set();
@@ -184,6 +185,7 @@ export class RoomDO {
       shared: [...this.shared],
       order: [...this.sessions.keys()],
       goals: Object.fromEntries(this.goals),
+      lists: Object.fromEntries(this.lists),
       camPrefs: Object.fromEntries(this.camPrefs),
       locked: this.locked,
     });
@@ -214,6 +216,18 @@ export class RoomDO {
         this.goals.set(id, text);
         this.broadcast({ type: 'goal', id, text });
         this.syncLobby();
+        break;
+      }
+      case 'list': { // opt-in shared to-do list (#47): relayed to the room, held in
+        // memory only, never persisted — same as goals and chat.
+        if (Array.isArray(m.tasks)) {
+          const tasks = m.tasks.slice(0, 20).map((t) => ({ text: String(t && t.text || '').slice(0, 200), done: !!(t && t.done) }));
+          this.lists.set(id, tasks);
+          this.broadcastExcept(id, { type: 'peer-list', id, tasks });
+        } else { // null/absent = stopped sharing
+          this.lists.delete(id);
+          this.broadcastExcept(id, { type: 'peer-list', id, tasks: null });
+        }
         break;
       }
       case 'campref': { // stated camera preference (signal only — never touches tracks)
@@ -370,6 +384,7 @@ export class RoomDO {
     this.ready.delete(id);
     this.shared.delete(id);
     this.goals.delete(id);
+    this.lists.delete(id);
     this.camPrefs.delete(id);
     this.broadcast({ type: 'peer-leave', id });
     this.broadcast({ type: 'ready-state', ready: [...this.ready] });

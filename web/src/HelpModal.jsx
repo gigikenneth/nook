@@ -5,6 +5,16 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'August 4, 2026',
+    items: [
+      'Share your to-do list with the room for accountability, or keep it private (it stays private unless you turn sharing on)',
+      'Ignore someone in “Around now” so you and they no longer see each other, and can’t pull each other into a room. It sticks across visits',
+      'Nook remembers your name and camera choice for next time, kept on your own device',
+      'Turning your camera off now fully releases it, so the camera light goes off',
+      'The pop-out timer works in Safari and other browsers now, not just Chrome',
+    ],
+  },
+  {
     date: 'August 2, 2026',
     items: [
       'Your to-do list and chat now come back after a refresh or a dropped connection, kept only in your own browser',

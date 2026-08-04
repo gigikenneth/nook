@@ -143,5 +143,31 @@ const store = new Map();
   assert.equal(stash.pref, 'off', 'camera pref kept for the return');
 }
 
+// 7) Shared to-do list (#47): opt-in, relayed + sanitised, held in memory,
+//    cleared on unshare, and never sent back to the sharer.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  const aSent = []; const bSent = [];
+  r.sessions.set('A', { ws: { send: (s) => aSent.push(JSON.parse(s)) }, name: 'A', rkey: 'a' });
+  r.sessions.set('B', { ws: { send: (s) => bSent.push(JSON.parse(s)) }, name: 'B', rkey: 'b' });
+  r.onMessage('A', { data: JSON.stringify({ type: 'list', tasks: [{ text: 'ship', done: true }, { text: 'x'.repeat(300), done: 'y' }, { bad: 1 }] }) });
+  assert.equal(r.lists.get('A')[0].done, true, 'done preserved');
+  assert.equal(r.lists.get('A')[1].text.length, 200, 'task text capped at 200');
+  assert.equal(r.lists.get('A')[2].text, '', 'missing text becomes empty string');
+  const relay = bSent.find((m) => m.type === 'peer-list');
+  assert.ok(relay && relay.id === 'A' && relay.tasks.length === 3, 'B received the relayed list');
+  assert.ok(!aSent.find((m) => m.type === 'peer-list'), 'sharer does not get their own list back');
+  r.onMessage('A', { data: JSON.stringify({ type: 'list', tasks: null }) });
+  assert.ok(!r.lists.has('A'), 'unshare clears the stored list');
+  assert.equal(bSent.filter((m) => m.type === 'peer-list').pop().tasks, null, 'B told sharing stopped');
+  r.onMessage('A', { data: JSON.stringify({ type: 'list', tasks: Array.from({ length: 30 }, (_, i) => ({ text: 't' + i, done: false })) }) });
+  assert.equal(r.lists.get('A').length, 20, 'list capped at 20 items');
+  r.onClose('A');
+  assert.ok(!r.lists.has('A'), 'leaving clears the shared list');
+}
+
 Date.now = realNow;
-console.log('RoomDO session-continuity + #9 + #30 self-check: all passed');
+console.log('RoomDO session-continuity + #9 + #30 + #47 self-check: all passed');

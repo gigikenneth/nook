@@ -277,6 +277,7 @@ export function useRoom(roomId, name, opts) {
           setPeers((p) => {
             const n = { ...p };
             for (const pe of m.peers) n[pe.id] = { ...(n[pe.id] || {}), name: pe.name };
+            for (const [pid, tasks] of Object.entries(m.lists || {})) n[pid] = { ...(n[pid] || {}), list: tasks };
             return n;
           });
           for (const pe of m.peers) {
@@ -340,6 +341,9 @@ export function useRoom(roomId, name, opts) {
           break;
         case 'host':
           setHostId(m.id);
+          break;
+        case 'peer-list': // a roommate shared (or stopped sharing) their to-do list (#47)
+          setPeers((p) => (p[m.id] ? { ...p, [m.id]: { ...p[m.id], list: m.tasks } } : p));
           break;
       }
     }
@@ -441,6 +445,8 @@ export function useRoom(roomId, name, opts) {
     kick: (id) => sendWs({ type: 'kick', id }),
     restart: () => sendWs({ type: 'restart' }),
     sendGoal: (text) => sendWs({ type: 'goal', text }),
+    shareList: (tasks) => sendWs({ type: 'list', tasks }), // tasks array to share, null to stop
+
     setCamPref: (pref) => sendWs({ type: 'campref', pref }),
     sendChat: (text) => sendWs({ type: 'chat', text }),
   };
