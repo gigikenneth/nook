@@ -346,7 +346,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
         <footer className="site-foot">
           <span>Nook is in beta, and I'm actively tinkering with it.</span>
           <span>Found a bug? <ReportBug label="Report it" /></span>
-          <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>.</span>
+          <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>. <a href="https://discord.gg/7fvsBq79VU" target="_blank" rel="noopener noreferrer">Join the Discord</a>.</span>
         </footer>
       )}
     </main>
