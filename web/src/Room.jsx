@@ -468,7 +468,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
 function PhaseBanner({ phase, endsAt, regroupMin }) {
   const copy = {
-    greet: { t: 'Say hello', s: 'Share what you’re working on, then mark yourself ready. Turn your camera or mic on if you like.' },
+    greet: { t: 'Say hello', s: 'When it’s your turn, share what you’re working on (out loud or typed), then pass on. Mark ready when you’re set.' },
     focus: { t: 'Heads down', s: 'Cameras off. Just you, your list, and the clock.' },
     regroup: { t: 'Regroup', s: regroupMin > 0 ? 'How did it go? Turn your camera on to chat.' : 'Wrapping up.' },
   }[phase];
@@ -492,9 +492,9 @@ function GreetPanel({ selfId, selfName, goal, setGoal, onShareGoal, onShared, go
   return (
     <>
       <label className="field">
-        <span>What are you working on?</span>
+        <span>What are you working on? <span className="opt">optional</span></span>
         <input value={goal} onChange={(e) => setGoal(e.target.value)} onBlur={onShareGoal}
-          placeholder="Your focus for this session" maxLength={200} />
+          placeholder="Say it out loud, or type it here" maxLength={200} />
       </label>
 
       <ul className="goal-list">
@@ -517,7 +517,7 @@ function GreetPanel({ selfId, selfName, goal, setGoal, onShareGoal, onShared, go
       </ul>
 
       {!allShared && myTurn && (
-        <button className="primary" onClick={onShared} disabled={!goal.trim()}>I’ve shared my goal</button>
+        <button className="primary" onClick={onShared}>I’ve shared</button>
       )}
       {!allShared && !myTurn && currentSharer && (
         <p className="hint">{nameOf(currentSharer)} is sharing… you’re up next in turn.</p>
