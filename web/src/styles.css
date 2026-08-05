@@ -479,8 +479,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .room.focus-fit .chat-panel { display: flex; flex-direction: column; min-height: 0; }
 .room.focus-fit .chat-panel .chat-log { flex: 1 1 auto; max-height: none; }
 .room.focus-fit .focus-right { min-height: 0; overflow-y: auto; padding-right: 2px; }
-/* Download is an end-of-session action; hide it during heads-down focus. */
-.room.focus-fit .dl-row { display: none; }
 
 @media (max-width: 820px) {
   .stage { grid-template-columns: 1fr; }
