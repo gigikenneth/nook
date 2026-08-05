@@ -33,15 +33,15 @@ function ChatMessage({ m, selfId, onReact }) {
         </div>
       )}
       {m.mid && (
-        <span className="react-add">
-          <button className="react-btn" aria-label="Add reaction" onClick={() => setPickerOpen((o) => !o)}>＋</button>
-          {pickerOpen && (
-            <span className="react-picker">
-              {REACTIONS.map((e) => (
-                <button key={e} onClick={() => { onReact(m.mid, e, !mineFor(e)); setPickerOpen(false); }}>{e}</button>
-              ))}
-            </span>
-          )}
+        <button className="react-btn" aria-label="Add reaction" onClick={() => setPickerOpen((o) => !o)}>＋</button>
+      )}
+      {/* Picker is anchored to the bubble's own edge (not the ＋ corner) so it
+          opens inward and never spills off the panel on short messages. */}
+      {m.mid && pickerOpen && (
+        <span className="react-picker">
+          {REACTIONS.map((e) => (
+            <button key={e} onClick={() => { onReact(m.mid, e, !mineFor(e)); setPickerOpen(false); }}>{e}</button>
+          ))}
         </span>
       )}
     </div>
@@ -60,6 +60,18 @@ const CHECKINS = [
 
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
 const CHIP = ['#29bcee', '#a5d67b', '#6be492', '#171a6b']; // cyan, lime, green, indigo (Groove complements)
+
+// A small who's-here bubble for the focus phase, where cameras are off. The name
+// stays full-size and readable; only the avatar is a compact circle.
+function PresenceChip({ name, isHost, i, onKick }) {
+  return (
+    <span className="presence-chip">
+      <span className="presence-av" style={{ background: CHIP[i % CHIP.length] }}>{initials(name)}</span>
+      <span className="presence-name">{name}{isHost ? ' · host' : ''}</span>
+      {onKick && <button className="presence-kick" title={`Remove ${name} from the room`} aria-label={`Remove ${name}`} onClick={onKick}>×</button>}
+    </span>
+  );
+}
 // Light tints so each other person's chat bubbles read as their own colour.
 // Keyed by name (stable across reconnects, unlike the per-connection id).
 const CHAT_TINT = ['#dbe4ff', '#d4f3e0', '#e6f0cf', '#cdeefb']; // pale blue, mint, lime, cyan
@@ -345,8 +357,50 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   if (status === 'offline') return <Ended msg="Lost connection to the server. Check your internet, then rejoin." onLeave={onLeave} />;
   if (status === 'closed') return <Ended msg="You left the room." onLeave={onLeave} />;
 
+  // Roommates who opted to share their list (#47), read-only.
+  const sharedListsEl = peerIds.some((id) => Array.isArray(peers[id].list) && peers[id].list.length) ? (
+    <aside className="panel shared-lists">
+      <h3 className="panel-title">Room lists</h3>
+      {peerIds.filter((id) => Array.isArray(peers[id].list) && peers[id].list.length).map((id) => (
+        <div key={id} className="shared-list">
+          <strong>{peers[id].name || 'Someone'}</strong>
+          <ul className="todo-check readonly">
+            {peers[id].list.map((t, i) => (
+              <li key={i} className={t.done ? 'done' : ''}><span>{t.done ? '✓' : '·'} {t.text}</span></li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </aside>
+  ) : null;
+
+  const chatPanelEl = (
+    <aside className="panel chat-panel">
+      <div className="panel-head">
+        <h3 className="panel-title">Chat</h3>
+        <span className="hint" title="Never stored on a server. A copy stays in your browser so a refresh can restore it, and it clears when you close the tab.">not on our servers</span>
+      </div>
+      <div className="chat-log" ref={logRef}>
+        {chat.length === 0 ? (
+          <div className="chat-empty"><ChatDoodle /><p>Say something. Messages vanish when the room does.</p></div>
+        ) : chat.map((m, i) => (
+          <ChatMessage key={m.mid || i} m={m} selfId={selfId} onReact={room.react} />
+        ))}
+      </div>
+      <form className="chat-form" onSubmit={send}>
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Message…" maxLength={500} />
+        <button className="primary chat-send" type="submit" disabled={!draft.trim()}>Send</button>
+      </form>
+      <p className="chat-note">Chat isn’t saved. It clears when you leave or the room closes.</p>
+      <div className="dl-row">
+        <button className="secondary sm" onClick={downloadTodos}>Download list</button>
+        <button className="secondary sm" onClick={downloadChat} disabled={chat.length === 0}>Download chat</button>
+      </div>
+    </aside>
+  );
+
   return (
-    <main className="room">
+    <main className={`room ${phase === 'focus' ? 'focus-fit' : ''}`}>
       {status === 'reconnecting' && <div className="reconnecting" role="status">Reconnecting…</div>}
       {checkin && <CheckIn question={checkin} initialText={checkinDraft} onDraft={onCheckinDraft} onShare={shareCheckin} onClose={finishCheckin} />}
       <header className="room-head">
@@ -377,87 +431,69 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
       <PhaseBanner phase={phase} endsAt={endsAt} regroupMin={regroupMin} />
 
-      <section className="stage">
-        <div className={`grid grid-${count}`}>
-          <Tile name={name} stream={local} self camOff={camOff} isHost={isHost}
-            media={room.media} onToggleCam={room.toggleCam} onToggleMic={room.toggleMic}
-            mediaError={room.mediaError} onDismissError={room.dismissMediaError}
-            pref={camPrefs[selfId]} onCyclePref={() => room.setCamPref(nextPref(camPrefs[selfId] || null))} />
-          {peerIds.map((id) => (
-            <Tile key={id} name={peers[id].name || 'Guest'} stream={peers[id].stream} camOff={camOff}
-              isHost={id === hostId} canKick={isHost && id !== selfId} onKick={() => room.kick(id)}
-              pref={camPrefs[id]} videoMuted={peers[id].camLive === false} />
-          ))}
-        </div>
+      {phase === 'focus' ? (
+        /* Focus: nobody's on camera, so people become small name bubbles under
+           the bar, and the space goes to chat (left) + your list (right). */
+        <>
+          <div className="presence-bar">
+            <PresenceChip name={`${name} (you)`} isHost={isHost} i={0} />
+            {peerIds.map((id, idx) => (
+              <PresenceChip key={id} name={peers[id].name || 'Guest'} isHost={id === hostId} i={idx + 1}
+                onKick={isHost ? () => { if (window.confirm(`Remove ${peers[id].name || 'this person'} from the room?`)) room.kick(id); } : undefined} />
+            ))}
+          </div>
+          <section className="focus-cols">
+            {chatPanelEl}
+            <div className="focus-right">
+              <aside className="panel">
+                <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
+                  onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList} />
+              </aside>
+              {sharedListsEl}
+            </div>
+          </section>
+        </>
+      ) : (
+        <section className="stage">
+          <div className={`grid grid-${count}`}>
+            <Tile name={name} stream={local} self camOff={camOff} isHost={isHost}
+              media={room.media} onToggleCam={room.toggleCam} onToggleMic={room.toggleMic}
+              mediaError={room.mediaError} onDismissError={room.dismissMediaError}
+              pref={camPrefs[selfId]} onCyclePref={() => room.setCamPref(nextPref(camPrefs[selfId] || null))} />
+            {peerIds.map((id) => (
+              <Tile key={id} name={peers[id].name || 'Guest'} stream={peers[id].stream} camOff={camOff}
+                isHost={id === hostId} canKick={isHost && id !== selfId} onKick={() => room.kick(id)}
+                pref={camPrefs[id]} videoMuted={peers[id].camLive === false} />
+            ))}
+          </div>
 
-        <div className="rail">
-          <aside className="panel">
-            {phase === 'greet' && (
-              <GreetPanel selfId={selfId} selfName={name} goal={goal} setGoal={setGoal}
-                onShareGoal={() => goal.trim() && room.sendGoal(goal.trim())}
-                onShared={() => {
-                  const g = goal.trim();
-                  if (g) {
-                    room.sendGoal(g);
-                    // Your shared goal becomes the top item on your to-do list (deduped).
-                    setTasks((ts) => ts.some((t) => t.text === g) ? ts : [{ id: nextTaskId(), text: g, done: false }, ...ts]);
-                  }
-                  room.shareGoal();
-                }}
-                goals={goals} peers={peers} order={order} shared={shared}
-                ready={ready} iAmReady={iAmReady} count={count}
-                onReady={() => room.setReady(!iAmReady)} isHost={isHost} onStart={room.start} />
-            )}
-            {phase === 'focus' && (
-              <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
-                onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList} />
-            )}
-            {phase === 'regroup' && (
-              <RegroupPanel tasks={tasks} onRestart={room.restart} />
-            )}
-          </aside>
-
-          {/* Roommates who opted to share their list (#47), read-only. */}
-          {peerIds.some((id) => Array.isArray(peers[id].list) && peers[id].list.length) && (
-            <aside className="panel shared-lists">
-              <h3 className="panel-title">Room lists</h3>
-              {peerIds.filter((id) => Array.isArray(peers[id].list) && peers[id].list.length).map((id) => (
-                <div key={id} className="shared-list">
-                  <strong>{peers[id].name || 'Someone'}</strong>
-                  <ul className="todo-check readonly">
-                    {peers[id].list.map((t, i) => (
-                      <li key={i} className={t.done ? 'done' : ''}><span>{t.done ? '✓' : '·'} {t.text}</span></li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+          <div className="rail">
+            <aside className="panel">
+              {phase === 'greet' && (
+                <GreetPanel selfId={selfId} selfName={name} goal={goal} setGoal={setGoal}
+                  onShareGoal={() => goal.trim() && room.sendGoal(goal.trim())}
+                  onShared={() => {
+                    const g = goal.trim();
+                    if (g) {
+                      room.sendGoal(g);
+                      // Your shared goal becomes the top item on your to-do list (deduped).
+                      setTasks((ts) => ts.some((t) => t.text === g) ? ts : [{ id: nextTaskId(), text: g, done: false }, ...ts]);
+                    }
+                    room.shareGoal();
+                  }}
+                  goals={goals} peers={peers} order={order} shared={shared}
+                  ready={ready} iAmReady={iAmReady} count={count}
+                  onReady={() => room.setReady(!iAmReady)} isHost={isHost} onStart={room.start} />
+              )}
+              {phase === 'regroup' && (
+                <RegroupPanel tasks={tasks} onRestart={room.restart} />
+              )}
             </aside>
-          )}
-
-          <aside className="panel chat-panel">
-            <div className="panel-head">
-              <h3 className="panel-title">Chat</h3>
-              <span className="hint" title="Never stored on a server. A copy stays in your browser so a refresh can restore it, and it clears when you close the tab.">not on our servers</span>
-            </div>
-            <div className="chat-log" ref={logRef}>
-              {chat.length === 0 ? (
-                <div className="chat-empty"><ChatDoodle /><p>Say something. Messages vanish when the room does.</p></div>
-              ) : chat.map((m, i) => (
-                <ChatMessage key={m.mid || i} m={m} selfId={selfId} onReact={room.react} />
-              ))}
-            </div>
-            <form className="chat-form" onSubmit={send}>
-              <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Message…" maxLength={500} />
-              <button className="primary chat-send" type="submit" disabled={!draft.trim()}>Send</button>
-            </form>
-            <p className="chat-note">Chat isn’t saved. It clears when you leave or the room closes.</p>
-            <div className="dl-row">
-              <button className="secondary sm" onClick={downloadTodos}>Download list</button>
-              <button className="secondary sm" onClick={downloadChat} disabled={chat.length === 0}>Download chat</button>
-            </div>
-          </aside>
-        </div>
-      </section>
+            {sharedListsEl}
+            {chatPanelEl}
+          </div>
+        </section>
+      )}
       <footer className="site-foot in-room">
         <ReportBug />
         <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>. <a href="https://discord.gg/7fvsBq79VU" target="_blank" rel="noopener noreferrer">Join the Discord</a>.</span>
