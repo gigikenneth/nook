@@ -140,6 +140,14 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   const editTask = (id, text) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, text } : t)));
   const toggleTask = (id) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
   const removeTask = (id) => setTasks((ts) => ts.filter((t) => t.id !== id));
+  const reorderTask = (id, toIndex) => setTasks((ts) => {
+    const from = ts.findIndex((t) => t.id === id);
+    if (from < 0 || toIndex < 0 || toIndex >= ts.length || from === toIndex) return ts;
+    const next = [...ts];
+    const [item] = next.splice(from, 1);
+    next.splice(toIndex, 0, item);
+    return next;
+  });
 
   // Opt-in: share your list with the room for accountability (#47). Off by
   // default (private, as before). While on, broadcast the list (debounced) on
@@ -363,7 +371,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
             )}
             {phase === 'focus' && (
               <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
-                onRemove={removeTask} shared={listShared} onToggleShare={toggleShareList} />
+                onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList} />
             )}
             {phase === 'regroup' && (
               <RegroupPanel tasks={tasks} onRestart={room.restart} />
@@ -493,13 +501,31 @@ function GreetPanel({ selfId, selfName, goal, setGoal, onShareGoal, onShared, go
   );
 }
 
-function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, shared, onToggleShare }) {
+function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, shared, onToggleShare }) {
   const [draft, setDraft] = useState('');
+  const [dragId, setDragId] = useState(null);
+  const ulRef = useRef(null);
   function add(e) {
     e.preventDefault();
     const t = draft.trim();
     if (t) { onAdd(t); setDraft(''); }
   }
+  // Drag-to-reorder via pointer events (works with mouse and touch, no library).
+  // Grabbing the handle captures the pointer; as it moves over other rows we
+  // splice the dragged task to that row's index, so the list reorders live.
+  const startDrag = (e, id) => {
+    e.preventDefault();
+    setDragId(id);
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* older browser */ }
+  };
+  const onMove = (e) => {
+    if (dragId == null || !ulRef.current) return;
+    const rows = [...ulRef.current.children];
+    let target = rows.findIndex((li) => { const r = li.getBoundingClientRect(); return e.clientY < r.top + r.height / 2; });
+    if (target === -1) target = rows.length - 1;
+    onReorder(dragId, target);
+  };
+  const endDrag = () => setDragId(null);
   return (
     <>
       <div className="list-head">
@@ -510,9 +536,11 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, shared, onToggle
         </label>
       </div>
       {tasks.length === 0 && <p className="hint">Nothing yet. Add a task below.</p>}
-      <ul className="todo-check">
+      <ul className="todo-check" ref={ulRef}>
         {tasks.map((t) => (
-          <li key={t.id} className={t.done ? 'done' : ''}>
+          <li key={t.id} className={`${t.done ? 'done' : ''} ${dragId === t.id ? 'dragging' : ''}`}>
+            <button className="drag-handle" aria-label="Drag to reorder" title="Drag to reorder"
+              onPointerDown={(e) => startDrag(e, t.id)} onPointerMove={onMove} onPointerUp={endDrag} onPointerCancel={endDrag}>⠿</button>
             <input type="checkbox" checked={t.done} onChange={() => onToggle(t.id)} aria-label="Done" />
             <input className="task-text" value={t.text} onChange={(e) => onEdit(t.id, e.target.value)}
               maxLength={200} aria-label="Task" />
