@@ -287,18 +287,22 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ---------- Chat ---------- */
 .chat-log { display: grid; gap: 8px; overflow-y: auto; align-content: start; padding-right: 4px; min-height: 140px; max-height: 34vh; }
-.chat-msg { display: grid; gap: 1px; background: var(--cream); padding: 8px 12px; border-radius: 14px; justify-self: start; max-width: 90%; }
+.chat-msg { position: relative; display: grid; gap: 1px; background: var(--cream); padding: 8px 12px; border-radius: 14px; justify-self: start; max-width: 90%; }
 .chat-msg.mine { background: var(--pink); justify-self: end; }
 .chat-msg .who { font-size: 11px; font-weight: 800; color: var(--olive); text-transform: uppercase; letter-spacing: .04em; }
 .chat-msg .body { font-size: 14px; line-height: 1.35; }
-/* Emoji reactions (#53) */
+/* Emoji reactions (#53). Chips only render once a message has reactions, so
+   un-reacted messages stay compact. The ＋ is a hover overlay pinned to the
+   corner — no extra row, and reachable without scrolling. */
 .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: center; }
 .reaction { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; font-size: 12px; font-weight: 700; border-radius: var(--r-pill); background: rgba(0,0,0,.06); color: var(--ink); }
 .reaction.me { background: var(--olive); color: var(--cream); }
-.react-add { position: relative; display: inline-flex; }
-.react-btn { padding: 1px 6px; font-size: 13px; color: var(--muted); background: rgba(0,0,0,.05); border-radius: var(--r-pill); opacity: .55; }
-.chat-msg:hover .react-btn { opacity: 1; }
-.react-picker { position: absolute; bottom: 100%; left: 0; margin-bottom: 4px; display: flex; gap: 2px; background: #fff; padding: 4px; border-radius: var(--r-pill); box-shadow: var(--shadow); z-index: 5; }
+.react-add { position: absolute; top: 4px; right: 6px; }
+.chat-msg.mine .react-add { right: auto; left: 6px; } /* keep it off the text on right-aligned bubbles */
+.react-btn { padding: 0 5px; font-size: 14px; line-height: 1.4; color: var(--ink); background: #fff; border-radius: var(--r-pill); box-shadow: 0 1px 4px rgba(0,0,0,.18); opacity: 0; transition: opacity .12s; }
+.chat-msg:hover .react-btn, .react-btn:focus-visible { opacity: 1; }
+.react-picker { position: absolute; top: 100%; right: 0; margin-top: 4px; display: flex; gap: 2px; background: #fff; padding: 4px; border-radius: var(--r-pill); box-shadow: var(--shadow); z-index: 5; }
+.chat-msg.mine .react-picker { right: auto; left: 0; }
 .react-picker button { font-size: 17px; padding: 2px 4px; border-radius: 8px; }
 .react-picker button:hover { background: var(--cream); }
 .chat-empty { color: var(--muted); font-size: 13px; text-align: center; display: grid; justify-items: center; gap: 6px; }
@@ -308,14 +312,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .chat-send { padding: 12px 18px; flex: none; }
 .dl-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
-/* Compose emoji picker by the message box (#53) */
-.emoji-add { position: relative; flex: none; display: flex; }
-.emoji-btn { font-size: 19px; padding: 6px 8px; border-radius: var(--r-pill); background: rgba(0,0,0,.05); line-height: 1; }
-.emoji-btn:hover { background: rgba(0,0,0,.1); }
-.emoji-picker { position: absolute; bottom: 100%; left: 0; margin-bottom: 6px; z-index: 6; width: 220px;
-  display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; background: #fff; padding: 6px; border-radius: 14px; box-shadow: var(--shadow); }
-.emoji-picker button { font-size: 20px; padding: 4px; border-radius: 8px; }
-.emoji-picker button:hover { background: var(--cream); }
 .chat-note { margin: 6px 2px 0; font-size: 11px; color: var(--muted); }
 
 .ended { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
