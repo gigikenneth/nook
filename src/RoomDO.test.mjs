@@ -189,5 +189,26 @@ const store = new Map();
   assert.equal(r.phase, 'focus', 'restart is ignored mid-focus');
 }
 
+// 9) Chat carries a stable mid, and emoji reactions relay (#53). Unknown emoji
+//    is rejected so only the allowed set travels.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  const sent = [];
+  r.sessions.set('A', { ws: { send: (s) => sent.push(JSON.parse(s)) }, name: 'A', rkey: 'a' });
+  r.sessions.set('B', { ws: { send() {} }, name: 'B', rkey: 'b' });
+  r.onMessage('B', { data: JSON.stringify({ type: 'chat', text: 'hi' }) });
+  const chat = sent.find((m) => m.type === 'chat');
+  assert.ok(chat && chat.mid, 'chat message carries a stable mid');
+  r.onMessage('A', { data: JSON.stringify({ type: 'react', mid: chat.mid, emoji: '👍', on: true }) });
+  const react = sent.find((m) => m.type === 'react');
+  assert.ok(react && react.mid === chat.mid && react.emoji === '👍' && react.on === true && react.id === 'A', 'reaction relayed with reactor + on flag');
+  sent.length = 0;
+  r.onMessage('A', { data: JSON.stringify({ type: 'react', mid: chat.mid, emoji: '💩', on: true }) });
+  assert.ok(!sent.find((m) => m.type === 'react'), 'reaction outside the allowed set is dropped');
+}
+
 Date.now = realNow;
-console.log('RoomDO session-continuity + #9 + #30 + #47 + #55 self-check: all passed');
+console.log('RoomDO session-continuity + #9 + #30 + #47 + #55 + #53 self-check: all passed');
