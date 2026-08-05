@@ -337,7 +337,17 @@ export function useRoom(roomId, name, opts) {
           // current at receive time. selfId is per-connection and changes on every
           // reconnect, so comparing m.id === selfId at render time would flip all
           // my past messages to "not mine" (grey, left-aligned) after a reconnect.
-          setChat((c) => [...c, { id: m.id, name: m.name, text: m.text, t: m.t, mine: m.id === selfIdRef.current }]);
+          setChat((c) => [...c, { mid: m.mid, id: m.id, name: m.name, text: m.text, t: m.t, mine: m.id === selfIdRef.current, reactions: {} }]);
+          break;
+        case 'react': // emoji reaction toggled on a message (#53)
+          setChat((c) => c.map((msg) => {
+            if (msg.mid !== m.mid) return msg;
+            const reactions = { ...(msg.reactions || {}) };
+            const who = new Set(reactions[m.emoji] || []);
+            if (m.on) who.add(m.id); else who.delete(m.id);
+            if (who.size) reactions[m.emoji] = [...who]; else delete reactions[m.emoji];
+            return { ...msg, reactions };
+          }));
           break;
         case 'host':
           setHostId(m.id);
@@ -449,5 +459,6 @@ export function useRoom(roomId, name, opts) {
 
     setCamPref: (pref) => sendWs({ type: 'campref', pref }),
     sendChat: (text) => sendWs({ type: 'chat', text }),
+    react: (mid, emoji, on) => sendWs({ type: 'react', mid, emoji, on }),
   };
 }

@@ -13,6 +13,7 @@
 const MAX = 4;
 const HEARTBEAT_MS = 12000;
 const SESSION_KEY = 'sess'; // persisted session blob (survives eviction/deploy)
+const REACTIONS = new Set(['👍', '❤️', '🎉', '😂', '👀']); // allowed chat reactions (#53)
 // A tab that returns within this window (matched by its stable client id) is a
 // reconnect, not a new arrival — so we don't chime a "someone joined" and we
 // restore their goal/camera pref instead of rebuilding from scratch (#30).
@@ -240,7 +241,14 @@ export class RoomDO {
       case 'chat': { // relayed live, never stored — history dies with the room
         const s = this.sessions.get(id);
         const text = String(m.text || '').slice(0, 500).trim();
-        if (text) this.broadcast({ type: 'chat', id, name: s ? s.name : 'Guest', text, t: Date.now() });
+        // `mid` gives each message a stable id so reactions can attach to it.
+        if (text) this.broadcast({ type: 'chat', mid: crypto.randomUUID(), id, name: s ? s.name : 'Guest', text, t: Date.now() });
+        break;
+      }
+      case 'react': { // emoji reaction on a chat message (#53) — relayed, not stored
+        if (m.mid && REACTIONS.has(m.emoji)) {
+          this.broadcast({ type: 'react', mid: String(m.mid), emoji: m.emoji, id, on: !!m.on });
+        }
         break;
       }
       case 'ready':
