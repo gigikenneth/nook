@@ -5,6 +5,17 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'August 5, 2026',
+    items: [
+      'The focus screen is redesigned: with cameras off, people show as small name bubbles, and the space goes to a bigger chat and your to-do list side by side',
+      'Greeting is simpler: share your goal out loud or typed, and pass the turn without having to type anything',
+      'Drag to reorder your to-do list by its handle',
+      'React to any chat message with an emoji',
+      'Anyone can start the next session from regroup, not just the host',
+      'A link to join the Discord, down in the footer',
+    ],
+  },
+  {
     date: 'August 4, 2026',
     items: [
       'Share your to-do list with the room for accountability, or keep it private (it stays private unless you turn sharing on)',
