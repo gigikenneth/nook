@@ -216,7 +216,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .timer-label { font-size: 11px; text-transform: uppercase; letter-spacing: .1em; font-weight: 700; opacity: .7; }
 .timer-clock { font-family: var(--mono); font-size: 40px; font-weight: 500; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
 
-.stage { display: grid; grid-template-columns: 1fr 340px; gap: 18px; align-items: start; }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 18px; align-items: start; }
 .grid { display: grid; gap: 14px; }
 .grid-1 { grid-template-columns: 1fr; }
 .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
@@ -297,12 +297,14 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: center; }
 .reaction { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; font-size: 12px; font-weight: 700; border-radius: var(--r-pill); background: rgba(0,0,0,.06); color: var(--ink); }
 .reaction.me { background: var(--olive); color: var(--cream); }
-.react-add { position: absolute; top: 4px; right: 6px; }
-.chat-msg.mine .react-add { right: auto; left: 6px; } /* keep it off the text on right-aligned bubbles */
-.react-btn { padding: 0 5px; font-size: 14px; line-height: 1.4; color: var(--ink); background: #fff; border-radius: var(--r-pill); box-shadow: 0 1px 4px rgba(0,0,0,.18); opacity: 0; transition: opacity .12s; }
+.react-btn { position: absolute; top: 4px; right: 6px; padding: 0 5px; font-size: 14px; line-height: 1.4; color: var(--ink); background: #fff; border-radius: var(--r-pill); box-shadow: 0 1px 4px rgba(0,0,0,.18); opacity: 0; transition: opacity .12s; }
+.chat-msg.mine .react-btn { right: auto; left: 6px; } /* off the text on right-aligned bubbles */
 .chat-msg:hover .react-btn, .react-btn:focus-visible { opacity: 1; }
-.react-picker { position: absolute; top: 100%; right: 0; margin-top: 4px; display: flex; gap: 2px; background: #fff; padding: 4px; border-radius: var(--r-pill); box-shadow: var(--shadow); z-index: 5; }
-.chat-msg.mine .react-picker { right: auto; left: 0; }
+/* Anchor the picker to the bubble's own edge so it opens inward and stays in the
+   panel even for a short message: peers' (left) bubbles open rightward, your
+   (right) bubbles open leftward. */
+.react-picker { position: absolute; top: 100%; left: 0; margin-top: 4px; display: flex; gap: 2px; background: #fff; padding: 4px; border-radius: var(--r-pill); box-shadow: var(--shadow); z-index: 5; }
+.chat-msg.mine .react-picker { left: auto; right: 0; }
 .react-picker button { font-size: 17px; padding: 2px 4px; border-radius: 8px; }
 .react-picker button:hover { background: var(--cream); }
 .chat-empty { color: var(--muted); font-size: 13px; text-align: center; display: grid; justify-items: center; gap: 6px; }
@@ -457,9 +459,40 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .rail { display: grid; gap: 18px; align-content: start; position: sticky; top: 22px; }
 
+/* Focus phase (#62): cameras are off, so people become small name bubbles under
+   the bar, and the space goes to chat (left) + your list (right). Greet/regroup
+   keep the live-camera tile layout. */
+.presence-bar { display: flex; flex-wrap: wrap; gap: 10px; }
+.presence-chip { display: inline-flex; align-items: center; gap: 8px; background: #fff; padding: 5px 15px 5px 5px; border-radius: var(--r-pill); box-shadow: var(--shadow); }
+.presence-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 12px; flex: none; }
+.presence-name { font-weight: 700; font-size: 14px; font-family: var(--display); white-space: nowrap; }
+.presence-kick { margin-left: 2px; padding: 0 5px; font-size: 15px; line-height: 1; color: var(--muted); border-radius: 50%; }
+.presence-kick:hover { color: var(--pink-deep); background: var(--cream); }
+
+.focus-cols { display: grid; grid-template-columns: 1fr 360px; gap: 18px; align-items: start; }
+.focus-right { display: grid; gap: 18px; align-content: start; min-height: 0; }
+
+/* Lock the room to the window height so nothing runs off the bottom (#62). The
+   chat log (left) and the list column (right) each scroll inside themselves. */
+.room.focus-fit { height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; }
+.room.focus-fit .focus-cols { flex: 1 1 auto; min-height: 0; align-items: stretch; }
+.room.focus-fit .chat-panel { display: flex; flex-direction: column; min-height: 0; }
+.room.focus-fit .chat-panel .chat-log { flex: 1 1 auto; max-height: none; }
+.room.focus-fit .focus-right { min-height: 0; overflow-y: auto; padding-right: 2px; }
+/* Download is an end-of-session action; hide it during heads-down focus. */
+.room.focus-fit .dl-row { display: none; }
+
 @media (max-width: 820px) {
   .stage { grid-template-columns: 1fr; }
   .rail { position: static; }
+  /* On a stacked phone layout the page scrolls normally; don't viewport-lock. */
+  .room.focus-fit { height: auto; display: grid; }
+  .focus-cols { grid-template-columns: 1fr; }
+  .focus-cols .focus-right { order: -1; } /* stacked: your list first, chat below */
+  .room.focus-fit .focus-cols { min-height: auto; }
+  .room.focus-fit .chat-panel { display: grid; }
+  .room.focus-fit .chat-panel .chat-log { flex: none; max-height: 50vh; }
+  .room.focus-fit .focus-right { overflow-y: visible; }
   .banner { flex-direction: column; align-items: flex-start; }
   .timer { justify-items: start; }
   .actions.two { grid-template-columns: 1fr; }
