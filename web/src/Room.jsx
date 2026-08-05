@@ -9,8 +9,6 @@ import { Moon, ChatDoodle, CamBadge } from './graphics.jsx';
 // Camera-preference cycle: unset -> up for camera -> camera-shy -> unset.
 const nextPref = (p) => (p === 'on' ? 'off' : p === 'off' ? null : 'on');
 const REACTIONS = ['👍', '❤️', '🎉', '😂', '👀']; // quick emoji reactions (#53)
-// A small curated set for the compose picker next to the message box (#53).
-const EMOJIS = ['😀', '😂', '😍', '😊', '😉', '🤔', '😅', '😴', '🙌', '👍', '👏', '🙏', '🔥', '🎉', '❤️', '✅', '💪', '🚀', '☕️', '👀'];
 
 // A chat message with emoji reactions: existing reactions show as chips (click
 // to toggle your own), and a ＋ opens the quick palette. Reactions are relayed
@@ -19,29 +17,32 @@ function ChatMessage({ m, selfId, onReact }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const reactions = m.reactions || {};
   const mineFor = (e) => (reactions[e] || []).includes(selfId);
+  const hasReactions = Object.keys(reactions).length > 0;
   return (
     <div className={`chat-msg ${m.mine ? 'mine' : ''}`} style={m.mine ? undefined : { background: chatColor(m.name) }}>
       <span className="who">{m.mine ? 'You' : m.name}</span>
       <span className="body">{m.text}</span>
-      {(Object.keys(reactions).length > 0 || m.mid) && (
+      {/* Chips only appear once a message has reactions, so un-reacted messages
+          don't grow. The ＋ is a hover overlay in the corner, not a row. */}
+      {hasReactions && (
         <div className="reactions">
           {Object.entries(reactions).map(([emoji, who]) => (
             <button key={emoji} className={`reaction ${who.includes(selfId) ? 'me' : ''}`}
               onClick={() => onReact(m.mid, emoji, !who.includes(selfId))}>{emoji} {who.length}</button>
           ))}
-          {m.mid && (
-            <span className="react-add">
-              <button className="react-btn" aria-label="Add reaction" onClick={() => setPickerOpen((o) => !o)}>＋</button>
-              {pickerOpen && (
-                <span className="react-picker">
-                  {REACTIONS.map((e) => (
-                    <button key={e} onClick={() => { onReact(m.mid, e, !mineFor(e)); setPickerOpen(false); }}>{e}</button>
-                  ))}
-                </span>
-              )}
+        </div>
+      )}
+      {m.mid && (
+        <span className="react-add">
+          <button className="react-btn" aria-label="Add reaction" onClick={() => setPickerOpen((o) => !o)}>＋</button>
+          {pickerOpen && (
+            <span className="react-picker">
+              {REACTIONS.map((e) => (
+                <button key={e} onClick={() => { onReact(m.mid, e, !mineFor(e)); setPickerOpen(false); }}>{e}</button>
+              ))}
             </span>
           )}
-        </div>
+        </span>
       )}
     </div>
   );
@@ -200,7 +201,6 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
   const [copied, setCopied] = useState(false);
   const [draft, setDraft] = useState('');
-  const [emojiOpen, setEmojiOpen] = useState(false); // compose emoji picker by the message box
 
   const isHost = selfId && selfId === hostId;
   const iAmReady = selfId && ready.includes(selfId);
@@ -447,16 +447,6 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
               ))}
             </div>
             <form className="chat-form" onSubmit={send}>
-              <div className="emoji-add">
-                <button type="button" className="emoji-btn" aria-label="Add emoji" onClick={() => setEmojiOpen((o) => !o)}>😊</button>
-                {emojiOpen && (
-                  <div className="emoji-picker" role="menu">
-                    {EMOJIS.map((e) => (
-                      <button type="button" key={e} onClick={() => setDraft((d) => (d + e).slice(0, 500))}>{e}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
               <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Message…" maxLength={500} />
               <button className="primary chat-send" type="submit" disabled={!draft.trim()}>Send</button>
             </form>
