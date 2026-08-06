@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiBase, wsBase } from './config';
 import { liveTrackOf, mediaErrorMessage } from './media';
+import { shouldReoffer } from './mesh';
 import { getDid } from './device';
+
+// If a renegotiation offer goes unanswered this long, assume it was lost (a glare
+// collision the peer dropped, or a dropped signal) and re-send it — up to
+// RENEG_MAX times. Without this a stranded audio track never heals (#68).
+const RENEG_RETRY_MS = 3500;
+const RENEG_MAX = 4;
 
 // STUN by default; the /ice endpoint adds a TURN relay when configured so peers
 // behind strict NAT (different networks) can still connect.
@@ -111,12 +118,20 @@ export function useRoom(roomId, name, opts) {
 
   // Toggling media on mid-call adds a track the original offer didn't have, so
   // the peer needs a fresh offer/answer.
-  const renegotiate = useCallback(async (peerId, pc, iceRestart = false) => {
+  const renegotiate = useCallback(async (peerId, pc, iceRestart = false, attempt = 0) => {
+    if (pc.signalingState === 'closed') return;
     try {
       const offer = await pc.createOffer(iceRestart ? { iceRestart: true } : undefined);
       await pc.setLocalDescription(offer);
       sendWs({ type: 'signal', to: peerId, data: { sdp: pc.localDescription } });
-    } catch { /* negotiation raced; the next signal recovers */ }
+    } catch { /* negotiation raced; the watchdog below re-offers if we're stuck */ }
+    // Watchdog: if the answer never lands we're stuck in 'have-local-offer' —
+    // the offer was lost. Re-send it. Clears itself once the answer applies
+    // (state back to 'stable') or on close (see flushCands / peer-leave). (#68)
+    clearTimeout(pc._renegTimer);
+    pc._renegTimer = setTimeout(() => {
+      if (shouldReoffer(pc.signalingState, attempt + 1, RENEG_MAX)) renegotiate(peerId, pc, false, attempt + 1);
+    }, RENEG_RETRY_MS);
   }, [sendWs]);
 
   // A live track died (device reclaimed, tab backgrounded): reflect it in the UI
@@ -244,7 +259,7 @@ export function useRoom(roomId, name, opts) {
             if (collision) renegotiate(from, pc);
           } catch { /* raced negotiation; a later signal recovers */ }
         } else if (data.sdp.type === 'answer' && pc) {
-          try { await pc.setRemoteDescription(data.sdp); await flushCands(pc); } catch {}
+          try { await pc.setRemoteDescription(data.sdp); await flushCands(pc); clearTimeout(pc._renegTimer); } catch {}
         }
       } else if (data.candidate && pc) {
         // Buffer candidates that arrive before the remote description is set,
@@ -292,7 +307,7 @@ export function useRoom(roomId, name, opts) {
           break; // no join sound — people found it noisy (#32)
         case 'peer-leave': {
           const pc = pcMap.get(m.id);
-          if (pc) { pc.close(); pcMap.delete(m.id); }
+          if (pc) { clearTimeout(pc._renegTimer); pc.close(); pcMap.delete(m.id); }
           setPeers((p) => { const n = { ...p }; delete n[m.id]; return n; });
           setGoals((g) => { const n = { ...g }; delete n[m.id]; return n; });
           setCamPrefs((c) => { const n = { ...c }; delete n[m.id]; return n; });

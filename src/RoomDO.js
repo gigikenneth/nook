@@ -148,6 +148,12 @@ export class RoomDO {
     // fall back to the per-tab `cid` (covers a refresh when localStorage is
     // blocked). Either way it's an opaque, anonymous id — nothing relational.
     const rkey = (url.searchParams.get('did') || url.searchParams.get('cid')) || null;
+    // A still-open session with this key is a stale connection from the same tab
+    // — e.g. a phone-suspend reconnect that opened a new socket before the old
+    // one's close event fired. Evict it now, or the returning person appears
+    // twice to everyone (#57). onClose stashes its goal/pref, so the reconnect
+    // restore just below picks them back up.
+    this.supersedeStale(rkey);
     const prevLeave = rkey ? this.recentLeavers.get(rkey) : null;
     const reconnecting = !!(prevLeave && Date.now() - prevLeave.at < RECONNECT_TTL_MS);
     if (reconnecting) {
@@ -380,6 +386,20 @@ export class RoomDO {
         occupants,
       }),
     }).catch(() => {});
+  }
+
+  // Drop any open session that shares this reconnect key — a zombie left behind
+  // by a reconnect whose old socket hasn't closed yet (#57). Runs the normal
+  // onClose so peers get a peer-leave and the goal/pref is stashed for restore.
+  supersedeStale(rkey) {
+    if (!rkey) return;
+    for (const [pid, s] of this.sessions) {
+      if (s.rkey === rkey) {
+        try { s.ws.close(1000, 'superseded'); } catch {}
+        this.onClose(pid);
+        break; // at most one live session per key
+      }
+    }
   }
 
   onClose(id) {

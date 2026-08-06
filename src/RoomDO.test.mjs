@@ -210,5 +210,37 @@ const store = new Map();
   assert.ok(!sent.find((m) => m.type === 'react'), 'reaction outside the allowed set is dropped');
 }
 
+// 10) Duplicate self (#57): a second live connection sharing the same reconnect
+//     key (a phone-suspend reconnect before the old socket's close event fired)
+//     supersedes the stale session, so the returning person doesn't appear twice.
+//     The evicted copy is stashed so the rejoin still restores its goal/pref.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true; r.isPublic = true;
+  const obs = [];
+  // A live observer (different key) that should be told the stale copy left.
+  r.sessions.set('mags', { ws: { send: (s) => obs.push(JSON.parse(s)) }, name: 'Mags', rkey: 'dev-mags' });
+  // The zombie: same tab as the reconnecting person, socket not yet closed.
+  let closed = false;
+  r.sessions.set('zombie', { ws: { send() {}, close() { closed = true; } }, name: 'Jeff', rkey: 'dev-jeff' });
+  r.goals.set('zombie', 'write the report');
+
+  r.supersedeStale('dev-jeff');
+
+  assert.ok(!r.sessions.has('zombie'), 'stale same-key session evicted');
+  assert.ok(closed, 'stale socket closed');
+  assert.ok(r.sessions.has('mags'), 'unrelated session untouched');
+  assert.ok(obs.find((m) => m.type === 'peer-leave' && m.id === 'zombie'), 'peers told the stale copy left');
+  const stash = r.recentLeavers.get('dev-jeff');
+  assert.ok(stash && stash.goal === 'write the report', 'evicted goal kept for the rejoin');
+  // No matching key => no-op (doesn't evict anyone).
+  r.supersedeStale('nobody');
+  assert.ok(r.sessions.has('mags'), 'supersedeStale with no match is a no-op');
+  r.supersedeStale(null);
+  assert.ok(r.sessions.has('mags'), 'supersedeStale(null) is a no-op');
+}
+
 Date.now = realNow;
-console.log('RoomDO session-continuity + #9 + #30 + #47 + #55 + #53 self-check: all passed');
+console.log('RoomDO session-continuity + #9 + #30 + #47 + #55 + #53 + #57 self-check: all passed');
