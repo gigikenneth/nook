@@ -16,3 +16,6 @@ web/.env.*
 
 # Wrangler local state
 .wrangler/
+
+# visual brainstorm companion scratch
+.superpowers/
