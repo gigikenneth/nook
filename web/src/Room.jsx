@@ -4,6 +4,7 @@ import { useWakeLock } from './useWakeLock';
 import { usePipTimer } from './usePipTimer';
 import { chime } from './sound';
 import { ReportBug } from './ReportBug.jsx';
+import { ThemeToggle } from './ThemeToggle.jsx';
 import { Moon, ChatDoodle, CamBadge } from './graphics.jsx';
 
 // Camera-preference cycle: unset -> up for camera -> camera-shy -> unset.
@@ -411,6 +412,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
           {locked && <span className="badge badge-locked">🔒 locked</span>}
         </div>
         <div className="room-actions">
+          <ThemeToggle className="sm" />
           {isHost && (
             <button className={`ghost sm ${locked ? 'is-locked' : ''}`} onClick={room.toggleLock}
               title={locked ? 'Room is closed to new people' : 'Anyone with space can join, even mid-session'}>

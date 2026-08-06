@@ -14,6 +14,16 @@
   --purple: #a5d67b;      /* was purple #ac7bd6 -> lime */
   --ink: #171717;
   --muted: #58686a;       /* was warm gray #6a6858 -> cool gray */
+  --text-muted: var(--muted);
+
+  /* Semantic vars — light values equal the current look; redefined for dark theme. */
+  --bg: var(--cream);
+  --surface: #fff;
+  --field: var(--cream);
+  --field-focus: #fff;
+  --on-slab: var(--cream);      /* light text that sits on a dark slab */
+  --accent-text: var(--olive);  /* indigo text on a light background */
+  --on-accent: #171717;         /* text on a light accent bg (mint/lime/cyan) — stays dark in BOTH themes */
 
   --r-lg: 30px;
   --r-md: 20px;
@@ -34,7 +44,7 @@ body {
   margin: 0;
   font-family: var(--body);
   color: var(--ink);
-  background: var(--cream);
+  background: var(--bg);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
@@ -60,26 +70,26 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
 }
 .brand > * { position: relative; z-index: 1; }
 .brand h1 {
-  font-family: var(--wordmark); font-weight: 800; color: var(--cream);
+  font-family: var(--wordmark); font-weight: 800; color: var(--on-slab);
   font-size: clamp(72px, 17vw, 128px); line-height: 0.9; letter-spacing: -0.02em; text-transform: uppercase;
 }
-.tagline { color: var(--cream); opacity: 0.92; margin: 6px 0 0; max-width: 34ch; font-weight: 500; font-size: 17px; }
+.tagline { color: var(--on-slab); opacity: 0.92; margin: 6px 0 0; max-width: 34ch; font-weight: 500; font-size: 17px; }
 
 /* "How it works / what's new" button on the hero slab, and its panel. */
 .help-btn {
   position: absolute; top: 18px; left: 20px; z-index: 2;
   padding: 4px 12px; border-radius: var(--r-pill);
-  background: rgba(255, 255, 255, 0.14); color: var(--cream); font-size: 12px; font-weight: 700;
+  background: rgba(255, 255, 255, 0.14); color: var(--on-slab); font-size: 12px; font-weight: 700;
 }
 .help-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.26); transform: none; }
 .help-card {
-  background: #fff; border-radius: var(--r-lg); width: min(460px, calc(100vw - 32px));
+  background: var(--surface); border-radius: var(--r-lg); width: min(460px, calc(100vw - 32px));
   max-height: 82vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: var(--shadow);
 }
 .help-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 14px 4px; }
 .help-tabs { display: flex; gap: 6px; }
-.help-tabs button { padding: 8px 14px; font-size: 14px; font-weight: 700; background: var(--cream); color: var(--muted); border-radius: var(--r-pill); }
-.help-tabs button.sel { background: var(--olive); color: var(--cream); }
+.help-tabs button { padding: 8px 14px; font-size: 14px; font-weight: 700; background: var(--field); color: var(--muted); border-radius: var(--r-pill); }
+.help-tabs button.sel { background: var(--olive); color: var(--on-slab); }
 .help-body { padding: 6px 24px 26px; overflow-y: auto; }
 .help-body h3 { margin-bottom: 6px; }
 .help-steps { margin: 8px 0; padding-left: 20px; display: grid; gap: 7px; }
@@ -93,12 +103,12 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
 .help-subhead { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 8px; }
 .help-tips { margin: 0 0 12px; padding: 0; list-style: none; display: grid; gap: 9px; }
 .help-tips li { line-height: 1.45; padding-left: 16px; position: relative; }
-.help-tips li::before { content: '·'; position: absolute; left: 4px; color: var(--olive); font-weight: 800; }
+.help-tips li::before { content: '·'; position: absolute; left: 4px; color: var(--accent-text); font-weight: 800; }
 
 /* Subtle "beta" tag on the hero slab. */
 .beta-tag {
   position: absolute; top: 18px; right: 20px; z-index: 2;
-  padding: 3px 10px; border-radius: var(--r-pill); background: var(--orange); color: var(--ink);
+  padding: 3px 10px; border-radius: var(--r-pill); background: var(--orange); color: var(--on-accent);
   font-family: var(--body); font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: .07em;
 }
 
@@ -107,33 +117,33 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
   display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 8px;
   text-align: center; padding: 14px 12px 4px; font-size: 13px; color: var(--muted);
 }
-.site-foot a { color: var(--olive); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+.site-foot a { color: var(--accent-text); font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .site-foot.in-room { padding: 10px; }
 
 /* First-open orientation: the three things you do, in order. */
 .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: center; }
 .steps li { display: flex; align-items: center; gap: 9px; font-weight: 700; color: var(--muted); font-size: 14px; }
 .steps li span { width: 24px; height: 24px; border-radius: 50%; flex: none; display: grid; place-items: center;
-  background: var(--olive); color: var(--cream); font-size: 12px; font-family: var(--display); }
+  background: var(--olive); color: var(--on-slab); font-size: 12px; font-family: var(--display); }
 .brand .moon { position: absolute; bottom: 20px; right: 26px; z-index: 2; }
 
 .card {
-  background: #fff; border: 1px solid var(--line);
+  background: var(--surface); border: 1px solid var(--line);
   border-radius: var(--r-lg); padding: 26px; display: grid; gap: 18px; box-shadow: var(--shadow);
 }
-.card.center { justify-items: center; text-align: center; gap: 16px; padding: 44px; background: var(--cream); }
-.joining { margin: 0; color: var(--olive); font-weight: 700; }
+.card.center { justify-items: center; text-align: center; gap: 16px; padding: 44px; background: var(--field); }
+.joining { margin: 0; color: var(--accent-text); font-weight: 700; }
 
 .field { display: grid; gap: 7px; }
 .field > span { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
 .field.small { width: 130px; }
 input, textarea {
-  font: inherit; color: var(--ink); background: var(--cream);
+  font: inherit; color: var(--ink); background: var(--field);
   border: 2px solid transparent; border-radius: var(--r-md); padding: 13px 16px; width: 100%;
   transition: border-color .15s, background .15s;
 }
-input::placeholder, textarea::placeholder { color: #9b9885; }
-input:focus, textarea:focus { background: #fff; border-color: var(--olive); }
+input::placeholder, textarea::placeholder { color: var(--text-muted); }
+input:focus, textarea:focus { background: var(--field-focus); border-color: var(--accent-text); }
 input:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
 
 /* Custom checkbox — the generic input styling above (and iOS defaults) make a
@@ -141,13 +151,13 @@ input:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px
 input[type="checkbox"] {
   -webkit-appearance: none; appearance: none;
   width: 20px; height: 20px; flex: none; padding: 0; margin: 0;
-  border: 2px solid var(--muted); border-radius: 6px; background: #fff;
+  border: 2px solid var(--muted); border-radius: 6px; background: var(--surface);
   cursor: pointer; position: relative; transition: background .15s, border-color .15s;
 }
 input[type="checkbox"]:checked { background: var(--orange); border-color: var(--orange); }
 input[type="checkbox"]:checked::after {
   content: ''; position: absolute; left: 5px; top: 1px;
-  width: 6px; height: 11px; border: solid var(--ink); border-width: 0 2px 2px 0; transform: rotate(45deg);
+  width: 6px; height: 11px; border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg);
 }
 input[type="checkbox"]:disabled { opacity: .5; cursor: not-allowed; }
 
@@ -165,14 +175,14 @@ button {
 button:hover:not(:disabled) { transform: translateY(-2px); }
 button:active { transform: translateY(0) scale(0.97); }
 button:disabled { opacity: .45; cursor: not-allowed; }
-.primary { background: var(--olive); color: var(--cream); }
+.primary { background: var(--olive); color: var(--on-slab); }
 .primary:hover:not(:disabled) { filter: brightness(1.12); }
-.primary.is-on { background: var(--orange); }
-.secondary { background: var(--pink); color: var(--ink); }
+.primary.is-on { background: var(--orange); color: var(--on-accent); }
+.secondary { background: var(--pink); color: var(--on-accent); }
 .secondary:hover:not(:disabled) { filter: brightness(1.04); }
 .ghost { background: transparent; color: var(--muted); }
 .ghost.x { padding: 8px 12px; font-size: 18px; line-height: 1; border-radius: var(--r-pill); }
-.link-btn { background: none; border: none; color: var(--olive); padding: 4px 2px; justify-self: start; text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
+.link-btn { background: none; border: none; color: var(--accent-text); padding: 4px 2px; justify-self: start; text-decoration: underline; text-underline-offset: 3px; font-weight: 700; }
 .link-btn.inline { display: inline; padding: 0; font: inherit; font-weight: 700; vertical-align: baseline; overflow: visible; }
 .sm { padding: 9px 16px; font-size: 14px; }
 .hint { color: var(--muted); font-size: 13px; margin: 0; font-weight: 500; }
@@ -180,13 +190,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 /* Camera-preference signal (#9): a stated social hint, never controls the camera. */
 .cam-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--r-pill);
   font-size: 11px; font-weight: 800; line-height: 1.6; white-space: nowrap; }
-.cam-badge.on { background: rgba(41, 188, 238, 0.18); color: var(--olive); }   /* cyan tint — up for camera */
+.cam-badge.on { background: rgba(41, 188, 238, 0.18); color: var(--accent-text); }   /* cyan tint — up for camera */
 .cam-badge.off { background: rgba(88, 104, 106, 0.16); color: var(--muted); }  /* grey tint — camera-shy */
 .cam-badges { display: inline-flex; gap: 4px; margin-top: 2px; }
 /* Home identity picker: two toggles, either selected = your preference, neither = unset. */
 .cam-picker { display: flex; gap: 8px; flex-wrap: wrap; }
-.cam-opt { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; background: var(--cream); color: var(--ink); border: 2px solid transparent; }
-.cam-opt.sel { background: var(--orange); border-color: var(--orange); }
+.cam-opt { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; background: var(--field); color: var(--ink); border: 2px solid transparent; }
+.cam-opt.sel { background: var(--orange); border-color: var(--orange); color: var(--on-accent); }
 /* Self tile: tap the badge to cycle your preference. */
 .cam-pref-btn { padding: 2px 8px; background: rgba(255, 255, 255, 0.14); border-radius: var(--r-pill); }
 .cam-pref-btn .cam-set { font-size: 11px; font-weight: 700; color: #fff; opacity: 0.85; }
@@ -201,15 +211,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 .banner {
   display: flex; justify-content: space-between; align-items: center; gap: 20px;
-  padding: 22px 26px; border-radius: var(--r-lg); background: var(--pink); color: var(--ink);
+  padding: 22px 26px; border-radius: var(--r-lg); background: var(--pink); color: var(--on-accent);
 }
 .banner h2 { font-size: 30px; }
 .banner p { margin: 5px 0 0; color: rgba(23, 23, 23, 0.7); font-weight: 500; }
-.banner-focus { background: var(--olive); color: var(--cream); }
-.banner-focus h2 { color: var(--cream); }
+.banner-focus { background: var(--olive); color: var(--on-slab); }
+.banner-focus h2 { color: var(--on-slab); }
 .banner-focus p { color: rgba(244, 241, 232, 0.75); }
-.banner-regroup { background: var(--purple); color: #fff; }
-.banner-regroup h2, .banner-regroup p { color: #fff; }
+.banner-regroup { background: var(--purple); color: var(--on-accent); }
+.banner-regroup h2, .banner-regroup p { color: var(--on-accent); }
 .banner-regroup p { opacity: .85; }
 
 .timer { display: grid; justify-items: end; gap: 2px; }
@@ -224,7 +234,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .tile { position: relative; aspect-ratio: 4 / 3; border-radius: var(--r-md); overflow: hidden; background: var(--olive); border: 3px solid var(--olive); }
 .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tile.camoff { background: var(--olive2); }
-.avatar { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--wordmark); font-size: 46px; color: var(--cream); letter-spacing: .04em; }
+.avatar { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--wordmark); font-size: 46px; color: var(--on-slab); letter-spacing: .04em; }
 .tile-bar { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 12px; border-radius: var(--r-pill); background: rgba(23, 23, 23, 0.55); }
 .tile-name { color: #fff; font-size: 13px; font-weight: 600; }
 .kick { color: var(--pink); font-size: 12px; padding: 4px 10px; }
@@ -238,9 +248,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .mediabtn { display: inline-flex; align-items: center; gap: 5px; padding: 7px 13px; font-size: 12px; font-weight: 700; border-radius: var(--r-pill);
   background: rgba(23, 23, 23, 0.55); color: #fff; }
 .mediabtn:hover:not(:disabled) { filter: brightness(1.15); }
-.mediabtn.off { background: var(--orange); color: var(--ink); } /* accent (cyan) when muted/off */
+.mediabtn.off { background: var(--orange); color: var(--on-accent); } /* accent (cyan) when muted/off */
 
-.panel { background: #fff; border-radius: var(--r-lg); padding: 22px; display: grid; gap: 15px; box-shadow: var(--shadow); }
+.panel { background: var(--surface); border-radius: var(--r-lg); padding: 22px; display: grid; gap: 15px; box-shadow: var(--shadow); }
 .panel-title { font-size: 21px; }
 .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 
@@ -248,12 +258,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .goal-list li { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .goal-chip { width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center; font-weight: 800; font-size: 12px; color: #fff; font-family: var(--display); }
 .goal-body { display: grid; gap: 1px; min-width: 0; }
-.goal-body strong { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--olive); }
+.goal-body strong { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--accent-text); }
 .goal-body span { font-size: 14px; }
 
 /* Greet turn-taking: the frame sits on whoever is sharing now and advances. */
 .share-row { border: 2px solid transparent; border-radius: var(--r-md); padding: 8px 10px; transition: border-color .2s var(--spring), background .2s; }
-.share-row.current { border-color: var(--olive); background: var(--cream); }
+.share-row.current { border-color: var(--accent-text); background: var(--field); }
 .share-row.shared { opacity: .6; }
 .share-tick { margin-left: auto; align-self: center; color: var(--pink-deep); font-weight: 800; }
 
@@ -265,15 +275,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .todo-check li label { display: flex; gap: 11px; align-items: flex-start; cursor: pointer; }
 .todo-check input[type="checkbox"] { margin-top: 1px; }
 .todo-check .task-text { flex: 1; min-width: 0; border: none; background: transparent; padding: 6px 8px; margin: 0; }
-.todo-check .task-text:focus { background: #fff; }
+.todo-check .task-text:focus { background: var(--surface); }
 .todo-check li.done span,
 .todo-check li.done .task-text { text-decoration: line-through; color: var(--muted); }
-.tally { font-family: var(--wordmark); font-size: 36px; margin: 0; color: var(--olive); }
+.tally { font-family: var(--wordmark); font-size: 36px; margin: 0; color: var(--accent-text); }
 /* Drag-to-reorder handle on each task (#53) */
 .drag-handle { background: none; border: none; padding: 0 4px; margin: 0; font-size: 15px; line-height: 1; color: var(--muted); cursor: grab; touch-action: none; opacity: .55; }
 .drag-handle:hover { opacity: 1; }
 .drag-handle:active { cursor: grabbing; }
-.todo-check li.dragging { opacity: .6; background: var(--cream); border-radius: 8px; }
+.todo-check li.dragging { opacity: .6; background: var(--field); border-radius: 8px; }
 
 /* Share-your-list toggle + roommates' shared lists (#47) */
 .list-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
@@ -287,26 +297,27 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ---------- Chat ---------- */
 .chat-log { display: grid; gap: 8px; overflow-y: auto; align-content: start; padding-right: 4px; min-height: 140px; max-height: 34vh; }
-.chat-msg { position: relative; display: grid; gap: 1px; background: var(--cream); padding: 8px 12px; border-radius: 14px; justify-self: start; max-width: 90%; }
-.chat-msg.mine { background: var(--pink); justify-self: end; }
-.chat-msg .who { font-size: 11px; font-weight: 800; color: var(--olive); text-transform: uppercase; letter-spacing: .04em; }
+.chat-msg { position: relative; display: grid; gap: 1px; background: var(--field); padding: 8px 12px; border-radius: 14px; justify-self: start; max-width: 90%; }
+.chat-msg.mine { background: var(--pink); justify-self: end; color: var(--on-accent); }
+.chat-msg.mine .who { color: rgba(23, 23, 23, 0.62); } /* keep the name label dark on the mint bubble in both themes */
+.chat-msg .who { font-size: 11px; font-weight: 800; color: var(--accent-text); text-transform: uppercase; letter-spacing: .04em; }
 .chat-msg .body { font-size: 14px; line-height: 1.35; }
 /* Emoji reactions (#53). Chips only render once a message has reactions, so
    un-reacted messages stay compact. The ＋ is a hover overlay pinned to the
    corner — no extra row, and reachable without scrolling. */
 .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: center; }
 .reaction { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; font-size: 12px; font-weight: 700; border-radius: var(--r-pill); background: rgba(0,0,0,.06); color: var(--ink); }
-.reaction.me { background: var(--olive); color: var(--cream); }
-.react-btn { position: absolute; top: 4px; right: 6px; padding: 0 5px; font-size: 14px; line-height: 1.4; color: var(--ink); background: #fff; border-radius: var(--r-pill); box-shadow: 0 1px 4px rgba(0,0,0,.18); opacity: 0; transition: opacity .12s; }
+.reaction.me { background: var(--olive); color: var(--on-slab); }
+.react-btn { position: absolute; top: 4px; right: 6px; padding: 0 5px; font-size: 14px; line-height: 1.4; color: var(--ink); background: var(--surface); border-radius: var(--r-pill); box-shadow: 0 1px 4px rgba(0,0,0,.18); opacity: 0; transition: opacity .12s; }
 .chat-msg.mine .react-btn { right: auto; left: 6px; } /* off the text on right-aligned bubbles */
 .chat-msg:hover .react-btn, .react-btn:focus-visible { opacity: 1; }
 /* Anchor the picker to the bubble's own edge so it opens inward and stays in the
    panel even for a short message: peers' (left) bubbles open rightward, your
    (right) bubbles open leftward. */
-.react-picker { position: absolute; top: 100%; left: 0; margin-top: 4px; display: flex; gap: 2px; background: #fff; padding: 4px; border-radius: var(--r-pill); box-shadow: var(--shadow); z-index: 5; }
+.react-picker { position: absolute; top: 100%; left: 0; margin-top: 4px; display: flex; gap: 2px; background: var(--surface); padding: 4px; border-radius: var(--r-pill); box-shadow: var(--shadow); z-index: 5; }
 .chat-msg.mine .react-picker { left: auto; right: 0; }
 .react-picker button { font-size: 17px; padding: 2px 4px; border-radius: 8px; }
-.react-picker button:hover { background: var(--cream); }
+.react-picker button:hover { background: var(--field); }
 .chat-empty { color: var(--muted); font-size: 13px; text-align: center; display: grid; justify-items: center; gap: 6px; }
 .chat-empty p { margin: 0; }
 .chat-form { display: flex; gap: 8px; }
@@ -331,7 +342,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ---------- Landing directory ---------- */
 .home.wide { max-width: 720px; }
-.directory { gap: 14px; background: var(--cream); }
+.directory { gap: 14px; background: var(--field); }
 .live-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--orange); animation: pulse 2s infinite; }
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 rgba(41, 188, 238, .5); }
@@ -342,7 +353,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 /* Room cards: who's here is shown by an avatar stack, not a decorative stripe. */
 .room-row {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  padding: 14px 18px; border-radius: var(--r-md); background: #fff;
+  padding: 14px 18px; border-radius: var(--r-md); background: var(--surface);
   transition: transform .25s var(--spring);
 }
 .room-row:hover { transform: translateY(-2px); }
@@ -351,7 +362,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .room-av {
   width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
   font-family: var(--display); font-weight: 700; font-size: 12px; color: #fff;
-  border: 2px solid #fff; margin-left: -9px;
+  border: 2px solid var(--surface); margin-left: -9px;
 }
 .room-av:first-child { margin-left: 0; }
 .room-av.lock { background: var(--cream2); color: var(--ink); font-size: 16px; border: none; }
@@ -362,26 +373,26 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .room-people span { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .room-meta { display: flex; align-items: center; gap: 10px; flex: none; }
 .room-meta .count { color: var(--muted); font-size: 13px; font-weight: 700; }
-.room-meta .primary { background: var(--pink); color: var(--ink); }
+.room-meta .primary { background: var(--pink); color: var(--on-accent); }
 
 /* Presence: who's around + cowork invites */
 .avail-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
-.avail-toggle .link-like { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; color: var(--olive); }
+.avail-toggle .link-like { text-decoration: underline; text-underline-offset: 3px; cursor: pointer; color: var(--accent-text); }
 .people-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .person-row { display: flex; align-items: center; gap: 12px; }
 .person-row strong { font-size: 15px; font-family: var(--display); font-weight: 700; }
 /* Ping stands out from the indigo header/hero: use the bright live-accent (cyan). */
-.person-row .primary { margin-left: auto; background: var(--orange); color: var(--ink); }
+.person-row .primary { margin-left: auto; background: var(--orange); color: var(--on-accent); }
 /* Ignore sits after the ping/invite button; no auto-margin so it hugs it. */
 
 /* Ignore / un-ignore (issue #28) */
 .undo-toast {
   margin-top: 12px; padding: 10px 16px; border-radius: var(--r-pill);
-  background: var(--panel, #eef0f6); color: var(--muted); font-size: 14px;
+  background: var(--panel, var(--surface)); color: var(--muted); font-size: 14px;
 }
 .linky {
   background: none; border: none; padding: 0; margin-left: 6px;
-  color: var(--olive); font-weight: 700; text-decoration: underline; cursor: pointer;
+  color: var(--accent-text); font-weight: 700; text-decoration: underline; cursor: pointer;
 }
 .ignored-manager { margin-top: 14px; }
 .ignored-manager summary { cursor: pointer; color: var(--muted); font-size: 14px; font-weight: 700; }
@@ -391,25 +402,25 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 50;
   display: flex; align-items: center; gap: 16px; max-width: calc(100vw - 32px);
   /* Bright cyan so the invite pops instead of blending with the indigo header. */
-  background: var(--orange); color: var(--ink); padding: 10px 10px 10px 22px;
+  background: var(--orange); color: var(--on-accent); padding: 10px 10px 10px 22px;
   border-radius: var(--r-pill); box-shadow: 0 16px 40px -16px rgba(41, 188, 238, 0.7); font-weight: 700;
   animation: toast-pop .3s var(--spring);
 }
 @keyframes toast-pop { from { opacity: 0; transform: translate(-50%, -12px); } to { opacity: 1; transform: translate(-50%, 0); } }
 .invite-actions { display: flex; gap: 8px; flex: none; }
-.invite-toast .primary { background: var(--olive); color: var(--cream); } /* contrast against cyan */
-.invite-toast .ghost { color: var(--ink); opacity: .7; }
+.invite-toast .primary { background: var(--olive); color: var(--on-slab); } /* contrast against cyan */
+.invite-toast .ghost { color: var(--on-accent); opacity: .7; }
 
 .reconnecting {
   position: fixed; top: 0; left: 0; right: 0; z-index: 70; text-align: center;
-  padding: 8px 12px; font-weight: 700; font-size: 14px; background: var(--orange); color: var(--ink);
+  padding: 8px 12px; font-weight: 700; font-size: 14px; background: var(--orange); color: var(--on-accent);
 }
 
 /* Mid-session check-in card (#16): a gentle, dismissible prompt at the midpoint. */
 .checkin {
   position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 55;
   width: min(440px, calc(100vw - 32px));
-  background: #fff; color: var(--ink); border-radius: var(--r-lg); padding: 18px 20px;
+  background: var(--surface); color: var(--ink); border-radius: var(--r-lg); padding: 18px 20px;
   box-shadow: var(--shadow); border: 1px solid var(--line); animation: toast-pop .3s var(--spring);
 }
 .checkin-head { display: flex; align-items: center; justify-content: space-between; }
@@ -427,7 +438,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .overlay-close {
   position: absolute; top: 14px; right: 14px; z-index: 3;
   width: 40px; height: 40px; padding: 0; border-radius: 50%;
-  background: #fff; color: var(--ink); font-size: 22px; line-height: 1; box-shadow: var(--shadow);
+  background: var(--surface); color: var(--ink); font-size: 22px; line-height: 1; box-shadow: var(--shadow);
 }
 
 /* In-app bug report modal */
@@ -436,7 +447,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   background: rgba(16, 18, 78, 0.45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
 }
 .report-card {
-  background: #fff; border-radius: var(--r-lg); padding: 24px; width: 100%; max-width: 420px;
+  background: var(--surface); border-radius: var(--r-lg); padding: 24px; width: 100%; max-width: 420px;
   box-shadow: var(--shadow); display: grid; gap: 12px;
 }
 .report-card textarea { min-height: 92px; resize: vertical; }
@@ -445,12 +456,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
 
 .badge { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; padding: 4px 10px; border-radius: var(--r-pill); background: var(--cream2); color: var(--muted); }
-.badge-greet { background: var(--pink); color: var(--ink); }
-.badge-focus { background: var(--olive); color: var(--cream); }
-.badge-regroup { background: var(--purple); color: #fff; }
+.badge-greet { background: var(--pink); color: var(--on-accent); }
+.badge-focus { background: var(--olive); color: var(--on-slab); }
+.badge-regroup { background: var(--purple); color: var(--on-accent); }
 .badge-locked { background: var(--cream2); color: var(--muted); }
 .time-left { font-size: 12px; color: var(--muted); font-weight: 700; white-space: nowrap; }
-.ghost.is-locked { color: var(--olive); font-weight: 800; }
+.ghost.is-locked { color: var(--accent-text); font-weight: 800; }
 
 .actions.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .actions.two button { display: grid; gap: 3px; padding: 18px; text-align: center; }
@@ -463,11 +474,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    the bar, and the space goes to chat (left) + your list (right). Greet/regroup
    keep the live-camera tile layout. */
 .presence-bar { display: flex; flex-wrap: wrap; gap: 10px; }
-.presence-chip { display: inline-flex; align-items: center; gap: 8px; background: #fff; padding: 5px 15px 5px 5px; border-radius: var(--r-pill); box-shadow: var(--shadow); }
+.presence-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--surface); padding: 5px 15px 5px 5px; border-radius: var(--r-pill); box-shadow: var(--shadow); }
 .presence-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 12px; flex: none; }
 .presence-name { font-weight: 700; font-size: 14px; font-family: var(--display); white-space: nowrap; }
 .presence-kick { margin-left: 2px; padding: 0 5px; font-size: 15px; line-height: 1; color: var(--muted); border-radius: 50%; }
-.presence-kick:hover { color: var(--pink-deep); background: var(--cream); }
+.presence-kick:hover { color: var(--pink-deep); background: var(--field); }
 
 .focus-cols { display: grid; grid-template-columns: 1fr 360px; gap: 18px; align-items: start; }
 .focus-right { display: grid; gap: 18px; align-content: start; min-height: 0; }
@@ -525,3 +536,16 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* ---------- Dark theme ---------- */
+html[data-theme="dark"] {
+  --bg:#121317; --surface:#1b1d22; --field:#202329; --field-focus:#262a31;
+  --ink:#e9eaec; --muted:#9aa1ab; --text-muted:#9aa1ab;
+  --cream:#202329; --cream2:#2a2e37;
+  --olive:#252834; --olive2:#2d3140;
+  --on-slab:#e9eaec; --accent-text:#aab4e6;
+  --line:rgba(255,255,255,.12);
+  --shadow:0 14px 34px -20px rgba(0,0,0,.75);
+}
+/* dark-only spot fixes for near-invisible-on-dark rgba surfaces */
+html[data-theme="dark"] .reaction { background: rgba(255,255,255,.08); }

@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Apply the saved theme before first paint so dark users never see a light flash. -->
+    <script>
+      try { if (localStorage.getItem('nook.theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); } catch (e) {}
+    </script>
     <title>Nook: your focus crew</title>
     <meta name="description" content="Your focus crew for the next 50 minutes. Show up, say what you're working on, and get it done alongside a few other people. Login-free, no accounts, free." />
     <link rel="icon" type="image/svg+xml" href="/twemoji/1f319.svg" />
