@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiBase, wsBase } from './config';
-import { liveTrackOf, mediaErrorMessage } from './media';
+import { liveTrackOf, mediaErrorMessage, mediaConstraints } from './media';
 import { shouldReoffer } from './mesh';
 import { getDid } from './device';
 
@@ -154,7 +154,7 @@ export function useRoom(roomId, name, opts) {
       if (dead) { try { dead.stop(); } catch {} cur.removeTrack(dead); }
     }
     let got;
-    try { got = await navigator.mediaDevices.getUserMedia(kind === 'video' ? { video: true } : { audio: true }); }
+    try { got = await navigator.mediaDevices.getUserMedia(mediaConstraints(kind)); }
     catch (e) { setMediaError(mediaErrorMessage(kind, e)); return false; }
     const track = got.getTracks()[0];
     track.onended = () => onTrackEnded(kind);

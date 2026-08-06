@@ -1,7 +1,7 @@
 // Self-check for the camera/mic helpers behind issue #6. Run:
 //   node web/src/media.test.mjs
 import assert from 'node:assert';
-import { liveTrackOf, mediaErrorMessage } from './media.js';
+import { liveTrackOf, mediaErrorMessage, mediaConstraints } from './media.js';
 
 const streamWith = (kind, readyState) => ({
   getVideoTracks: () => (kind === 'video' && readyState ? [{ kind: 'video', readyState }] : []),
@@ -21,4 +21,12 @@ assert.match(mediaErrorMessage('video', { name: 'NotFoundError' }), /No camera/,
 assert.match(mediaErrorMessage('audio', { name: 'NotReadableError' }), /in use/, 'device busy');
 assert.match(mediaErrorMessage('video', {}), /Couldn't start/, 'unknown -> generic');
 
-console.log('media (#6) self-check: all passed');
+// mediaConstraints: audio and video are requested separately, never together —
+// so a broken/blocked camera can't reject the mic request with it (#38). If
+// anyone "optimizes" this into one getUserMedia({video,audio}) call, this fails.
+assert.deepEqual(mediaConstraints('video'), { video: true }, 'video request carries no audio');
+assert.deepEqual(mediaConstraints('audio'), { audio: true }, 'audio request carries no video');
+assert.ok(!('audio' in mediaConstraints('video')), 'a video failure never rejects the audio request');
+assert.ok(!('video' in mediaConstraints('audio')), 'an audio failure never rejects the video request');
+
+console.log('media (#6 + #38) self-check: all passed');

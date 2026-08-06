@@ -10,6 +10,14 @@ export function liveTrackOf(stream, kind) {
   return t && t.readyState === 'live' ? t : null;
 }
 
+// Camera and mic are always requested one kind at a time — never a single
+// getUserMedia({ video, audio }). A combined request rejects wholesale if either
+// device is missing/blocked, so a broken camera would also kill your audio;
+// keeping them separate means audio still works when video is broken (#38).
+export function mediaConstraints(kind) {
+  return kind === 'video' ? { video: true } : { audio: true };
+}
+
 // Turn a getUserMedia rejection into something the user can act on, instead of
 // the camera silently doing nothing.
 export function mediaErrorMessage(kind, e) {
