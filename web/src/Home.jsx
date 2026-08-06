@@ -4,6 +4,7 @@ import { useLobby } from './useLobby';
 import { ReportBug } from './ReportBug.jsx';
 import { Moon, Sparkles, CamBadge, CamPrefPicker } from './graphics.jsx';
 import { HelpModal } from './HelpModal.jsx';
+import { ThemeToggle } from './ThemeToggle.jsx';
 import { loadPrefs } from './device';
 
 const uid = () => crypto.randomUUID();
@@ -188,6 +189,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
         <>
           <header className="brand">
             <h1>Nook</h1><span className="beta-tag">beta</span>
+            <ThemeToggle className="on-hero" />
             <button className="help-btn" onClick={() => setHelpOpen(true)} aria-label="How Nook works and what's new">? How it works</button>
             <p className="tagline">Your focus crew for the next 50 minutes. Show up, say what you're on, and get it done alongside a few other people.</p>
             <Moon size={40} />
