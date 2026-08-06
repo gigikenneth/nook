@@ -5,6 +5,15 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'August 7, 2026',
+    items: [
+      'Dark mode: tap the moon in the header to switch, and Nook remembers your choice on your device',
+      'Group audio is steadier: if someone’s voice does not come through, the connection now repairs itself instead of staying silent',
+      'Fixed a glitch where you could momentarily show up twice after reconnecting',
+      'Clearer wording in the greeting and the mid-session check-in',
+    ],
+  },
+  {
     date: 'August 5, 2026',
     items: [
       'The focus screen is redesigned: with cameras off, people show as small name bubbles, and the space goes to a bigger chat and your to-do list side by side',
