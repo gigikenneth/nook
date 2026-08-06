@@ -310,7 +310,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   }, [phase, endsAt, config.focusMin, roomId, checkinSeed]); // eslint-disable-line react-hooks/exhaustive-deps
   function shareCheckin(text) {
     const t = text.trim();
-    if (t) room.sendChat(`check-in — ${t}`);
+    if (t) room.sendChat(`Mid-session check-in — ${t}`);
     finishCheckin();
   }
   function onCheckinDraft(text) {
@@ -563,12 +563,12 @@ function GreetPanel({ selfId, selfName, goal, setGoal, onShareGoal, onShared, go
         <>
           <div className="ready-row">
             <span>{ready.length}/{count} ready</span>
-            <button className={`primary ${iAmReady ? 'is-on' : ''}`} onClick={onReady}>{iAmReady ? 'Ready ✓' : 'I’m ready'}</button>
+            <button className={`primary ${iAmReady ? 'is-on' : ''}`} onClick={onReady}>{iAmReady ? 'Ready ✓' : (ready.length === count - 1 ? 'I’m ready · Start Focus' : 'I’m ready')}</button>
           </div>
           <p className="hint">Everyone’s shared. Focus begins when everyone’s ready.</p>
         </>
       )}
-      <button className="link-btn" onClick={onStart}>Start now (don’t wait)</button>
+      <button className="link-btn" onClick={onStart}>Start now (don’t wait for others)</button>
     </>
   );
 }
