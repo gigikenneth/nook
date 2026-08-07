@@ -297,7 +297,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ---------- Chat ---------- */
 .chat-log { display: grid; gap: 8px; overflow-y: auto; align-content: start; padding-right: 4px; min-height: 140px; max-height: 34vh; }
-.chat-msg { position: relative; display: grid; gap: 1px; background: var(--field); padding: 8px 12px; border-radius: 14px; justify-self: start; max-width: 90%; }
+/* Peer bubbles carry a per-person tint via the inline --tint var (pale in light).
+   In dark mode that pale tint is blended into the surface so the bubble stays
+   dark and its text stays readable — see the [data-theme="dark"] rules below. */
+.chat-msg { position: relative; display: grid; gap: 1px; background: var(--tint, var(--field)); padding: 8px 12px; border-radius: 14px; justify-self: start; max-width: 90%; }
 .chat-msg.mine { background: var(--pink); justify-self: end; color: var(--on-accent); }
 .chat-msg.mine .who { color: rgba(23, 23, 23, 0.62); } /* keep the name label dark on the mint bubble in both themes */
 .chat-msg .who { font-size: 11px; font-weight: 800; color: var(--accent-text); text-transform: uppercase; letter-spacing: .04em; }
@@ -549,3 +552,9 @@ html[data-theme="dark"] {
 }
 /* dark-only spot fixes for near-invisible-on-dark rgba surfaces */
 html[data-theme="dark"] .reaction { background: rgba(255,255,255,.08); }
+/* Chat bubbles: blend each person's pale tint into the dark surface so the bubble
+   is a subtly-tinted DARK card with light, readable text (instead of a bright
+   pale bubble the dark text can't sit on). */
+html[data-theme="dark"] .chat-msg { background: color-mix(in srgb, var(--tint, var(--surface)) 22%, var(--surface)); color: var(--text); }
+html[data-theme="dark"] .chat-msg.mine { background: color-mix(in srgb, var(--pink) 22%, var(--surface)); }
+html[data-theme="dark"] .chat-msg.mine .who { color: var(--muted); }

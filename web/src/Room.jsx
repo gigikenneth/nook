@@ -20,7 +20,7 @@ function ChatMessage({ m, selfId, onReact }) {
   const mineFor = (e) => (reactions[e] || []).includes(selfId);
   const hasReactions = Object.keys(reactions).length > 0;
   return (
-    <div className={`chat-msg ${m.mine ? 'mine' : ''}`} style={m.mine ? undefined : { background: chatColor(m.name) }}>
+    <div className={`chat-msg ${m.mine ? 'mine' : ''}`} style={m.mine ? undefined : { '--tint': chatColor(m.name) }}>
       <span className="who">{m.mine ? 'You' : m.name}</span>
       <span className="body">{m.text}</span>
       {/* Chips only appear once a message has reactions, so un-reacted messages
