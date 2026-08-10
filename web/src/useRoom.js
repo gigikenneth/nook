@@ -81,10 +81,14 @@ export function useRoom(roomId, name, opts) {
   }, []);
 
   // Run a PC signaling operation with no other op interleaving (the single PC's
-  // signalingState can't handle concurrent offer/answer cycles).
+  // signalingState can't handle concurrent offer/answer cycles). Any failure is
+  // surfaced to the debug overlay instead of being silently swallowed.
   const serialize = useCallback((fn) => {
-    const next = negotiating.current.then(fn, fn);
-    negotiating.current = next.catch(() => {});
+    const run = () => Promise.resolve().then(fn).catch((e) => {
+      setDebug((d) => ({ ...d, err: String((e && e.message) || e).slice(0, 90) }));
+    });
+    const next = negotiating.current.then(run, run);
+    negotiating.current = next;
     return next;
   }, []);
 
