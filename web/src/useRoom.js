@@ -51,6 +51,7 @@ export function useRoom(roomId, name, opts) {
   const senders = useRef({ audio: null, video: null }); // RTCRtpSender per kind, reused across on/off
   const roster = useRef({}); // last applied roster: peerId -> { session, audio, video }
   const midToPeer = useRef(new Map()); // incoming transceiver mid -> { peerId, kind }
+  const pulled = useRef(new Map()); // `${peerId}:${kind}` -> trackName already wired (dedupe pulls)
   const negotiating = useRef(Promise.resolve()); // serialize PC signaling ops
 
   const camOn = useRef(false);
@@ -195,11 +196,27 @@ export function useRoom(roomId, name, opts) {
       });
     }
 
+    // Resolve once the PC's ICE is up (or immediately if already), so we never
+    // pull remote tracks before the connection can carry them.
+    function waitConnected(conn, timeoutMs = 8000) {
+      const live = (s) => s === 'connected' || s === 'completed';
+      if (live(conn.iceConnectionState)) return Promise.resolve();
+      return new Promise((resolve) => {
+        const done = () => { conn.removeEventListener('iceconnectionstatechange', check); resolve(); };
+        const check = () => { if (live(conn.iceConnectionState)) done(); };
+        conn.addEventListener('iceconnectionstatechange', check);
+        setTimeout(done, timeoutMs); // proceed anyway; a later reconcile recovers
+      });
+    }
+
     function makePc() {
       const conn = new RTCPeerConnection(iceRef.current);
       conn.ontrack = onTrack;
       conn.oniceconnectionstatechange = () => {
         if (conn.iceConnectionState === 'failed') setStatus('media-offline');
+        // Reconnected: re-pull anything the roster says we should have (covers a
+        // pull attempted before the connection was live).
+        else if (conn.iceConnectionState === 'connected') { const r = roster.current; roster.current = {}; reconcile(r); }
       };
       pc.current = conn;
       return conn;
@@ -207,7 +224,8 @@ export function useRoom(roomId, name, opts) {
 
     // Establish the Realtime session. A data channel gives the initial offer
     // content so the PC connects even before any media is published (Nook joins
-    // muted / camera-off).
+    // muted / camera-off). Wait for the connection to be live before returning,
+    // so the caller's first reconcile pulls onto a working link.
     async function establishSession() {
       const conn = pc.current;
       conn.createDataChannel('nook');
@@ -216,10 +234,15 @@ export function useRoom(roomId, name, opts) {
       sessionId.current = res.sessionId;
       await conn.setRemoteDescription(res.sessionDescription);
       announce(); // publish our (empty) track set so the roster has our session id
+      await waitConnected(conn);
     }
 
-    // Pull one remote track and wire it to its peer tile.
+    // Pull one remote track and wire it to its peer tile. Skips if we already
+    // have this exact track wired (so a re-reconcile can't double-pull).
     function pullRemote(peerId, kind, trackName, ownerSession) {
+      const key = `${peerId}:${kind}`;
+      if (pulled.current.get(key) === trackName) return Promise.resolve();
+      pulled.current.set(key, trackName);
       return serialize(async () => {
         const conn = pc.current;
         if (!conn || conn.signalingState === 'closed') return;
@@ -239,6 +262,7 @@ export function useRoom(roomId, name, opts) {
     }
 
     function dropRemote(peerId, kind) {
+      pulled.current.delete(`${peerId}:${kind}`);
       setPeers((p) => {
         const prev = p[peerId];
         if (!prev || !prev.stream) return p;
@@ -294,6 +318,7 @@ export function useRoom(roomId, name, opts) {
           break;
         case 'peer-leave': {
           midToPeer.current.forEach((v, k) => { if (v.peerId === m.id) midToPeer.current.delete(k); });
+          pulled.current.delete(`${m.id}:audio`); pulled.current.delete(`${m.id}:video`);
           const nextRoster = { ...roster.current }; delete nextRoster[m.id]; roster.current = nextRoster;
           setPeers((p) => { const n = { ...p }; delete n[m.id]; return n; });
           setGoals((g) => { const n = { ...g }; delete n[m.id]; return n; });
@@ -372,6 +397,7 @@ export function useRoom(roomId, name, opts) {
           senders.current = { audio: null, video: null };
           published.current = { audio: null, video: null };
           midToPeer.current.clear();
+          pulled.current.clear();
           roster.current = {};
           setPeers({});
           if (attempts >= MAX_RETRIES) return setStatus('offline');
