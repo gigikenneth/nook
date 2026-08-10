@@ -217,7 +217,12 @@ export function useRoom(roomId, name, opts) {
     }
 
     function makePc() {
-      const conn = new RTCPeerConnection(iceRef.current);
+      // max-bundle is REQUIRED for Cloudflare Realtime and fixes a WebKit (iOS
+      // Safari/Chrome) SDP error — "Duplicate payload type with conflicting codec
+      // name or clock rate" — that WebKit throws when a single PC has both a
+      // pulled (recv) and a published (send) m-line without bundling. Chromium is
+      // lenient; WebKit rejects it, so iPhones could receive but never publish.
+      const conn = new RTCPeerConnection({ ...iceRef.current, bundlePolicy: 'max-bundle' });
       conn.ontrack = onTrack;
       conn.oniceconnectionstatechange = () => {
         setDebug((d) => ({ ...d, ice: conn.iceConnectionState }));
