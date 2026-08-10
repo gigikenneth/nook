@@ -555,6 +555,9 @@ html[data-theme="dark"] .reaction { background: rgba(255,255,255,.08); }
 /* Chat bubbles: blend each person's pale tint into the dark surface so the bubble
    is a subtly-tinted DARK card with light, readable text (instead of a bright
    pale bubble the dark text can't sit on). */
-html[data-theme="dark"] .chat-msg { background: color-mix(in srgb, var(--tint, var(--surface)) 22%, var(--surface)); color: var(--text); }
-html[data-theme="dark"] .chat-msg.mine { background: color-mix(in srgb, var(--pink) 22%, var(--surface)); }
+/* Solid-dark fallback FIRST so browsers without color-mix (older phones, #71)
+   get a readable dark bubble instead of dropping to the pale --tint + light text.
+   Modern browsers use the tinted color-mix on the second declaration. */
+html[data-theme="dark"] .chat-msg { background: var(--surface); background: color-mix(in srgb, var(--tint, var(--surface)) 22%, var(--surface)); color: var(--text); }
+html[data-theme="dark"] .chat-msg.mine { background: var(--cream2); background: color-mix(in srgb, var(--pink) 22%, var(--surface)); }
 html[data-theme="dark"] .chat-msg.mine .who { color: var(--muted); }
