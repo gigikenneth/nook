@@ -103,6 +103,34 @@ export default {
       return Response.json({ iceServers }, { headers: cors });
     }
 
+    // Cloudflare Realtime (SFU) signaling proxy. The client hits our Worker so
+    // the app token stays server-side; we forward to the Realtime Connection API
+    // 1:1 (sessions/new, sessions/:id/tracks/new, sessions/:id/renegotiate),
+    // injecting Authorization. Path after /realtime/ maps straight onto the API.
+    if (url.pathname.startsWith('/realtime/')) {
+      if (!env.REALTIME_APP_ID || !env.REALTIME_APP_TOKEN) {
+        return json({ error: 'Realtime is not configured.' }, 503);
+      }
+      const rest = url.pathname.slice('/realtime/'.length);
+      const target = `https://rtc.live.cloudflare.com/v1/apps/${env.REALTIME_APP_ID}/${rest}`;
+      try {
+        const r = await fetch(target, {
+          method: req.method,
+          headers: {
+            Authorization: `Bearer ${env.REALTIME_APP_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text(),
+        });
+        return new Response(await r.text(), {
+          status: r.status,
+          headers: { ...cors, 'Content-Type': 'application/json' },
+        });
+      } catch {
+        return json({ error: 'Realtime upstream unavailable.' }, 502);
+      }
+    }
+
     // Presence websocket for the "who's around" list + cowork invites.
     if (url.pathname === '/lobby/ws') {
       const lobby = env.LOBBY.get(env.LOBBY.idFromName('global'));
