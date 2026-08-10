@@ -1,38 +1,30 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiBase, wsBase } from './config';
-import { liveTrackOf, mediaErrorMessage, mediaConstraints } from './media';
-import { shouldReoffer } from './mesh';
+import { liveTrackOf, mediaErrorMessage } from './media';
+import { diffRoster, newSession, pushTracks, pullTracks, renegotiate } from './sfu';
 import { getDid } from './device';
 
-// If a renegotiation offer goes unanswered this long, assume it was lost (a glare
-// collision the peer dropped, or a dropped signal) and re-send it — up to
-// RENEG_MAX times. Without this a stranded audio track never heals (#68).
-const RENEG_RETRY_MS = 3500;
-const RENEG_MAX = 4;
+// Cloudflare Realtime (SFU) transport. Each client keeps ONE PeerConnection to
+// the Cloudflare edge: it PUSHES its mic/cam tracks up and PULLS each roommate's
+// tracks down. The Durable Object is the track-ID registry — it broadcasts who
+// publishes which tracks, and diffRoster turns roster changes into pull/drop
+// work. This replaces the old <=4 WebRTC mesh, which was fragile on phones and
+// >2 people (#68/#72).
+const CF_STUN = { iceServers: [{ urls: 'stun:stun.cloudflare.com:3478' }] };
 
-// STUN by default; the /ice endpoint adds a TURN relay when configured so peers
-// behind strict NAT (different networks) can still connect.
-const DEFAULT_ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-// Mesh WebRTC over a Durable Object WebSocket. The newcomer offers to every
-// existing peer; existing peers only answer. That one-directional rule avoids
-// glare, which is fine at <=4 people.
 export function useRoom(roomId, name, opts) {
   const [selfId, setSelfId] = useState(null);
   const [hostId, setHostId] = useState(null);
-  const [peers, setPeers] = useState({}); // id -> { name, stream }
+  const [peers, setPeers] = useState({}); // id -> { name, stream, camLive }
   const [phase, setPhase] = useState('greet');
   const [endsAt, setEndsAt] = useState(null);
-  const [checkinSeed, setCheckinSeed] = useState(null); // server-picked, so the room shares one check-in
+  const [checkinSeed, setCheckinSeed] = useState(null);
   const [ready, setReady] = useState([]);
-  const [shared, setShared] = useState([]); // ids who confirmed sharing their goal
-  const [order, setOrder] = useState([]); // join order — drives the greet turn frame
-  const [locked, setLocked] = useState(false); // host closed the room to newcomers
-  const [goals, setGoals] = useState({}); // id -> text
-  const [camPrefs, setCamPrefs] = useState({}); // id -> 'on' | 'off' (stated camera preference)
-  // Chat is relayed live and never stored on the server. We keep a copy in this
-  // tab's own storage so a refresh or a phone reclaiming the tab can restore it;
-  // sessionStorage is per-tab and clears when the tab closes.
+  const [shared, setShared] = useState([]);
+  const [order, setOrder] = useState([]);
+  const [locked, setLocked] = useState(false);
+  const [goals, setGoals] = useState({});
+  const [camPrefs, setCamPrefs] = useState({});
   const [chat, setChat] = useState(() => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(`nook.chat.${roomId}`) || 'null');
@@ -44,28 +36,30 @@ export function useRoom(roomId, name, opts) {
   const [status, setStatus] = useState('connecting');
   const [local, setLocal] = useState(null);
 
-  // Mirror the chat into this tab's storage so a reload can restore it.
   useEffect(() => {
     try { sessionStorage.setItem(`nook.chat.${roomId}`, JSON.stringify(chat)); } catch { /* full/blocked */ }
   }, [chat, roomId]);
 
   const ws = useRef(null);
-  const pcs = useRef(new Map()); // peerId -> RTCPeerConnection
+  const pc = useRef(null); // the single PeerConnection to the Cloudflare edge
+  const sessionId = useRef(null); // our Realtime session id
+  const iceRef = useRef(CF_STUN);
   const localStream = useRef(null);
-  const iceRef = useRef(DEFAULT_ICE); // RTCPeerConnection config; filled from /ice on join
+  // Track names we've published, by kind (the SFU addresses a track by
+  // (sessionId, trackName); trackName is the local MediaStreamTrack id).
+  const published = useRef({ audio: null, video: null });
+  const senders = useRef({ audio: null, video: null }); // RTCRtpSender per kind, reused across on/off
+  const roster = useRef({}); // last applied roster: peerId -> { session, audio, video }
+  const midToPeer = useRef(new Map()); // incoming transceiver mid -> { peerId, kind }
+  const negotiating = useRef(Promise.resolve()); // serialize PC signaling ops
 
-  // Manual mic/cam intent. Effective track state = intent AND the phase allows
-  // media at all (focus forces everything off). `media` mirrors intent for the UI.
-  // Default OFF: you join muted with your camera off and turn them on if you want.
   const camOn = useRef(false);
   const micOn = useRef(false);
   const [media, setMedia] = useState({ cam: false, mic: false });
-  const [mediaError, setMediaError] = useState(null); // last camera/mic problem, shown to the user
+  const [mediaError, setMediaError] = useState(null);
   const phaseRef = useRef(phase);
   phaseRef.current = phase;
-  const selfIdRef = useRef(null); // for renegotiation glare handling
-  // Stable per-tab id so the server can recognise a returning connection (a
-  // refresh or phone-lock reconnect keeps it; a new tab gets a fresh one).
+  const selfIdRef = useRef(null);
   const cidRef = useRef(null);
   if (!cidRef.current) {
     try {
@@ -74,29 +68,69 @@ export function useRoom(roomId, name, opts) {
       cidRef.current = c;
     } catch { cidRef.current = crypto.randomUUID(); }
   }
-  // Persistent per-browser id: survives a full tab close, so the server can
-  // recognise a returning browser (not just a same-tab refresh, which `cid`
-  // already covers). Sent only to our own server, never to peers.
   const didRef = useRef(null);
   if (!didRef.current) didRef.current = getDid();
 
-  // Audio mutes via `enabled` (instant, device stays open for a quick unmute —
-  // the usual mute behaviour). Video is different: `enabled = false` still keeps
-  // the camera hardware running (and its light on), which is not what "off"
-  // should mean (#46). Camera off/on actually releases and re-acquires the
-  // device — see releaseVideo / toggleCam.
+  const sendWs = useCallback((obj) => {
+    const s = ws.current;
+    if (s && s.readyState === 1) s.send(JSON.stringify(obj));
+  }, []);
+
+  // Run a PC signaling operation with no other op interleaving (the single PC's
+  // signalingState can't handle concurrent offer/answer cycles).
+  const serialize = useCallback((fn) => {
+    const next = negotiating.current.then(fn, fn);
+    negotiating.current = next.catch(() => {});
+    return next;
+  }, []);
+
+  // Audio mutes via `enabled` (instant); video off actually releases the camera
+  // so its light goes off (#46). Focus forces all media off.
   const applyTracks = useCallback((phOverride) => {
     const s = localStream.current;
     if (!s) return;
     const mediaOn = (phOverride || phaseRef.current) !== 'focus';
-    s.getVideoTracks().forEach((t) => { t.enabled = mediaOn && camOn.current; });
     s.getAudioTracks().forEach((t) => { t.enabled = mediaOn && micOn.current; });
+    s.getVideoTracks().forEach((t) => { t.enabled = mediaOn && camOn.current; });
   }, []);
 
-  // Actually stop the camera so the device (and its indicator light) goes off.
-  // The video RTP sender is kept but its track set to null, so re-acquiring
-  // later just replaceTrack()s into the same sender — no renegotiation, and no
-  // pile-up of dead senders.
+  // Tell the DO which tracks we currently publish so roommates can pull them.
+  const announce = useCallback(() => {
+    sendWs({ type: 'publish', session: sessionId.current, audio: published.current.audio, video: published.current.video });
+  }, [sendWs]);
+
+  // Publish (or re-publish) a local track of `kind` to the SFU, reusing the same
+  // sender across camera off/on so we don't pile up transceivers.
+  const publishTrack = useCallback((kind, track) => serialize(async () => {
+    const conn = pc.current;
+    if (!conn || conn.signalingState === 'closed') return;
+    let sender = senders.current[kind];
+    if (sender) {
+      await sender.replaceTrack(track);
+    } else {
+      const tx = conn.addTransceiver(track, { direction: 'sendonly' });
+      sender = tx.sender;
+      senders.current[kind] = sender;
+    }
+    // Renegotiate: offer -> pushTracks -> answer. trackName = the track id.
+    await conn.setLocalDescription(await conn.createOffer());
+    const mid = conn.getTransceivers().find((t) => t.sender === sender)?.mid;
+    const res = await pushTracks(apiBase, sessionId.current,
+      [{ location: 'local', mid, trackName: track.id }], conn.localDescription.sdp);
+    await conn.setRemoteDescription(res.sessionDescription);
+    published.current[kind] = track.id;
+    announce();
+  }), [serialize, announce]);
+
+  // Stop publishing a kind (camera off): drop the track from its sender and tell
+  // the room. The transceiver/sender is kept for a seamless re-publish later.
+  const unpublishTrack = useCallback((kind) => serialize(async () => {
+    const sender = senders.current[kind];
+    if (sender) { try { await sender.replaceTrack(null); } catch { /* closing */ } }
+    published.current[kind] = null;
+    announce();
+  }), [announce]);
+
   const releaseVideo = useCallback(() => {
     const s = localStream.current;
     const track = s && s.getVideoTracks()[0];
@@ -105,56 +139,24 @@ export function useRoom(roomId, name, opts) {
       s.removeTrack(track);
       setLocal(new MediaStream(s.getTracks()));
     }
-    for (const [, pc] of pcs.current) {
-      const sender = pc._videoSender || pc.getSenders().find((snd) => snd.track && snd.track.kind === 'video');
-      if (sender) { try { sender.replaceTrack(null); } catch {} }
-    }
-  }, []);
+    unpublishTrack('video');
+  }, [unpublishTrack]);
 
-  const sendWs = useCallback((obj) => {
-    const s = ws.current;
-    if (s && s.readyState === 1) s.send(JSON.stringify(obj));
-  }, []);
-
-  // Toggling media on mid-call adds a track the original offer didn't have, so
-  // the peer needs a fresh offer/answer.
-  const renegotiate = useCallback(async (peerId, pc, iceRestart = false, attempt = 0) => {
-    if (pc.signalingState === 'closed') return;
-    try {
-      const offer = await pc.createOffer(iceRestart ? { iceRestart: true } : undefined);
-      await pc.setLocalDescription(offer);
-      sendWs({ type: 'signal', to: peerId, data: { sdp: pc.localDescription } });
-    } catch { /* negotiation raced; the watchdog below re-offers if we're stuck */ }
-    // Watchdog: if the answer never lands we're stuck in 'have-local-offer' —
-    // the offer was lost. Re-send it. Clears itself once the answer applies
-    // (state back to 'stable') or on close (see flushCands / peer-leave). (#68)
-    clearTimeout(pc._renegTimer);
-    pc._renegTimer = setTimeout(() => {
-      if (shouldReoffer(pc.signalingState, attempt + 1, RENEG_MAX)) renegotiate(peerId, pc, false, attempt + 1);
-    }, RENEG_RETRY_MS);
-  }, [sendWs]);
-
-  // A live track died (device reclaimed, tab backgrounded): reflect it in the UI
-  // so the tile shows "off" and the next toggle re-acquires a fresh one (#6).
   const onTrackEnded = useCallback((kind) => {
     if (kind === 'video') { camOn.current = false; setMedia((m) => ({ ...m, cam: false })); releaseVideo(); }
-    else { micOn.current = false; setMedia((m) => ({ ...m, mic: false })); }
-  }, [releaseVideo]);
+    else { micOn.current = false; setMedia((m) => ({ ...m, mic: false })); unpublishTrack('audio'); }
+  }, [releaseVideo, unpublishTrack]);
 
-  // Lazily acquire mic/camera only when the user turns it on — no permission
-  // prompt on join. Returns false (and surfaces why) if it can't. Wires the track
-  // to every peer, reusing an existing sender so a re-acquired track actually
-  // reaches them instead of piling up dead senders.
+  // Lazily acquire mic/camera only when the user turns it on, then publish it.
   const ensureMedia = useCallback(async (kind) => {
     const cur = localStream.current;
     if (liveTrackOf(cur, kind)) return true;
-    // Drop a dead track (ended camera/mic) so we get a fresh one.
     if (cur) {
       const dead = (kind === 'video' ? cur.getVideoTracks() : cur.getAudioTracks())[0];
       if (dead) { try { dead.stop(); } catch {} cur.removeTrack(dead); }
     }
     let got;
-    try { got = await navigator.mediaDevices.getUserMedia(mediaConstraints(kind)); }
+    try { got = await navigator.mediaDevices.getUserMedia(kind === 'video' ? { video: true } : { audio: true }); }
     catch (e) { setMediaError(mediaErrorMessage(kind, e)); return false; }
     const track = got.getTracks()[0];
     track.onended = () => onTrackEnded(kind);
@@ -162,115 +164,101 @@ export function useRoom(roomId, name, opts) {
     if (!stream) { stream = new MediaStream(); localStream.current = stream; }
     stream.addTrack(track);
     setLocal(stream);
-    for (const [peerId, pc] of pcs.current) {
-      // Reuse the existing sender for this kind (seamless, no renegotiation);
-      // only a brand-new sender needs an offer/answer. For video, a released
-      // camera left the sender with a null track (see releaseVideo), so match it
-      // by the remembered `_videoSender` too.
-      let sender = pc.getSenders().find((s) => (s.track ? s.track.kind : null) === track.kind);
-      if (!sender && track.kind === 'video') sender = pc._videoSender || null;
-      if (sender) {
-        try { await sender.replaceTrack(track); if (track.kind === 'video') pc._videoSender = sender; continue; }
-        catch { /* fall through to addTrack */ }
-      }
-      const added = pc.addTrack(track, stream);
-      if (track.kind === 'video') pc._videoSender = added;
-      await renegotiate(peerId, pc);
-    }
+    await publishTrack(kind, track);
     setMediaError(null);
     return true;
-  }, [renegotiate, onTrackEnded]);
+  }, [onTrackEnded, publishTrack]);
 
   useEffect(() => {
     let dead = false;
-    const pcMap = pcs.current;
-    const cleanups = []; // listeners to remove on unmount
 
-    function makePc(peerId) {
-      const pc = new RTCPeerConnection(iceRef.current);
-      pc._pendingCands = []; // ICE candidates that arrive before the remote description
-      pc._videoSender = null; // the one video RTP sender, kept stable across camera off/on
-      if (localStream.current) {
-        localStream.current.getTracks().forEach((t) => {
-          const snd = pc.addTrack(t, localStream.current);
-          if (t.kind === 'video') pc._videoSender = snd;
-        });
-      }
-      pc.onicecandidate = (e) => {
-        if (e.candidate) sendWs({ type: 'signal', to: peerId, data: { candidate: e.candidate } });
-      };
-      pc.ontrack = (e) => {
-        const [stream] = e.streams;
-        setPeers((p) => ({ ...p, [peerId]: { ...(p[peerId] || {}), stream } }));
-        // When a peer releases their camera (#46), our incoming video track goes
-        // muted. Track it so the tile drops to their avatar instead of freezing
-        // on the last frame.
-        if (e.track.kind === 'video') {
-          const upd = (live) => setPeers((p) => (p[peerId] ? { ...p, [peerId]: { ...p[peerId], camLive: live } } : p));
-          upd(!e.track.muted);
-          e.track.onmute = () => upd(false);
-          e.track.onunmute = () => upd(true);
+    // Attach an incoming remote track to the right peer tile. midToPeer is filled
+    // by pullRemote *before* setRemoteDescription triggers ontrack.
+    function onTrack(e) {
+      const mid = e.transceiver && e.transceiver.mid;
+      const info = midToPeer.current.get(mid);
+      if (!info) return; // not a pull we initiated
+      const { peerId, kind } = info;
+      setPeers((p) => {
+        const prev = p[peerId] || {};
+        const stream = prev.stream || new MediaStream();
+        // Replace any existing track of this kind, then add the new one.
+        (kind === 'video' ? stream.getVideoTracks() : stream.getAudioTracks()).forEach((t) => stream.removeTrack(t));
+        stream.addTrack(e.track);
+        const next = { ...prev, stream };
+        if (kind === 'video') {
+          next.camLive = !e.track.muted;
+          e.track.onmute = () => setPeers((q) => (q[peerId] ? { ...q, [peerId]: { ...q[peerId], camLive: false } } : q));
+          e.track.onunmute = () => setPeers((q) => (q[peerId] ? { ...q, [peerId]: { ...q[peerId], camLive: true } } : q));
         }
-      };
-      // Recover from a dropped connection: one side (deterministic by id) restarts
-      // ICE. Without this, an intermittent first-attempt failure never recovers.
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'failed' && (selfIdRef.current || '') > peerId) {
-          renegotiate(peerId, pc, true);
-        }
-      };
-      pcMap.set(peerId, pc);
-      return pc;
+        return { ...p, [peerId]: next };
+      });
     }
 
-    // Add any ICE candidates that arrived before the remote description was set.
-    async function flushCands(pc) {
-      const pend = pc._pendingCands || [];
-      pc._pendingCands = [];
-      for (const c of pend) { try { await pc.addIceCandidate(c); } catch {} }
+    function makePc() {
+      const conn = new RTCPeerConnection(iceRef.current);
+      conn.ontrack = onTrack;
+      conn.oniceconnectionstatechange = () => {
+        if (conn.iceConnectionState === 'failed') setStatus('media-offline');
+      };
+      pc.current = conn;
+      return conn;
     }
 
-    // Reconcile tracks whenever the phase changes (focus forces media off);
-    // manual mic/cam intent is honored via applyTracks. Focus also clears the
-    // camera intent (#35), so release the device there too — no live camera (or
-    // its light) during a heads-down focus block (#46).
+    // Establish the Realtime session. A data channel gives the initial offer
+    // content so the PC connects even before any media is published (Nook joins
+    // muted / camera-off).
+    async function establishSession() {
+      const conn = pc.current;
+      conn.createDataChannel('nook');
+      await conn.setLocalDescription(await conn.createOffer());
+      const res = await newSession(apiBase, conn.localDescription.sdp);
+      sessionId.current = res.sessionId;
+      await conn.setRemoteDescription(res.sessionDescription);
+      announce(); // publish our (empty) track set so the roster has our session id
+    }
+
+    // Pull one remote track and wire it to its peer tile.
+    function pullRemote(peerId, kind, trackName, ownerSession) {
+      return serialize(async () => {
+        const conn = pc.current;
+        if (!conn || conn.signalingState === 'closed') return;
+        const res = await pullTracks(apiBase, sessionId.current,
+          [{ location: 'remote', sessionId: ownerSession, trackName }]);
+        // Map the assigned transceiver mid to this peer/kind before applying the
+        // remote description, so ontrack can route it.
+        for (const t of res.tracks || []) {
+          if (t.mid != null) midToPeer.current.set(String(t.mid), { peerId, kind });
+        }
+        if (res.requiresImmediateRenegotiation && res.sessionDescription) {
+          await conn.setRemoteDescription(res.sessionDescription);
+          await conn.setLocalDescription(await conn.createAnswer());
+          await renegotiate(apiBase, sessionId.current, conn.localDescription.sdp);
+        }
+      });
+    }
+
+    function dropRemote(peerId, kind) {
+      setPeers((p) => {
+        const prev = p[peerId];
+        if (!prev || !prev.stream) return p;
+        const stream = prev.stream;
+        (kind === 'video' ? stream.getVideoTracks() : stream.getAudioTracks()).forEach((t) => stream.removeTrack(t));
+        const next = { ...prev, stream };
+        if (kind === 'video') next.camLive = false;
+        return { ...p, [peerId]: next };
+      });
+    }
+
+    // Apply the DO's published-tracks roster: pull what's new, drop what's gone.
+    function reconcile(next) {
+      const { toPull, toDrop } = diffRoster(roster.current, next, selfIdRef.current);
+      roster.current = next;
+      for (const d of toDrop) dropRemote(d.peerId, d.kind);
+      for (const pl of toPull) pullRemote(pl.peerId, pl.kind, pl.trackId, pl.session);
+    }
+
     const applyPhaseToTracks = (ph) => { if (ph === 'focus') releaseVideo(); applyTracks(ph); };
-
-    async function onSignal(from, data) {
-      let pc = pcMap.get(from);
-      if (data.sdp) {
-        if (data.sdp.type === 'offer') {
-          if (!pc) pc = makePc(from);
-          // Perfect-negotiation glare handling: if both sides offer at once, the
-          // "impolite" peer (lower id) ignores the colliding offer; the polite
-          // one rolls back and accepts it.
-          const collision = pc.signalingState !== 'stable';
-          const polite = (selfIdRef.current || '') > from;
-          if (collision && !polite) return;
-          try {
-            if (collision) await pc.setLocalDescription({ type: 'rollback' });
-            await pc.setRemoteDescription(data.sdp);
-            await flushCands(pc);
-            const ans = await pc.createAnswer();
-            await pc.setLocalDescription(ans);
-            sendWs({ type: 'signal', to: from, data: { sdp: pc.localDescription } });
-            // We rolled back our own offer to accept theirs — re-send it so our
-            // just-added track (e.g. camera) reaches them too, not just one way.
-            if (collision) renegotiate(from, pc);
-          } catch { /* raced negotiation; a later signal recovers */ }
-        } else if (data.sdp.type === 'answer' && pc) {
-          try { await pc.setRemoteDescription(data.sdp); await flushCands(pc); clearTimeout(pc._renegTimer); } catch {}
-        }
-      } else if (data.candidate && pc) {
-        // Buffer candidates that arrive before the remote description is set,
-        // otherwise addIceCandidate throws and the candidate is lost.
-        if (pc.remoteDescription && pc.remoteDescription.type) {
-          try { await pc.addIceCandidate(data.candidate); } catch {}
-        } else {
-          pc._pendingCands.push(data.candidate);
-        }
-      }
-    }
 
     async function handle(m) {
       switch (m.type) {
@@ -295,66 +283,50 @@ export function useRoom(roomId, name, opts) {
             for (const [pid, tasks] of Object.entries(m.lists || {})) n[pid] = { ...(n[pid] || {}), list: tasks };
             return n;
           });
-          for (const pe of m.peers) {
-            const pc = makePc(pe.id);
-            const offer = await pc.createOffer();
-            await pc.setLocalDescription(offer);
-            sendWs({ type: 'signal', to: pe.id, data: { sdp: pc.localDescription } });
-          }
+          // Bring up our session, then pull whatever the room already publishes.
+          try {
+            await establishSession();
+            if (m.tracks) reconcile(m.tracks);
+          } catch { setStatus('media-offline'); }
           break;
         case 'peer-join':
           setPeers((p) => ({ ...p, [m.id]: { ...(p[m.id] || {}), name: m.name } }));
-          break; // no join sound — people found it noisy (#32)
+          break;
         case 'peer-leave': {
-          const pc = pcMap.get(m.id);
-          if (pc) { clearTimeout(pc._renegTimer); pc.close(); pcMap.delete(m.id); }
+          midToPeer.current.forEach((v, k) => { if (v.peerId === m.id) midToPeer.current.delete(k); });
+          const nextRoster = { ...roster.current }; delete nextRoster[m.id]; roster.current = nextRoster;
           setPeers((p) => { const n = { ...p }; delete n[m.id]; return n; });
           setGoals((g) => { const n = { ...g }; delete n[m.id]; return n; });
           setCamPrefs((c) => { const n = { ...c }; delete n[m.id]; return n; });
           break;
         }
-        case 'signal':
-          await onSignal(m.from, m.data);
+        case 'tracks': { // roster change: someone published/unpublished a track
+          const { id, session, audio, video } = m;
+          reconcile({ ...roster.current, [id]: { session, audio: audio || null, video: video || null } });
           break;
+        }
         case 'phase':
           setPhase(m.phase);
           setEndsAt(m.endsAt);
           setCheckinSeed(m.checkinSeed ?? null);
-          // Entering focus clears your camera/mic intent, so they don't spring
-          // back on by themselves at regroup — every phase starts off until you
-          // turn it on (#35). (Greet is already off-by-default on join.)
           if (m.phase === 'focus') {
             camOn.current = false; micOn.current = false;
             setMedia({ cam: false, mic: false });
           }
           applyPhaseToTracks(m.phase);
           break;
-        case 'ready-state':
-          setReady(m.ready);
-          break;
-        case 'shared-state':
-          setShared(m.shared);
-          break;
-        case 'order':
-          setOrder(m.order);
-          break;
-        case 'locked-state':
-          setLocked(m.locked);
-          break;
-        case 'goal':
-          setGoals((g) => ({ ...g, [m.id]: m.text }));
-          break;
+        case 'ready-state': setReady(m.ready); break;
+        case 'shared-state': setShared(m.shared); break;
+        case 'order': setOrder(m.order); break;
+        case 'locked-state': setLocked(m.locked); break;
+        case 'goal': setGoals((g) => ({ ...g, [m.id]: m.text })); break;
         case 'campref':
           setCamPrefs((c) => { const n = { ...c }; if (m.pref) n[m.id] = m.pref; else delete n[m.id]; return n; });
           break;
         case 'chat':
-          // Freeze whether this is my own message now, against the selfId that's
-          // current at receive time. selfId is per-connection and changes on every
-          // reconnect, so comparing m.id === selfId at render time would flip all
-          // my past messages to "not mine" (grey, left-aligned) after a reconnect.
           setChat((c) => [...c, { mid: m.mid, id: m.id, name: m.name, text: m.text, t: m.t, mine: m.id === selfIdRef.current, reactions: {} }]);
           break;
-        case 'react': // emoji reaction toggled on a message (#53)
+        case 'react':
           setChat((c) => c.map((msg) => {
             if (msg.mid !== m.mid) return msg;
             const reactions = { ...(msg.reactions || {}) };
@@ -364,48 +336,43 @@ export function useRoom(roomId, name, opts) {
             return { ...msg, reactions };
           }));
           break;
-        case 'host':
-          setHostId(m.id);
-          break;
-        case 'peer-list': // a roommate shared (or stopped sharing) their to-do list (#47)
+        case 'host': setHostId(m.id); break;
+        case 'peer-list':
           setPeers((p) => (p[m.id] ? { ...p, [m.id]: { ...p[m.id], list: m.tasks } } : p));
           break;
       }
     }
 
     async function run() {
-      // Pull ICE servers (STUN + TURN if configured) before any peer connects.
       try {
         const res = await fetch(`${apiBase}/ice`);
         const data = await res.json();
         if (!dead && data.iceServers) iceRef.current = { iceServers: data.iceServers };
-      } catch { /* keep STUN-only default */ }
+      } catch { /* keep Cloudflare STUN default */ }
       if (dead) return;
 
-      // No camera/mic prompt on join — you appear as an avatar and acquire media
-      // only when you turn it on (see ensureMedia). This avoids a confusing
-      // upfront permission prompt and a dead toggle if you decline it.
       const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}&cid=${encodeURIComponent(cidRef.current)}&did=${encodeURIComponent(didRef.current)}`;
       let attempts = 0;
       const MAX_RETRIES = 10;
 
       function connect() {
+        makePc();
         const socket = new WebSocket(`${wsBase}/room/${encodeURIComponent(roomId)}/ws?${qs}`);
         ws.current = socket;
         socket.onopen = () => { attempts = 0; setStatus('connected'); };
         socket.onmessage = (ev) => handle(JSON.parse(ev.data));
-        // 4000 kicked, 4001 full, 4002 locked (server-sent, terminal). 1000/1005
-        // are clean closes. Anything else (1006 abnormal drop) is a transient
-        // network blip — reconnect with backoff instead of dead-ending.
         socket.onclose = (e) => {
           if (dead) return;
           if (e.code === 4000) return setStatus('kicked');
           if (e.code === 4001) return setStatus('full');
           if (e.code === 4002) return setStatus('locked');
           if (e.code === 1000 || e.code === 1005) return setStatus('closed');
-          // Tear down stale peer connections; a fresh welcome rebuilds them.
-          pcMap.forEach((pc) => pc.close());
-          pcMap.clear();
+          // Tear down the media connection; a fresh welcome rebuilds it.
+          try { pc.current && pc.current.close(); } catch {}
+          senders.current = { audio: null, video: null };
+          published.current = { audio: null, video: null };
+          midToPeer.current.clear();
+          roster.current = {};
           setPeers({});
           if (attempts >= MAX_RETRIES) return setStatus('offline');
           attempts += 1;
@@ -414,20 +381,17 @@ export function useRoom(roomId, name, opts) {
         };
       }
 
-      // Phones suspend the tab (lock / app-switch / sleep), which drops the socket
-      // AND freezes the backoff timer. Reconnect the moment the tab is visible or
-      // the network returns, with a fresh retry budget — this is the main mobile fix.
       function reconnectNow() {
         if (dead) return;
         const s = ws.current;
-        if (s && (s.readyState === 0 || s.readyState === 1)) return; // connecting/open
+        if (s && (s.readyState === 0 || s.readyState === 1)) return;
         attempts = 0;
         connect();
       }
       const onVisible = () => { if (document.visibilityState === 'visible') reconnectNow(); };
       window.addEventListener('online', reconnectNow);
       document.addEventListener('visibilitychange', onVisible);
-      cleanups.push(() => {
+      cleanup.push(() => {
         window.removeEventListener('online', reconnectNow);
         document.removeEventListener('visibilitychange', onVisible);
       });
@@ -435,14 +399,14 @@ export function useRoom(roomId, name, opts) {
       connect();
     }
 
+    const cleanup = [];
     run();
 
     return () => {
       dead = true;
-      cleanups.forEach((fn) => fn());
+      cleanup.forEach((fn) => fn());
       try { ws.current && ws.current.close(); } catch {}
-      pcMap.forEach((pc) => pc.close());
-      pcMap.clear();
+      try { pc.current && pc.current.close(); } catch {}
       if (localStream.current) localStream.current.getTracks().forEach((t) => t.stop());
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -455,9 +419,9 @@ export function useRoom(roomId, name, opts) {
     toggleLock: () => sendWs({ type: 'lock', locked: !locked }),
     toggleCam: async () => {
       const on = !camOn.current;
-      if (on && !(await ensureMedia('video'))) return; // denied/no device — stay off
+      if (on && !(await ensureMedia('video'))) return;
       camOn.current = on; setMedia((m) => ({ ...m, cam: on }));
-      if (!on) releaseVideo(); // off = actually free the camera + its light (#46)
+      if (!on) releaseVideo();
       applyTracks();
     },
     toggleMic: async () => {
@@ -470,8 +434,7 @@ export function useRoom(roomId, name, opts) {
     kick: (id) => sendWs({ type: 'kick', id }),
     restart: () => sendWs({ type: 'restart' }),
     sendGoal: (text) => sendWs({ type: 'goal', text }),
-    shareList: (tasks) => sendWs({ type: 'list', tasks }), // tasks array to share, null to stop
-
+    shareList: (tasks) => sendWs({ type: 'list', tasks }),
     setCamPref: (pref) => sendWs({ type: 'campref', pref }),
     sendChat: (text) => sendWs({ type: 'chat', text }),
     react: (mid, emoji, on) => sendWs({ type: 'react', mid, emoji, on }),

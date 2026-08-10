@@ -36,11 +36,47 @@ export function diffRoster(prev, next, selfId) {
 }
 
 // --- Live SFU calls (thin wrappers over the Worker proxy) --------------------
-// These hit our Worker, which adds the Realtime app token server-side. Built and
-// verified against real Cloudflare Realtime once app credentials are available.
+// These hit our Worker, which adds the Realtime app token server-side (the token
+// is never in the browser). Bodies/paths mirror the Cloudflare Realtime
+// Connection API 1:1; the Worker maps /realtime/<x> -> apps/<appId>/<x>.
 
-export async function newSession(apiBase) {
-  const res = await fetch(`${apiBase}/realtime/sessions/new`, { method: 'POST' });
-  if (!res.ok) throw new Error(`session create failed: ${res.status}`);
-  return res.json(); // { sessionId }
+async function post(apiBase, path, body) {
+  const res = await fetch(`${apiBase}/realtime/${path}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const out = await res.json();
+  if (!res.ok || out.errorCode) throw new Error(out.errorDescription || `realtime ${path} ${res.status}`);
+  return out;
+}
+
+// Create a session by sending our initial offer. Returns { sessionId,
+// sessionDescription: <answer> }.
+export function newSession(apiBase, offerSdp) {
+  return post(apiBase, 'sessions/new', { sessionDescription: { type: 'offer', sdp: offerSdp } });
+}
+
+// Publish local tracks: tracks are [{ location:'local', mid, trackName }] plus
+// our new offer. Returns { sessionDescription: <answer>, tracks }.
+export function pushTracks(apiBase, sessionId, tracks, offerSdp) {
+  return post(apiBase, `sessions/${sessionId}/tracks/new`,
+    { sessionDescription: { type: 'offer', sdp: offerSdp }, tracks });
+}
+
+// Subscribe to remote tracks: [{ location:'remote', sessionId:<owner>, trackName }].
+// No local offer — the SFU answers with an offer if renegotiation is needed
+// (requiresImmediateRenegotiation + sessionDescription:<offer>).
+export function pullTracks(apiBase, sessionId, tracks) {
+  return post(apiBase, `sessions/${sessionId}/tracks/new`, { tracks });
+}
+
+// Answer the SFU's renegotiation offer (after a pull).
+export async function renegotiate(apiBase, sessionId, answerSdp) {
+  const res = await fetch(`${apiBase}/realtime/sessions/${sessionId}/renegotiate`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionDescription: { type: 'answer', sdp: answerSdp } }),
+  });
+  const out = await res.json();
+  if (!res.ok || out.errorCode) throw new Error(out.errorDescription || `renegotiate ${res.status}`);
+  return out;
 }

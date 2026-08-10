@@ -36,6 +36,7 @@ export class RoomDO {
     this.goals = new Map(); // id -> goal text
     this.lists = new Map(); // id -> [{ text, done }] — opt-in shared to-do list (#47), in-memory, never persisted
     this.camPrefs = new Map(); // id -> 'on' | 'off' — stated camera preference (signal only)
+    this.tracks = new Map(); // id -> { session, audio, video } — Cloudflare Realtime published-track roster
     this.recentLeavers = new Map(); // clientId -> { at, goal, pref } — for reconnect detection
     this.ready = new Set();
     this.shared = new Set(); // ids who confirmed they shared their goal (greet turn-taking)
@@ -194,6 +195,7 @@ export class RoomDO {
       goals: Object.fromEntries(this.goals),
       lists: Object.fromEntries(this.lists),
       camPrefs: Object.fromEntries(this.camPrefs),
+      tracks: Object.fromEntries(this.tracks), // Realtime roster: who publishes which tracks
       locked: this.locked,
     });
     this.broadcast({ type: 'order', order: [...this.sessions.keys()] });
@@ -215,9 +217,17 @@ export class RoomDO {
     try { m = JSON.parse(e.data); } catch { return; }
 
     switch (m.type) {
-      case 'signal': // relay a WebRTC offer/answer/candidate to one peer
-        this.send(m.to, { type: 'signal', from: id, data: m.data });
+      case 'publish': { // client reports its Cloudflare Realtime session + track ids
+        // so roommates can pull them. video is absent when the camera is off.
+        const entry = {
+          session: typeof m.session === 'string' ? m.session : null,
+          audio: typeof m.audio === 'string' ? m.audio : null,
+          video: typeof m.video === 'string' ? m.video : null,
+        };
+        this.tracks.set(id, entry);
+        this.broadcast({ type: 'tracks', id, ...entry });
         break;
+      }
       case 'goal': {
         const text = String(m.text || '').slice(0, 200);
         this.goals.set(id, text);
@@ -417,6 +427,7 @@ export class RoomDO {
     this.goals.delete(id);
     this.lists.delete(id);
     this.camPrefs.delete(id);
+    this.tracks.delete(id); // peer-leave (below) tells clients to drop their tracks
     this.broadcast({ type: 'peer-leave', id });
     this.broadcast({ type: 'ready-state', ready: [...this.ready] });
     this.broadcast({ type: 'shared-state', shared: [...this.shared] });
