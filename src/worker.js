@@ -57,33 +57,13 @@ export default {
       });
     }
 
-    // ICE servers for WebRTC. Always STUN; add a Cloudflare TURN relay (for peers
-    // behind strict NAT that can't connect directly) when credentials are set.
+    // ICE servers for WebRTC. Cloudflare Realtime TURN is the primary relay —
+    // free alongside the SFU and co-located with the same edge the media goes
+    // through, so strict-NAT clients (phones on cellular, locked-down wifi) can
+    // still reach it. The TURN token stays server-side; we mint short-lived
+    // creds per request. STUN-only is the last-resort fallback if TURN is down.
     if (url.pathname === '/ice') {
-      const iceServers = [{ urls: 'stun:stun.l.google.com:19302' }];
-      // Metered TURN (secret key stays server-side; never sent to the browser).
-      // Mint a short-lived credential with the secret, then fetch the ready
-      // iceServers for that credential's apiKey.
-      if (env.METERED_DOMAIN && env.METERED_SECRET_KEY) {
-        try {
-          const mint = await fetch(
-            `https://${env.METERED_DOMAIN}/api/v1/turn/credential?secretKey=${env.METERED_SECRET_KEY}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expiryInSeconds: 86400 }) },
-          );
-          if (mint.ok) {
-            const { apiKey } = await mint.json();
-            if (apiKey) {
-              const cr = await fetch(`https://${env.METERED_DOMAIN}/api/v1/turn/credentials?apiKey=${apiKey}`);
-              if (cr.ok) {
-                const arr = await cr.json();
-                if (Array.isArray(arr) && arr.length) {
-                  return Response.json({ iceServers: [...iceServers, ...arr] }, { headers: cors });
-                }
-              }
-            }
-          }
-        } catch { /* fall through to STUN */ }
-      }
+      const iceServers = [{ urls: 'stun:stun.cloudflare.com:3478' }];
       if (env.TURN_KEY_ID && env.TURN_API_TOKEN) {
         try {
           const r = await fetch(
@@ -96,7 +76,11 @@ export default {
           );
           if (r.ok) {
             const data = await r.json();
-            if (data.iceServers) iceServers.push(data.iceServers);
+            // Cloudflare returns iceServers as an array of one {urls,username,
+            // credential} object; spread it in (pushing the array nests it and
+            // browsers silently ignore the malformed entry -> no TURN).
+            if (Array.isArray(data.iceServers)) iceServers.push(...data.iceServers);
+            else if (data.iceServers) iceServers.push(data.iceServers);
           }
         } catch { /* fall back to STUN-only */ }
       }
