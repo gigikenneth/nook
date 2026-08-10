@@ -106,7 +106,7 @@ stored**.
 
 - Your name, to-do list, and chat live only in your browser and in the room's live memory. A copy of your list and chat is kept in your own browser tab so a refresh or a dropped connection can restore them; it never leaves your device and clears when you close the tab.
 - Chat is relayed live and is never stored on a server — the shared history disappears when the room does.
-- Video is **peer-to-peer** (it never touches a server).
+- Video and audio flow through **Cloudflare Realtime** (a media relay), encrypted in transit and **never recorded or stored**. Nothing is written to disk; the stream exists only while the room does.
 - Two small pieces of state are kept on the server, and neither identifies you:
   - The room's own **session state** — its phase and countdown — so you can pick
     up a session where you left off. It holds no names, goals, or messages, and
@@ -119,33 +119,21 @@ stored**.
 
 **Do I need an account?** No. Type a name and you're in.
 
-**Is my video recorded?** No. Video is a direct peer-to-peer connection between
-the people in the room. Nothing is stored or passed through a server.
+**Is my video recorded?** No. Video and audio pass through Cloudflare Realtime
+(a media relay) encrypted in transit and are never recorded or written to disk.
+The stream exists only while the room is live and is gone when it ends.
 
-**What if my camera won't connect?** Nook uses STUN, and a TURN relay when the
-host has configured one (see the deployment guide), which lets cameras connect
-across most networks. Without TURN, a small number of people on strict networks
-won't get video through — but presence, the timer, chat, and your list all still
-work. If your own camera won't start, Nook now tells you why (blocked, no device,
-or in use by another app) instead of silently doing nothing.
+**What if my camera won't connect?** Each person makes one connection to
+Cloudflare's nearest edge, with STUN and a TURN relay to get through strict
+networks. If your own camera won't start, Nook tells you why (blocked, no device,
+or in use by another app) instead of silently doing nothing. Even if video
+struggles, presence, the timer, chat, and your list keep working.
 
-**Why is the video sometimes fuzzy or laggy?** Because there's no server in the
-middle. Nook just introduces people and then steps away — the video runs
-straight from your browser to each other person's, like cups on a string. That
-keeps it private and free, but it means a few string-related wobbles:
-
-- **Everyone holds their own strings.** In a room of four, your browser sends
-  your camera to all three other people at once. If your upload is weak, the
-  strings get shaky and the picture goes fuzzy or freezes.
-- **Quality is set by the weaker connection.** Each direct link is only as good
-  as the slower of the two people on it — there's no server to even it out.
-- **A string can slip.** A network hiccup, or another app grabbing your camera,
-  can drop a connection for a moment until it reconnects.
-
-Big platforms fix this with a server that relays everyone's video (an SFU), but
-that costs money every month. Nook skips it on purpose to stay free forever —
-the trade is occasional wobble. Presence, the timer, chat, and your list keep
-working even when video struggles.
+**How does the video work?** Every person uploads their camera once to Cloudflare
+Realtime (an SFU — a media relay), which forwards it to everyone else. Because
+each device sends a single stream instead of one per other person, it holds up
+far better on phones and in groups of three or four than a direct browser-to-
+browser mesh would. Media is encrypted in transit and never recorded or stored.
 
 **Can I stop seeing someone?** Yes. Hit **Ignore** next to a person in "Around
 now" and neither of you shows up for the other there, and you can't pull each
