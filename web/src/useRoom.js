@@ -35,6 +35,9 @@ export function useRoom(roomId, name, opts) {
   const [config, setConfig] = useState({ focusMin: opts.focusMin, regroupMin: opts.regroupMin });
   const [status, setStatus] = useState('connecting');
   const [local, setLocal] = useState(null);
+  // Live diagnostics for the on-screen ?debug=1 overlay — what state the media
+  // connection actually reaches on a real device.
+  const [debug, setDebug] = useState({ ice: '-', conn: '-', turn: null, session: false, pulls: 0, err: '' });
 
   useEffect(() => {
     try { sessionStorage.setItem(`nook.chat.${roomId}`, JSON.stringify(chat)); } catch { /* full/blocked */ }
@@ -213,11 +216,13 @@ export function useRoom(roomId, name, opts) {
       const conn = new RTCPeerConnection(iceRef.current);
       conn.ontrack = onTrack;
       conn.oniceconnectionstatechange = () => {
+        setDebug((d) => ({ ...d, ice: conn.iceConnectionState }));
         if (conn.iceConnectionState === 'failed') setStatus('media-offline');
         // Reconnected: re-pull anything the roster says we should have (covers a
         // pull attempted before the connection was live).
         else if (conn.iceConnectionState === 'connected') { const r = roster.current; roster.current = {}; reconcile(r); }
       };
+      conn.onconnectionstatechange = () => setDebug((d) => ({ ...d, conn: conn.connectionState }));
       pc.current = conn;
       return conn;
     }
@@ -233,6 +238,7 @@ export function useRoom(roomId, name, opts) {
       const res = await newSession(apiBase, conn.localDescription.sdp);
       sessionId.current = res.sessionId;
       await conn.setRemoteDescription(res.sessionDescription);
+      setDebug((d) => ({ ...d, session: true }));
       announce(); // publish our (empty) track set so the roster has our session id
       await waitConnected(conn);
     }
@@ -253,6 +259,7 @@ export function useRoom(roomId, name, opts) {
         for (const t of res.tracks || []) {
           if (t.mid != null) midToPeer.current.set(String(t.mid), { peerId, kind });
         }
+        setDebug((d) => ({ ...d, pulls: d.pulls + 1 }));
         if (res.requiresImmediateRenegotiation && res.sessionDescription) {
           await conn.setRemoteDescription(res.sessionDescription);
           await conn.setLocalDescription(await conn.createAnswer());
@@ -311,7 +318,7 @@ export function useRoom(roomId, name, opts) {
           try {
             await establishSession();
             if (m.tracks) reconcile(m.tracks);
-          } catch { setStatus('media-offline'); }
+          } catch (e) { setStatus('media-offline'); setDebug((d) => ({ ...d, err: String(e && e.message || e).slice(0, 80) })); }
           break;
         case 'peer-join':
           setPeers((p) => ({ ...p, [m.id]: { ...(p[m.id] || {}), name: m.name } }));
@@ -372,7 +379,14 @@ export function useRoom(roomId, name, opts) {
       try {
         const res = await fetch(`${apiBase}/ice`);
         const data = await res.json();
-        if (!dead && data.iceServers) iceRef.current = { iceServers: data.iceServers };
+        if (!dead && data.iceServers) {
+          iceRef.current = { iceServers: data.iceServers };
+          const hasTurn = data.iceServers.some((s) => {
+            const u = s && s.urls; const arr = Array.isArray(u) ? u : [u];
+            return arr.some((x) => typeof x === 'string' && x.startsWith('turn'));
+          });
+          setDebug((d) => ({ ...d, turn: hasTurn }));
+        }
       } catch { /* keep Cloudflare STUN default */ }
       if (dead) return;
 
@@ -439,7 +453,7 @@ export function useRoom(roomId, name, opts) {
   }, [roomId]);
 
   return {
-    selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status, local, media,
+    selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status, local, media, debug,
     mediaError, dismissMediaError: () => setMediaError(null),
     shareGoal: () => sendWs({ type: 'shared' }),
     toggleLock: () => sendWs({ type: 'lock', locked: !locked }),

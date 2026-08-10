@@ -169,7 +169,10 @@ function Timer({ endsAt, label }) {
 
 export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, camPref, onLeave, onBrowse }) {
   const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
-  const { selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status, local } = room;
+  const { selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status, local, debug } = room;
+  // On-screen diagnostics: open any room URL with ?debug=1 to see the live media
+  // connection state on a real device (no dev tools needed).
+  const showDebug = typeof location !== 'undefined' && /[?&]debug=1/.test(location.href);
 
   const [goal, setGoal] = useState(todos[0] || '');
   // Personal, editable task list (browser-only, never synced). Restored from this
@@ -402,6 +405,15 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
   return (
     <main className={`room ${phase === 'focus' ? 'focus-fit' : ''}`}>
+      {showDebug && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, zIndex: 999, background: 'rgba(0,0,0,.85)', color: '#0f0',
+          font: '11px/1.5 monospace', padding: '8px 10px', maxWidth: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+          {`ws:${status}  ice:${debug.ice}  conn:${debug.conn}\n`
+            + `turn:${debug.turn === null ? '?' : debug.turn ? 'YES' : 'NO'}  session:${debug.session ? 'up' : 'no'}  pulls:${debug.pulls}\n`
+            + `peers:${Object.keys(peers).length}  streams:${Object.values(peers).filter((p) => p.stream && p.stream.getTracks().length).length}  media:cam=${room.media.cam?1:0} mic=${room.media.mic?1:0}\n`
+            + `${debug.err ? 'ERR: ' + debug.err : ''}`}
+        </div>
+      )}
       {status === 'reconnecting' && <div className="reconnecting" role="status">Reconnecting…</div>}
       {checkin && <CheckIn question={checkin} initialText={checkinDraft} onDraft={onCheckinDraft} onShare={shareCheckin} onClose={finishCheckin} />}
       <header className="room-head">
