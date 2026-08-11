@@ -3,8 +3,16 @@
 //
 // Also the presence hub: opted-in people on the home screen hold a WebSocket
 // here so they can see who else is around and ping each other to cowork.
+//
+// HIBERNATION: presence sockets are accepted with state.acceptWebSocket and
+// handled via webSocketMessage/Close, so an idle lobby is evicted (billing ~0
+// duration). Per-person state rides in each socket's attachment { id, announced,
+// name, did, pref, watching }; the roster is DERIVED from state.getWebSockets().
+// The rooms directory and ping-debounce are in-memory (rooms refills from the
+// next room push after an eviction; a lost debounce just resets). The block
+// graph is persisted. See docs/superpowers/specs/2026-08-11-do-hibernation-design.md.
 
-const STALE_MS = 30000;
+const STALE_MS = 150000; // rooms re-report on their ~60s heartbeat; prune well after a couple of missed ticks
 const PING_COOLDOWN_MS = 4000; // ignore repeat pings to the same person
 const BLOCKS_KEY = 'blocks'; // persisted block graph (survives eviction/deploy)
 const prefOf = (v) => (v === 'on' || v === 'off' ? v : null); // camera preference, else unset
@@ -13,9 +21,8 @@ export class LobbyDO {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    this.rooms = new Map(); // roomId -> { count, phase, occupants, updated }
-    this.people = new Map(); // personId -> { ws, name, did }
-    this.lastPing = new Map(); // `${fromId}:${toId}` -> timestamp
+    this.rooms = new Map(); // roomId -> { count, phase, occupants, updated } — in-memory, refills from room pushes
+    this.lastPing = new Map(); // `${fromId}:${toId}` -> timestamp — in-memory debounce
     // Durable, symmetric block graph keyed by did: did -> Set(dids they can't
     // see and who can't see them). Anonymous ids, no PII, but relational and
     // persisted — the deliberate Level 3 departure from "nothing stored" for
@@ -60,12 +67,9 @@ export class LobbyDO {
     if (req.headers.get('Upgrade') === 'websocket') {
       const pair = new WebSocketPair();
       const [client, server] = Object.values(pair);
-      server.accept();
       const id = crypto.randomUUID();
-      server.addEventListener('message', (e) => this.onPresence(id, server, e));
-      const drop = () => this.leave(id);
-      server.addEventListener('close', drop);
-      server.addEventListener('error', drop);
+      this.state.acceptWebSocket(server);
+      server.serializeAttachment({ id, announced: false }); // becomes visible only on hello/watch
       server.send(JSON.stringify({ type: 'welcome', id }));
       return new Response(null, { status: 101, webSocket: client });
     }
@@ -93,62 +97,69 @@ export class LobbyDO {
     return Response.json({ rooms: list });
   }
 
-  onPresence(id, ws, e) {
+  // --- Derive-from-sockets helpers ------------------------------------------
+  people() {
+    return this.state.getWebSockets()
+      .map((ws) => ({ ws, a: ws.deserializeAttachment() }))
+      .filter((x) => x.a && x.a.announced);
+  }
+  personOf(id) { return this.state.getWebSockets().find((ws) => ws.deserializeAttachment()?.id === id); }
+  patch(ws, fn) { const a = ws.deserializeAttachment() || {}; fn(a); ws.serializeAttachment(a); return a; }
+
+  webSocketMessage(ws, data) {
     let m;
-    try { m = JSON.parse(e.data); } catch { return; }
+    try { m = JSON.parse(data); } catch { return; }
+    const self = ws.deserializeAttachment();
+    if (!self) return;
     switch (m.type) {
       case 'hello': // opt in: announce yourself and appear in the roster
-        this.people.set(id, { ws, name: String(m.name || 'Someone').slice(0, 32), pref: prefOf(m.pref), did: m.did || null });
-        this.sendBlocked(id); // let the client reconcile its ignore list
+        this.patch(ws, (x) => { x.announced = true; x.watching = false; x.name = String(m.name || 'Someone').slice(0, 32); x.pref = prefOf(m.pref); x.did = m.did || null; });
+        this.sendBlocked(ws); // let the client reconcile its ignore list
         this.broadcastRoster();
         break;
       case 'watch': // peeking from inside a session: see the roster + able to ping,
         // but stay off everyone else's list (you're busy, not available).
-        this.people.set(id, { ws, name: String(m.name || 'Someone').slice(0, 32), watching: true, did: m.did || null });
-        this.sendBlocked(id);
+        this.patch(ws, (x) => { x.announced = true; x.watching = true; x.name = String(m.name || 'Someone').slice(0, 32); x.did = m.did || null; });
+        this.sendBlocked(ws);
         try { ws.send(JSON.stringify(this.rosterFor(m.did || null))); } catch { /* dropped */ }
         break;
       case 'block': { // ignore someone in Around-now: mutual, durable
-        const from = this.people.get(id);
-        const target = this.people.get(m.toId);
-        if (from?.did && target?.did) {
-          this.addBlock(from.did, target.did);
+        const target = this.personOf(m.toId)?.deserializeAttachment();
+        if (self.did && target?.did) {
+          this.addBlock(self.did, target.did);
           try { ws.send(JSON.stringify({ type: 'blocked', did: target.did, name: target.name })); } catch { /* dropped */ }
           this.broadcastRoster();
         }
         break;
       }
       case 'unblock': { // un-ignore, by the did the client kept locally
-        const from = this.people.get(id);
-        if (from?.did && m.did) {
-          this.removeBlock(from.did, m.did);
+        if (self.did && m.did) {
+          this.removeBlock(self.did, m.did);
           try { ws.send(JSON.stringify({ type: 'unblocked', did: m.did })); } catch { /* dropped */ }
           this.broadcastRoster();
         }
         break;
       }
-      case 'rename': {
-        const p = this.people.get(id);
-        if (p) { p.name = String(m.name || 'Someone').slice(0, 32); this.broadcastRoster(); }
+      case 'rename':
+        this.patch(ws, (x) => { x.name = String(m.name || 'Someone').slice(0, 32); });
+        this.broadcastRoster();
         break;
-      }
-      case 'pref': { // camera-preference signal, shown next to the name in "Around now"
-        const p = this.people.get(id);
-        if (p) { p.pref = prefOf(m.pref); this.broadcastRoster(); }
+      case 'pref': // camera-preference signal, shown next to the name in "Around now"
+        this.patch(ws, (x) => { x.pref = prefOf(m.pref); });
+        this.broadcastRoster();
         break;
-      }
       case 'ping': { // "come cowork with me" -> deliver an invite to one person
-        const from = this.people.get(id);
-        const target = this.people.get(m.toId);
-        if (!from || !target || !m.roomId) break;
-        if (this.isBlocked(from.did, target.did)) break; // blocked pair can't pull each other in
-        const key = `${id}:${m.toId}`;
+        const targetWs = this.personOf(m.toId);
+        const target = targetWs?.deserializeAttachment();
+        if (!self.announced || !target || !m.roomId) break;
+        if (this.isBlocked(self.did, target.did)) break; // blocked pair can't pull each other in
+        const key = `${self.id}:${m.toId}`;
         const now = Date.now();
         if (now - (this.lastPing.get(key) || 0) < PING_COOLDOWN_MS) break; // debounce
         this.lastPing.set(key, now);
         try {
-          target.ws.send(JSON.stringify({
-            type: 'invite', fromId: id, fromName: from.name, roomId: String(m.roomId).slice(0, 64),
+          targetWs.send(JSON.stringify({
+            type: 'invite', fromId: self.id, fromName: self.name, roomId: String(m.roomId).slice(0, 64),
           }));
         } catch { /* target gone; roster will catch up */ }
         break;
@@ -156,8 +167,12 @@ export class LobbyDO {
     }
   }
 
-  leave(id) {
-    if (this.people.delete(id)) this.broadcastRoster();
+  webSocketClose(ws) { this.leave(ws); }
+  webSocketError(ws) { this.leave(ws); }
+
+  leave(ws) {
+    const a = ws.deserializeAttachment();
+    if (a && a.announced) { ws.serializeAttachment({ ...a, announced: false }); this.broadcastRoster(); }
   }
 
   // Roster for one viewer: excludes watchers (people peeking from a session)
@@ -166,25 +181,25 @@ export class LobbyDO {
   // makes an id peer-visible.
   rosterFor(viewerDid) {
     const hidden = (viewerDid && this.blocks.get(viewerDid)) || null;
-    const people = [...this.people]
-      .filter(([, p]) => !p.watching && !(hidden && p.did && hidden.has(p.did)))
-      .map(([id, p]) => ({ id, name: p.name, pref: p.pref || null }));
+    const people = this.people()
+      .filter((x) => !x.a.watching && !(hidden && x.a.did && hidden.has(x.a.did)))
+      .map((x) => ({ id: x.a.id, name: x.a.name, pref: x.a.pref || null }));
     return { type: 'roster', people };
   }
   // Roster is per-viewer now, so send each connected person their own filtered
   // copy rather than one broadcast. Around-now is a handful of people.
   broadcastRoster() {
-    for (const p of this.people.values()) {
-      try { p.ws.send(JSON.stringify(this.rosterFor(p.did))); } catch { /* dropped socket; its close handler prunes it */ }
+    for (const x of this.people()) {
+      try { x.ws.send(JSON.stringify(this.rosterFor(x.a.did))); } catch { /* dropped socket; its close handler prunes it */ }
     }
   }
   // Tell one client which dids it has blocked, so its un-ignore list survives a
   // cleared localStorage (names are cached client-side; dids are authoritative
   // here).
-  sendBlocked(id) {
-    const p = this.people.get(id);
-    if (!p) return;
-    const dids = (p.did && this.blocks.get(p.did)) ? [...this.blocks.get(p.did)] : [];
-    try { p.ws.send(JSON.stringify({ type: 'blocked-list', dids })); } catch { /* dropped */ }
+  sendBlocked(ws) {
+    const a = ws.deserializeAttachment();
+    if (!a) return;
+    const dids = (a.did && this.blocks.get(a.did)) ? [...this.blocks.get(a.did)] : [];
+    try { ws.send(JSON.stringify({ type: 'blocked-list', dids })); } catch { /* dropped */ }
   }
 }
