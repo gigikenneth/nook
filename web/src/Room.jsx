@@ -358,7 +358,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   if (status === 'kicked') return <Ended msg="You were removed from this room." onLeave={onLeave} />;
   if (status === 'full') return <Ended msg="That room is full. Four is the max." onLeave={onLeave} />;
   if (status === 'locked') return <Ended msg="This room is locked. The host isn't taking new people right now." onLeave={onLeave} />;
-  if (status === 'offline') return <Ended msg="Lost connection to the server. Check your internet, then rejoin." onLeave={onLeave} />;
+  if (status === 'offline') return <Ended msg="Lost connection to the room. This may be your internet, or Nook may be briefly down — try rejoining in a moment." onLeave={onLeave} />;
   if (status === 'closed') return <Ended msg="You left the room." onLeave={onLeave} />;
 
   // Roommates who opted to share their list (#47), read-only.
@@ -415,6 +415,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         </div>
       )}
       {status === 'reconnecting' && <div className="reconnecting" role="status">Reconnecting…</div>}
+      {status === 'down' && <div className="reconnecting" role="status">Nook's rooms are temporarily down — hang tight, we keep retrying and you'll reconnect automatically.</div>}
       {checkin && <CheckIn question={checkin} initialText={checkinDraft} onDraft={onCheckinDraft} onShare={shareCheckin} onClose={finishCheckin} />}
       <header className="room-head">
         <div className="room-id">
