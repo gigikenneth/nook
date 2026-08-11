@@ -56,6 +56,7 @@ export function useRoom(roomId, name, opts) {
   const midToPeer = useRef(new Map()); // incoming transceiver mid -> { peerId, kind }
   const pulled = useRef(new Map()); // `${peerId}:${kind}` -> trackName already wired (dedupe pulls)
   const negotiating = useRef(Promise.resolve()); // serialize PC signaling ops
+  const everConnected = useRef(false); // did the room socket ever open? distinguishes a brief mid-session drop from "never reached the server" (outage / offline)
 
   const camOn = useRef(false);
   const micOn = useRef(false);
@@ -407,7 +408,7 @@ export function useRoom(roomId, name, opts) {
         makePc();
         const socket = new WebSocket(`${wsBase}/room/${encodeURIComponent(roomId)}/ws?${qs}`);
         ws.current = socket;
-        socket.onopen = () => { attempts = 0; setStatus('connected'); };
+        socket.onopen = () => { attempts = 0; everConnected.current = true; setStatus('connected'); };
         socket.onmessage = (ev) => handle(JSON.parse(ev.data));
         socket.onclose = (e) => {
           if (dead) return;
@@ -423,9 +424,14 @@ export function useRoom(roomId, name, opts) {
           pulled.current.clear();
           roster.current = {};
           setPeers({});
-          if (attempts >= MAX_RETRIES) return setStatus('offline');
+          // A socket that never opened means the server is unreachable (Nook down,
+          // or the user is offline). Don't give up — keep retrying at the capped
+          // backoff so the tab self-heals the moment the room service is back; show
+          // a distinct 'down' banner instead of the terminal 'offline' screen.
+          const neverUp = !everConnected.current;
+          if (attempts >= MAX_RETRIES && !neverUp) return setStatus('offline');
           attempts += 1;
-          setStatus('reconnecting');
+          setStatus(neverUp && attempts >= 2 ? 'down' : 'reconnecting');
           setTimeout(() => { if (!dead) connect(); }, Math.min(1000 * 2 ** (attempts - 1), 8000));
         };
       }
