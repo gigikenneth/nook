@@ -6,9 +6,8 @@
 import assert from 'node:assert';
 import { LobbyDO } from './LobbyDO.js';
 
-function makeState() {
-  const store = new Map();
-  const s = { _sockets: [] };
+function makeState(store = new Map()) {
+  const s = { _sockets: [], store };
   s.storage = {
     get: async (k) => store.get(k),
     put: async (k, v) => { store.set(k, v); },
@@ -109,6 +108,37 @@ async function newLobby() { const st = makeState(); const lobby = new LobbyDO(st
   assert.equal(lobby.rosterFor(null).people.length, 2, 'both listed');
   aliceWs._open = false; lobby.webSocketClose(aliceWs);
   assert.deepEqual(lobby.rosterFor(null).people.map((p) => p.name), ['Bob'], 'Alice dropped on close');
+}
+
+// The open-rooms directory must survive a hibernation eviction. A room posts an
+// update; a fresh LobbyDO over the SAME storage (simulating eviction) still lists
+// it, instead of blanking out until the room's next ~60s push.
+{
+  const store = new Map();
+  const st1 = makeState(store);
+  const lobby1 = new LobbyDO(st1, null);
+  await lobby1._restore;
+  await lobby1.fetch(new Request('https://lobby/update', {
+    method: 'POST',
+    body: JSON.stringify({ roomId: 'r1', count: 2, phase: 'focus', endsAt: Date.now() + 60000, focusMin: 25, isPublic: true, occupants: [{ name: 'Gigi' }] }),
+  }));
+
+  const st2 = makeState(store); // rebuilt DO instance, same storage
+  const lobby2 = new LobbyDO(st2, null);
+  await lobby2._restore;
+  const res = await lobby2.fetch(new Request('https://lobby/rooms'));
+  const { rooms } = await res.json();
+  assert.equal(rooms.length, 1, 'directory survives eviction');
+  assert.equal(rooms[0].roomId, 'r1', 'same room restored');
+  assert.equal(rooms[0].focusMin, 25, 'room detail restored');
+
+  // A closed room (count 0) is removed from storage, not resurrected.
+  await lobby2.fetch(new Request('https://lobby/update', { method: 'POST', body: JSON.stringify({ roomId: 'r1', count: 0 }) }));
+  const st3 = makeState(store);
+  const lobby3 = new LobbyDO(st3, null);
+  await lobby3._restore;
+  const res3 = await lobby3.fetch(new Request('https://lobby/rooms'));
+  assert.equal((await res3.json()).rooms.length, 0, 'closed room stays gone after eviction');
 }
 
 console.log('LobbyDO hibernation self-check (watch + camera-pref + block(#28) + leave): all passed');

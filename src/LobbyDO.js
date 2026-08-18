@@ -15,13 +15,14 @@
 const STALE_MS = 150000; // rooms re-report on their ~60s heartbeat; prune well after a couple of missed ticks
 const PING_COOLDOWN_MS = 4000; // ignore repeat pings to the same person
 const BLOCKS_KEY = 'blocks'; // persisted block graph (survives eviction/deploy)
+const ROOMS_KEY = 'rooms'; // persisted open-rooms directory (survives hibernation eviction)
 const prefOf = (v) => (v === 'on' || v === 'off' ? v : null); // camera preference, else unset
 
 export class LobbyDO {
   constructor(state, env) {
     this.state = state;
     this.env = env;
-    this.rooms = new Map(); // roomId -> { count, phase, occupants, updated } — in-memory, refills from room pushes
+    this.rooms = new Map(); // roomId -> { count, phase, occupants, updated } — persisted so it survives hibernation eviction
     this.lastPing = new Map(); // `${fromId}:${toId}` -> timestamp — in-memory debounce
     // Durable, symmetric block graph keyed by did: did -> Set(dids they can't
     // see and who can't see them). Anonymous ids, no PII, but relational and
@@ -33,6 +34,11 @@ export class LobbyDO {
     this._restore = state && state.blockConcurrencyWhile(async () => {
       const raw = await state.storage.get(BLOCKS_KEY);
       if (raw) for (const [d, list] of Object.entries(raw)) this.blocks.set(d, new Set(list));
+      // Restore the open-rooms directory too. Under hibernation the DO is evicted
+      // between messages, so an in-memory-only rooms Map would blank out and the
+      // landing page would show no live rooms until each one's next ~60s push.
+      const roomsRaw = await state.storage.get(ROOMS_KEY);
+      if (roomsRaw) for (const [id, r] of Object.entries(roomsRaw)) this.rooms.set(id, r);
     });
   }
 
@@ -41,6 +47,11 @@ export class LobbyDO {
     const obj = {};
     for (const [d, set] of this.blocks) if (set.size) obj[d] = [...set];
     return this.state.storage.put(BLOCKS_KEY, obj);
+  }
+
+  persistRooms() {
+    if (!this.state) return;
+    return this.state.storage.put(ROOMS_KEY, Object.fromEntries(this.rooms));
   }
 
   isBlocked(a, b) {
@@ -81,16 +92,19 @@ export class LobbyDO {
       if (!roomId) return new Response('bad', { status: 400 });
       if (!count || count <= 0) this.rooms.delete(roomId);
       else this.rooms.set(roomId, { count, phase, endsAt: endsAt || null, focusMin: focusMin || null, locked: !!locked, isPublic: isPublic !== false, occupants: occupants || [], updated: Date.now() });
+      this.persistRooms(); // survive eviction
       return new Response('ok');
     }
 
     // GET /rooms — prune stale, return joinable-first list.
     const now = Date.now();
     const list = [];
+    let pruned = false;
     for (const [roomId, r] of this.rooms) {
-      if (now - r.updated > STALE_MS) { this.rooms.delete(roomId); continue; }
+      if (now - r.updated > STALE_MS) { this.rooms.delete(roomId); pruned = true; continue; }
       list.push({ roomId, count: r.count, phase: r.phase, endsAt: r.endsAt, focusMin: r.focusMin, locked: r.locked, isPublic: r.isPublic, occupants: r.occupants });
     }
+    if (pruned) this.persistRooms(); // drop dead entries from storage too
     // Actually-joinable rooms (public, unlocked, greeting, with space) float up.
     const joinable = (r) => (r.isPublic && !r.locked && r.phase === 'greet' && r.count < 4 ? 0 : 1);
     list.sort((a, b) => joinable(a) - joinable(b));
