@@ -294,6 +294,15 @@ export class RoomDO {
         }
         break;
       }
+      case 'edit': { // edit your own chat message (#70) — relayed, not stored, like
+        // the message itself. Messages are never kept server-side, so ownership
+        // can't be verified here; the client only offers Edit on your own bubbles.
+        // ponytail: same trust model as chat (a client can already send any text)
+        // — acceptable for a 4-person anonymous room.
+        const text = String(m.text || '').slice(0, 500).trim();
+        if (m.mid && text) this.broadcast({ type: 'edited', mid: String(m.mid), text });
+        break;
+      }
       case 'ready':
         this.patch(ws, (x) => { x.ready = true; });
         this.broadcast({ type: 'ready-state', ready: this.readyIds() });

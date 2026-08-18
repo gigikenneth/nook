@@ -326,16 +326,23 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .chat-msg.mine { background: var(--pink); justify-self: end; color: var(--on-accent); }
 .chat-msg.mine .who { color: rgba(23, 23, 23, 0.62); } /* keep the name label dark on the mint bubble in both themes */
 .chat-msg .who { font-size: 11px; font-weight: 800; color: var(--accent-text); text-transform: uppercase; letter-spacing: .04em; }
-.chat-msg .body { font-size: 14px; line-height: 1.35; }
+.chat-msg .body { font-size: 14px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; } /* preserve multi-line messages (#70) */
+.edited-tag { font-size: 11px; font-weight: 500; opacity: .6; }
+/* Inline editor for your own message (#70). */
+.chat-edit { display: grid; gap: 6px; }
+.chat-edit textarea { width: 100%; resize: none; border-radius: 12px; border: 1px solid var(--line); background: var(--field-focus); font-family: inherit; font-size: 14px; line-height: 1.35; padding: 7px 10px; }
+.chat-edit-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
 /* Emoji reactions (#53). Chips only render once a message has reactions, so
    un-reacted messages stay compact. The ＋ is a hover overlay pinned to the
    corner — no extra row, and reachable without scrolling. */
 .reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; align-items: center; }
 .reaction { display: inline-flex; align-items: center; gap: 3px; padding: 1px 7px; font-size: 12px; font-weight: 700; border-radius: var(--r-pill); background: rgba(0,0,0,.06); color: var(--ink); }
 .reaction.me { background: var(--olive); color: var(--on-slab); }
-.react-btn { position: absolute; top: 4px; right: 6px; padding: 0 5px; font-size: 14px; line-height: 1.4; color: var(--ink); background: var(--surface); border-radius: var(--r-pill); box-shadow: 0 1px 4px rgba(0,0,0,.18); opacity: 0; transition: opacity .12s; }
-.chat-msg.mine .react-btn { right: auto; left: 6px; } /* off the text on right-aligned bubbles */
-.chat-msg:hover .react-btn, .react-btn:focus-visible { opacity: 1; }
+/* Hover actions (edit + react) pinned to the corner — no extra row. */
+.msg-actions { position: absolute; top: 4px; right: 6px; display: flex; gap: 3px; opacity: 0; transition: opacity .12s; }
+.chat-msg.mine .msg-actions { right: auto; left: 6px; } /* off the text on right-aligned bubbles */
+.chat-msg:hover .msg-actions, .msg-actions:focus-within { opacity: 1; }
+.msg-act { padding: 0 5px; font-size: 14px; line-height: 1.4; color: var(--ink); background: var(--surface); border-radius: var(--r-pill); box-shadow: 0 1px 4px rgba(0,0,0,.18); }
 /* Anchor the picker to the bubble's own edge so it opens inward and stays in the
    panel even for a short message: peers' (left) bubbles open rightward, your
    (right) bubbles open leftward. */
@@ -347,6 +354,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .chat-empty p { margin: 0; }
 .chat-form { display: flex; gap: 8px; }
 .chat-form input { border-radius: var(--r-pill); flex: 1; min-width: 0; }
+/* Multi-line composer (#70): a textarea that grows to a few lines, snug like the
+   old single-line field at rest. */
+.chat-input { flex: 1; min-width: 0; resize: none; border-radius: 22px; padding: 11px 16px; line-height: 1.35; max-height: 84px; overflow-y: auto; }
 .chat-send { padding: 12px 18px; flex: none; }
 .dl-row { display: flex; gap: 8px; flex-wrap: wrap; }
 

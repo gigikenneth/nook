@@ -117,6 +117,9 @@ export function useRoom(roomId, name, opts) {
             return { ...msg, reactions };
           }));
           break;
+        case 'edited': // someone edited their message (#70)
+          setChat((c) => c.map((msg) => (msg.mid === m.mid ? { ...msg, text: m.text, edited: true } : msg)));
+          break;
         case 'host': setHostId(m.id); break;
         case 'peer-list':
           setPeers((p) => (p[m.id] ? { ...p, [m.id]: { ...p[m.id], list: m.tasks } } : p));
@@ -186,6 +189,7 @@ export function useRoom(roomId, name, opts) {
     shareList: (tasks) => sendWs({ type: 'list', tasks }),
     setCamPref: (pref) => sendWs({ type: 'campref', pref }),
     sendChat: (text) => sendWs({ type: 'chat', text }),
+    editChat: (mid, text) => sendWs({ type: 'edit', mid, text }),
     react: (mid, emoji, on) => sendWs({ type: 'react', mid, emoji, on }),
   };
 }

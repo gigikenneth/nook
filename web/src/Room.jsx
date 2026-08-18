@@ -13,17 +13,42 @@ const REACTIONS = ['👍', '❤️', '🎉', '😂', '👀']; // quick emoji rea
 // A chat message with emoji reactions: existing reactions show as chips (click
 // to toggle your own), and a ＋ opens the quick palette. Reactions are relayed
 // live and kept only in the client's chat state, like the messages themselves.
-function ChatMessage({ m, selfId, onReact }) {
+function ChatMessage({ m, selfId, onReact, onEdit }) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [edraft, setEdraft] = useState(m.text);
   const reactions = m.reactions || {};
   const mineFor = (e) => (reactions[e] || []).includes(selfId);
   const hasReactions = Object.keys(reactions).length > 0;
+  const saveEdit = () => {
+    const t = edraft.trim();
+    if (t && t !== m.text) onEdit(m.mid, t);
+    setEditing(false);
+  };
+  const startEdit = () => { setEdraft(m.text); setEditing(true); };
   return (
     <div className={`chat-msg ${m.mine ? 'mine' : ''}`} style={m.mine ? undefined : { '--tint': chatColor(m.name) }}>
       <span className="who">{m.mine ? 'You' : m.name}</span>
-      <span className="body">{m.text}</span>
+      {editing ? (
+        // Inline editor for your own message (#70). Enter saves, Shift+Enter adds
+        // a line, Esc cancels.
+        <form className="chat-edit" onSubmit={(e) => { e.preventDefault(); saveEdit(); }}>
+          <textarea value={edraft} autoFocus rows={2} maxLength={500}
+            onChange={(e) => setEdraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(); }
+              else if (e.key === 'Escape') setEditing(false);
+            }} />
+          <div className="chat-edit-actions">
+            <button type="button" className="link-btn" onClick={() => setEditing(false)}>Cancel</button>
+            <button type="submit" className="primary sm" disabled={!edraft.trim()}>Save</button>
+          </div>
+        </form>
+      ) : (
+        <span className="body">{m.text}{m.edited && <span className="edited-tag"> (edited)</span>}</span>
+      )}
       {/* Chips only appear once a message has reactions, so un-reacted messages
-          don't grow. The ＋ is a hover overlay in the corner, not a row. */}
+          don't grow. The actions are a hover overlay in the corner, not a row. */}
       {hasReactions && (
         <div className="reactions">
           {Object.entries(reactions).map(([emoji, who]) => (
@@ -32,10 +57,13 @@ function ChatMessage({ m, selfId, onReact }) {
           ))}
         </div>
       )}
-      {m.mid && (
-        <button className="react-btn" aria-label="Add reaction" onClick={() => setPickerOpen((o) => !o)}>＋</button>
+      {m.mid && !editing && (
+        <div className="msg-actions">
+          {m.mine && <button className="msg-act" aria-label="Edit message" title="Edit" onClick={startEdit}>✎</button>}
+          <button className="msg-act" aria-label="Add reaction" title="React" onClick={() => setPickerOpen((o) => !o)}>＋</button>
+        </div>
       )}
-      {/* Picker is anchored to the bubble's own edge (not the ＋ corner) so it
+      {/* Picker is anchored to the bubble's own edge (not the corner) so it
           opens inward and never spills off the panel on short messages. */}
       {m.mid && pickerOpen && (
         <span className="react-picker">
@@ -198,6 +226,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
   // Keep the chat log pinned to the newest message.
   const logRef = useRef(null);
+  const chatTaRef = useRef(null); // composer textarea, to reset its height after send
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [chat.length]);
 
   // Keep the phone/desktop screen awake while you're in a room (#17).
@@ -284,7 +313,11 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   function send(e) {
     e.preventDefault();
     const t = draft.trim();
-    if (t) { room.sendChat(t); setDraft(''); }
+    if (t) {
+      room.sendChat(t);
+      setDraft('');
+      if (chatTaRef.current) chatTaRef.current.style.height = 'auto'; // collapse the grown textarea
+    }
   }
   function downloadTodos() {
     const body = tasks.map((t) => `[${t.done ? 'x' : ' '}] ${t.text}`).join('\n');
@@ -328,11 +361,16 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         {chat.length === 0 ? (
           <div className="chat-empty"><ChatDoodle /><p>Say something. Messages vanish when the room does.</p></div>
         ) : chat.map((m, i) => (
-          <ChatMessage key={m.mid || i} m={m} selfId={selfId} onReact={room.react} />
+          <ChatMessage key={m.mid || i} m={m} selfId={selfId} onReact={room.react} onEdit={room.editChat} />
         ))}
       </div>
       <form className="chat-form" onSubmit={send}>
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Message…" maxLength={500} />
+        {/* Multi-line composer (#70): grows to a few lines. Enter sends,
+            Shift+Enter adds a line. */}
+        <textarea ref={chatTaRef} className="chat-input" value={draft} placeholder="Message…" maxLength={500} rows={1}
+          onChange={(e) => setDraft(e.target.value)}
+          onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = `${Math.min(e.target.scrollHeight, 84)}px`; }}
+          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e); } }} />
         <button className="primary chat-send" type="submit" disabled={!draft.trim()}>Send</button>
       </form>
       <p className="chat-note">Chat isn’t saved. It clears when you leave or the room closes.</p>
