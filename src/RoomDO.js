@@ -477,6 +477,7 @@ export class RoomDO {
         count: this.count(),
         phase: this.phase,
         endsAt: this.endsAt,
+        focusMin: this.focusMin, // session's focus length, so the directory can show it before you join
         locked: this.locked,
         isPublic: this.isPublic,
         occupants,

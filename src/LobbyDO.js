@@ -77,10 +77,10 @@ export class LobbyDO {
     const url = new URL(req.url);
 
     if (req.method === 'POST' && url.pathname.endsWith('/update')) {
-      const { roomId, count, phase, endsAt, locked, isPublic, occupants } = await req.json();
+      const { roomId, count, phase, endsAt, focusMin, locked, isPublic, occupants } = await req.json();
       if (!roomId) return new Response('bad', { status: 400 });
       if (!count || count <= 0) this.rooms.delete(roomId);
-      else this.rooms.set(roomId, { count, phase, endsAt: endsAt || null, locked: !!locked, isPublic: isPublic !== false, occupants: occupants || [], updated: Date.now() });
+      else this.rooms.set(roomId, { count, phase, endsAt: endsAt || null, focusMin: focusMin || null, locked: !!locked, isPublic: isPublic !== false, occupants: occupants || [], updated: Date.now() });
       return new Response('ok');
     }
 
@@ -89,7 +89,7 @@ export class LobbyDO {
     const list = [];
     for (const [roomId, r] of this.rooms) {
       if (now - r.updated > STALE_MS) { this.rooms.delete(roomId); continue; }
-      list.push({ roomId, count: r.count, phase: r.phase, endsAt: r.endsAt, locked: r.locked, isPublic: r.isPublic, occupants: r.occupants });
+      list.push({ roomId, count: r.count, phase: r.phase, endsAt: r.endsAt, focusMin: r.focusMin, locked: r.locked, isPublic: r.isPublic, occupants: r.occupants });
     }
     // Actually-joinable rooms (public, unlocked, greeting, with space) float up.
     const joinable = (r) => (r.isPublic && !r.locked && r.phase === 'greet' && r.count < 4 ? 0 : 1);

@@ -477,6 +477,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .badge-regroup { background: var(--purple); color: var(--on-accent); }
 .badge-locked { background: var(--cream2); color: var(--muted); }
 .time-left { font-size: 12px; color: var(--muted); font-weight: 700; white-space: nowrap; }
+/* Session's focus length, shown on directory cards so you know the commitment before joining. */
+.session-len { font-size: 12px; font-weight: 700; white-space: nowrap; padding: 2px 9px; border-radius: var(--r-pill);
+  background: var(--field); color: var(--accent-text); }
 .ghost.is-locked { color: var(--accent-text); font-weight: 800; }
 
 .actions.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

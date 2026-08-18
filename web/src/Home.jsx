@@ -225,6 +225,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
                     </div>
                     <div className="room-meta">
                       <span className={`badge badge-${r.phase}`}>{phaseLabel[r.phase]}</span>
+                      {r.focusMin && <span className="session-len" title="Focus length this session runs for">{r.focusMin}m focus</span>}
                       {minsLeft != null && <span className="time-left">~{minsLeft}m left</span>}
                     </div>
                   </li>
@@ -253,6 +254,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
                   </div>
                   <div className="room-meta">
                     <span className={`badge badge-${r.phase}`}>{phaseLabel[r.phase]}</span>
+                    {r.focusMin && <span className="session-len" title="Focus length this session runs for">{r.focusMin}m focus</span>}
                     {minsLeft != null && <span className="time-left">~{minsLeft}m left</span>}
                     {r.locked && <span className="badge badge-locked" title="Closed to new people">🔒</span>}
                     <span className="count">{r.count}/4</span>
