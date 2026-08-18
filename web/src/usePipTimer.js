@@ -15,6 +15,7 @@ export function usePipTimer() {
   const supported = typeof window !== 'undefined';
   const [isOpen, setIsOpen] = useState(false);
   const winRef = useRef(null);
+  const pollRef = useRef(null); // parent-side watchdog interval id
   const dataRef = useRef({ endsAt: null, phase: 'greet' }); // latest values for the redraw loop
 
   const draw = () => {
@@ -36,7 +37,15 @@ export function usePipTimer() {
   // Push the latest phase/timer in from the component and redraw immediately.
   const setData = (endsAt, phase) => { dataRef.current = { endsAt, phase }; draw(); };
 
+  const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
+
+  // The window went away — closed by the user, the OS, or the browser reclaiming
+  // it (or a single PiP slot being taken elsewhere). Sync our state so the button
+  // flips back to "Pop out timer" and a fresh click can reopen it.
+  const handleClosed = () => { stopPoll(); winRef.current = null; setIsOpen(false); };
+
   const close = () => {
+    stopPoll();
     const w = winRef.current;
     winRef.current = null;
     setIsOpen(false);
@@ -65,13 +74,18 @@ export function usePipTimer() {
       '</div>';
     draw();
     w.setInterval(draw, 500); // tied to the pop-out window; dies when it closes
-    // The user closing the window (or the browser reclaiming it) fires pagehide.
-    w.addEventListener('pagehide', () => { winRef.current = null; setIsOpen(false); }, { once: true });
+    // Detect the window closing from the PARENT, robustly. A one-shot `pagehide`
+    // could misfire (marking us closed while the window lives) or be missed; a
+    // watchdog polling `.closed` covers both Document-PiP and popup windows and
+    // never permanently disarms. pagehide stays as an immediate fast path.
+    stopPoll();
+    pollRef.current = setInterval(() => { if (!winRef.current || winRef.current.closed) handleClosed(); }, 1000);
+    w.addEventListener('pagehide', handleClosed);
     setIsOpen(true);
   };
 
   // Close the pop-out if you leave the room.
-  useEffect(() => () => { const w = winRef.current; if (w) { try { w.close(); } catch {} } }, []);
+  useEffect(() => () => { stopPoll(); const w = winRef.current; if (w) { try { w.close(); } catch {} } }, []);
 
   return { supported, isOpen, open, close, setData };
 }
