@@ -12,15 +12,17 @@ signaling protocol, and the data model.
 1. **Free to run forever.** No always-on server, no video server, no database.
    Everything lives inside free tiers.
 2. **No personal data stored.** Names, to-do lists, chat, and video are ephemeral
-   — never written to disk, never passed through a server (video is peer-to-peer).
+   — never written to disk. Video/audio run through an embedded Jitsi call (JaaS),
+   which Nook never records: recording and transcription are disabled in the token.
    No accounts, no analytics. Two things *are* persisted, and neither identifies a
    person: the room's **session state** (phase + countdown + lengths), kept in that
    room's Durable Object storage so a session survives reconnects and deploys; and
    the **block graph** for ignore (#28), kept in the singleton lobby's storage as
    pairs of anonymous per-browser `did`s — no names, no accounts. See
    [Session persistence](#session-persistence) and [On-device id + blocking](#on-device-id--blocking).
-3. **Small rooms.** Four people maximum, which keeps video peer-to-peer (a mesh)
-   and avoids the need for a media server.
+3. **Small rooms.** Four people maximum. This is a product choice — a nook is
+   meant to feel like a small table, not a webinar — and it also keeps the call
+   well inside JaaS's free tier.
 
 ## The pieces
 
@@ -30,22 +32,23 @@ signaling protocol, and the data model.
   │  Home  ─ live directory     │  HTTP  │  Worker (src/worker.js)       │
   │        ─ create / join      │ ─────► │   • serves the built app      │
   │                             │        │   • GET  /rooms   → LobbyDO   │
-  │  Room  ─ video tiles (mesh) │  WS    │   • WS   /room/:id/ws → RoomDO│
-  │        ─ timer / phases     │ ◄────► │                              │
+  │  Room  ─ Jitsi call (JaaS)  │  WS    │   • WS   /room/:id/ws → RoomDO│
+  │        ─ timer / phases     │ ◄────► │   • GET  /jitsi-token → JaaS  │
   │        ─ tasks / chat       │        │  RoomDO   (one per room)      │
   │                             │        │  LobbyDO  (one, global)       │
   └──────────┬──────────────────┘        └──────────────────────────────┘
-             │  WebRTC (peer-to-peer video/audio, via STUN)
+             │  embedded call to 8x8.vc (JaaS SFU handles media + NAT)
              ▼
-        Other browsers in the room
+        8x8.vc (Jitsi as a Service)
 ```
 
 | Component | File | Responsibility |
 |:--|:--|:--|
-| **Worker** | `src/worker.js` | HTTP entrypoint. Serves the static app, exposes the room directory (`/rooms`), and upgrades the room WebSocket (`/room/:id/ws`). |
-| **RoomDO** | `src/RoomDO.js` | One [Durable Object](https://developers.cloudflare.com/durable-objects/) per room. Holds live WebSocket sessions in memory, runs the phase timer via DO alarms, relays WebRTC signaling, and enforces the cap of 4. |
+| **Worker** | `src/worker.js` | HTTP entrypoint. Serves the static app, exposes the room directory (`/rooms`), signs Jitsi tokens (`/jitsi-token`), and upgrades the room WebSocket (`/room/:id/ws`). |
+| **JaaS signer** | `src/jaas.js` | WebCrypto RS256 signer. Builds a short-lived JaaS JWT (`signJaasToken`) and derives a stable Jitsi room name from a Nook room id (`jitsiRoomName`). |
+| **RoomDO** | `src/RoomDO.js` | One [Durable Object](https://developers.cloudflare.com/durable-objects/) per room. Holds live WebSocket sessions in memory, runs the phase timer via DO alarms, carries all coworking state, and enforces the cap of 4. Never touches media. |
 | **LobbyDO** | `src/LobbyDO.js` | A single global Durable Object. A live registry of open (public) rooms for the landing page, and the presence hub for the "who's around" list and cowork invites. |
-| **Web app** | `web/` | React + Vite front end. `useRoom.js` owns the WebSocket and the WebRTC mesh. |
+| **Web app** | `web/` | React + Vite front end. `useRoom.js` owns the WebSocket and coworking state (WS-only, no media); `JitsiStage.jsx` embeds the JaaS call. |
 
 ### Why Durable Objects
 
@@ -116,30 +119,23 @@ in-progress session back to greet. Now the session is durable:
 Per-person state (goals, ready/shared, camera prefs) is **not** persisted — it
 belongs to a live socket and is rebuilt when people (re)join.
 
-**Camera/mic rule:** camera and mic default **off**, and are acquired **lazily** —
-there is no `getUserMedia` prompt on join. You appear as an avatar until you tap
-"Camera on" / "Mic on", at which point the track is acquired, added to every peer
-connection, and negotiated over. The effective track state is *(manual intent)
-AND (phase allows media)*, and focus always forces media off. Because a track
-toggled on mid-call wasn't in the original offer, adding it triggers a fresh
-offer/answer; simultaneous toggles are resolved with the perfect-negotiation
-pattern (the lower-id peer is impolite and ignores a colliding offer).
-
-**Dead-track recovery.** A camera/mic track can end out from under you — the OS
-or another app grabs the device, or a phone backgrounds the tab. `ensureMedia`
-treats only a `readyState === 'live'` track as present (`liveTrackOf` in
-`web/src/media.js`); a dead one is dropped and re-acquired, then swapped onto the
-existing `RTCRtpSender` with `replaceTrack` so it reaches peers without piling up
-dead senders. `track.onended` flips the tile back to "off" so the next toggle
-re-acquires cleanly, and a failed `getUserMedia` (permission denied, no device,
-device in use) shows an actionable message (`mediaErrorMessage`) over your tile
-instead of failing silently.
+**Camera/mic rule:** the Jitsi call joins **muted** (`startWithAudioMuted` /
+`startWithVideoMuted`), so camera and mic default **off** and there is no
+`getUserMedia` prompt on join — you appear as an avatar until you toggle. Nook's
+own "Camera on" / "Mic on" buttons drive Jitsi through
+`executeCommand('toggleVideo' | 'toggleAudio')` rather than owning any tracks
+themselves. Device errors (permission denied, no device, device in use) and
+track loss (the OS or another app grabbing the camera, a phone backgrounding the
+tab) are Jitsi's problem now — the old `ensureMedia` / dead-track recovery /
+`mediaErrorMessage` logic is gone.
 
 **Camera preference (a social signal).** Separate from the actual camera, each
 person can flag how they'd rather be seen — `on` ("up for camera"), `off`
-("camera-shy"), or unset. It's purely a hint shown on tiles, directory rows, and
-the "around now" list (`campref` message; carried in `welcome`, `syncLobby`
-occupants, and the lobby roster). It never touches the real track.
+("camera-shy"), or unset. It's purely a hint carried over the WebSocket
+(`campref` message; carried in `welcome`, `syncLobby` occupants, and the lobby
+roster) and shown in directory rows and the "around now" list. It is **no longer
+rendered on video tiles** — those are now Jitsi's own grid — and it never touches
+the real track.
 
 **Greet heartbeat:** while a public room sits in greet waiting for people, the DO
 re-arms a short alarm (`HEARTBEAT_MS = 12s`) purely to re-report itself to the
@@ -167,14 +163,14 @@ The client opens one WebSocket to `/room/:id/ws?name=…&focus=…&regroup=…&p
 a full tab close. The room uses whichever is present to recognise a reconnecting
 connection — see [On-device id + blocking](#on-device-id--blocking)).
 The Worker routes it to the room's Durable Object, which relays JSON messages.
-Video and audio never go over this socket — it carries only WebRTC signaling and
-room state. The actual media flows peer-to-peer over WebRTC.
+Video and audio never go over this socket — it carries only coworking state
+(presence, phases, timer, chat, tasks, goals, camera preference). The actual
+media runs in a separate embedded Jitsi call (see [Video](#video-embedded-jitsi-jaas)).
 
 ### Client → server
 
 | `type` | Payload | Effect |
 |:--|:--|:--|
-| `signal` | `to`, `data` | Relay a WebRTC offer/answer/ICE candidate to one peer. |
 | `goal` | `text` | Set your shared "what I'm working on" text. |
 | `campref` | `pref` | Set your camera preference (`'on'` / `'off'`, anything else clears it). |
 | `shared` | — | "I've shared my goal" — advances the greet turn frame. |
@@ -185,6 +181,10 @@ room state. The actual media flows peer-to-peer over WebRTC.
 | `kick` | `id` | Host only: remove a participant. |
 | `restart` | — | Host only: from regroup, run another session. |
 
+> **Legacy, inert.** `RoomDO` still contains `publish` / `tracks` message
+> handlers and a tracks roster from the SFU era. The client no longer publishes,
+> so these are dead code — wired to nothing, left in place, not removed.
+
 ### Server → client
 
 | `type` | Payload | Meaning |
@@ -193,7 +193,6 @@ room state. The actual media flows peer-to-peer over WebRTC.
 | `peer-join` | `id`, `name`, `reconnect` | Someone joined. `reconnect: true` means a returning browser (matched by `did`, or `cid` for a same-tab refresh) — the client skips the join chime and the server restores their goal/camera pref. |
 | `peer-leave` | `id` | Someone left (kick, disconnect, or refresh). |
 | `order` | `order` | The join-order list of ids (drives the greet turn frame). |
-| `signal` | `from`, `data` | A relayed WebRTC signal from a peer. |
 | `phase` | `phase`, `endsAt`, `serverNow` | The phase changed. |
 | `ready-state` | `ready` | The set of ready ids changed. |
 | `locked-state` | `locked` | The room was opened/closed to newcomers. |
@@ -227,33 +226,52 @@ foregrounded) and the `online` event, with a fresh retry budget. Because the
 session is persisted and paused server-side, a reconnect resumes the same
 session — timer and phase intact — instead of restarting.
 
-## Video: the WebRTC mesh
+## Video: embedded Jitsi (JaaS)
 
-With four people or fewer, Nook uses a full mesh: every participant holds a direct
-`RTCPeerConnection` to every other participant. At most that's 3 connections per
-person — cheap, and it needs no media server.
+Media is handled entirely by an embedded [Jitsi](https://jitsi.org/) call, hosted
+on [JaaS](https://jaas.8x8.vc/) (Jitsi as a Service, 8x8.vc). Nook owns no tracks,
+no peer connections, and no ICE — 8x8's SFU carries all media and does its own NAT
+traversal. Nook migrated to this from an earlier Cloudflare Realtime SFU (and,
+before that, a WebRTC mesh); both are gone from the code.
 
-- The newcomer creates an offer to each existing peer; answers and ICE candidates
-  are relayed through the room's WebSocket (`signal` messages).
-- ICE config comes from the Worker's `/ice` endpoint (fetched before connecting):
-  always Google's public STUN (`stun:stun.l.google.com:19302`), plus a **TURN**
-  relay when credentials are set — Metered or Cloudflare Realtime (see
-  [DEPLOYMENT.md](DEPLOYMENT.md)). TURN relays media for peers behind
-  strict/symmetric NAT who can't connect directly.
-- **STUN-only fallback.** With no TURN configured, roughly 10–15% of users behind
-  strict NAT won't get a video connection; everything non-video still works for
-  them. Adding TURN closes that gap.
+- **`web/src/JitsiStage.jsx`** loads `https://8x8.vc/<appId>/external_api.js` and
+  embeds the call with `JitsiMeetExternalAPI`. It fetches a token from the Worker
+  and joins room `<appId>/<roomName>`. Nook hides Jitsi's own chrome —
+  `toolbarButtons: []`, prejoin skipped (`prejoinConfig.enabled: false` +
+  legacy `prejoinPageEnabled: false`) — and joins muted, so the only visible
+  controls are Nook's own Camera/Mic buttons, which drive Jitsi via
+  `executeCommand('toggleVideo' | 'toggleAudio')`. The stage is mounted **only
+  during greet and regroup**; in focus it unmounts entirely (cameras are off then).
+- **`src/jaas.js`** is a WebCrypto RS256 signer. `signJaasToken(env, {room, name})`
+  builds a JaaS JWT — header `kid: <appId>/<keyId>`; payload `aud: 'jitsi'`,
+  `iss: 'chat'`, `sub: <appId>`, the room, `exp` two hours out,
+  `context.user.{name, moderator: 'true'}`, and `context.features` with
+  recording, transcription, livestreaming, and outbound-call all `'false'`.
+  `jitsiRoomName(roomId)` returns `nook-<first 40 hex of SHA-256(roomId)>` — a
+  stable, collision-free, valid Jitsi room name derived from any Nook room id.
+- **Worker endpoint.** `GET /jitsi-token?room=<id>&name=<name>` returns
+  `{ jwt, appId, roomName }` (400 if no room; 503 if the `JAAS_*` secrets are
+  unset — see [DEPLOYMENT.md](DEPLOYMENT.md)).
+
+**Security model.** The visitor never authenticates; the Worker's server-side
+signature *is* the auth. Because the Jitsi room name is a hash of the Nook room
+id, only someone already admitted to the (max-4, WebSocket-gated) Nook room can
+obtain a valid token — Nook's WebSocket gate is the room's access control. And
+because recording and transcription are disabled in the token, no participant can
+record the call.
 
 ## The lobby / live directory
 
 Public rooms report themselves to the single global `LobbyDO`:
 
 - On any change, a room POSTs `/update` with `{ roomId, count, phase, endsAt,
-  locked, occupants }`. A room reporting `count <= 0` is deleted from the registry.
+  locked, focusMin, occupants }`. A room reporting `count <= 0` is deleted from
+  the registry.
 - The home page GETs `/rooms`, which prunes entries older than `STALE_MS = 30s`
   (so a room that dies without cleanly reporting still ages out) and returns the
   list sorted so that **greeting rooms with a free seat float to the top** — the
-  most joinable rooms first.
+  most joinable rooms first. Each room's `focusMin` rides along and is shown as a
+  badge on the directory card, so people see the session length before joining.
 - Invite-only rooms never report, so they never appear.
 
 **Joining ongoing sessions.** Because `endsAt` and `locked` are in the directory,
@@ -392,10 +410,12 @@ list is React-only — `{id, text, done}` objects personal to you.
 - **Refresh keeps your seat.** A refresh (or a mobile lock/background) reconnects
   via `sessionStorage`, and the server-side session is paused and persisted, so
   you land back in the same phase with the timer intact.
-- **TURN is optional.** With STUN only, strict-NAT users don't get video; add a
-  TURN relay to close that gap (see above).
-- **Mesh caps at 4.** The four-person limit is what keeps video serverless; going
-  higher would require an SFU and change the cost model entirely.
+- **Media is off-loaded to JaaS.** 8x8 carries all media and NAT traversal, so
+  strict-NAT users connect without any STUN/TURN of Nook's own. JaaS's free tier
+  covers up to 25,000 monthly active users; everything else stays on free
+  Cloudflare tiers.
+- **Four-person rooms.** The cap is a product choice — a nook should feel like a
+  small table — and it keeps the call comfortably inside the JaaS free tier.
 - **Ephemeral *personal* data.** No accounts, no history of who was there, no chat
   archive — names, lists, chat, and video are never stored. Two anonymous things
   persist: the room's session state (so you can resume it), wiped after 6h empty;

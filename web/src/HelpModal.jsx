@@ -5,6 +5,13 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'August 18, 2026',
+    items: [
+      'New video: the call is steadier and needs no sign-in. Nothing said or shown is ever recorded',
+      'The room list now shows each session’s focus length, so you can see how long it runs before you join',
+    ],
+  },
+  {
     date: 'August 7, 2026',
     items: [
       'Dark mode: tap the moon in the header to switch, and Nook remembers your choice on your device',
@@ -106,7 +113,7 @@ export function HelpModal({ onClose }) {
               <li><strong>Camera preference:</strong> signal whether you’re up for camera or camera-shy, so the group knows the vibe.</li>
               <li><strong>Join any time:</strong> you can join an open room even mid-session, and drop into whatever phase it’s in.</li>
             </ul>
-            <p className="hint">Your to-do list and chat stay private and are never saved. Your camera and mic are off until you turn them on.</p>
+            <p className="hint">Nothing here is recorded or saved. The video call is live only, and your to-do list and chat stay in your own browser. Your camera and mic are off until you turn them on.</p>
           </div>
         ) : (
           <div className="help-body">
