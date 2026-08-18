@@ -2,10 +2,8 @@ name = "nook"
 main = "src/worker.js"
 compatibility_date = "2024-09-23"
 
-# Cloudflare Realtime (SFU) app id — not secret; the API token is a Worker secret
-# (REALTIME_APP_TOKEN), set via `.dev.vars` locally and `wrangler secret put` in prod.
-[vars]
-REALTIME_APP_ID = "2128fc719eeb98ddfa569ca3f8be19f0"
+# Video is JaaS (8x8.vc). The RSA signing key + app id are Worker secrets
+# (JAAS_APP_ID, JAAS_KID, JAAS_PRIVATE_KEY), set with `wrangler secret put`.
 
 # The Worker also serves the built React app. Static files are served directly;
 # unmatched paths (/rooms, /room/:id/ws) fall through to the Worker. Routing is

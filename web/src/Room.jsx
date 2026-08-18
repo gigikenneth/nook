@@ -5,10 +5,9 @@ import { usePipTimer } from './usePipTimer';
 import { chime } from './sound';
 import { ReportBug } from './ReportBug.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
-import { Moon, ChatDoodle, CamBadge } from './graphics.jsx';
+import { JitsiStage } from './JitsiStage.jsx';
+import { Moon, ChatDoodle } from './graphics.jsx';
 
-// Camera-preference cycle: unset -> up for camera -> camera-shy -> unset.
-const nextPref = (p) => (p === 'on' ? 'off' : p === 'off' ? null : 'on');
 const REACTIONS = ['👍', '❤️', '🎉', '😂', '👀']; // quick emoji reactions (#53)
 
 // A chat message with emoji reactions: existing reactions show as chips (click
@@ -97,61 +96,6 @@ function download(filename, text) {
   URL.revokeObjectURL(url);
 }
 
-function Video({ stream, muted }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const v = ref.current;
-    if (!v || !stream) return;
-    v.srcObject = stream;
-    // Some browsers block autoplay of an unmuted peer stream; nudge it and
-    // retry on the next click if the first play() is rejected.
-    const play = () => v.play().catch(() => {});
-    play();
-    window.addEventListener('click', play, { once: true });
-    return () => window.removeEventListener('click', play);
-  }, [stream]);
-  return <video ref={ref} autoPlay playsInline muted={muted} />;
-}
-
-function Tile({ name, stream, self, camOff, isHost, canKick, onKick, media, onToggleCam, onToggleMic, pref, onCyclePref, mediaError, onDismissError, videoMuted }) {
-  const camShown = stream && !camOff && media?.cam !== false && !videoMuted;
-  return (
-    <div className={`tile ${camOff ? 'camoff' : ''}`}>
-      {camShown ? <Video stream={stream} muted={self} /> : <div className="avatar">{initials(name)}</div>}
-      {self && mediaError && (
-        <div className="media-error" role="alert">
-          <span>{mediaError}</span>
-          <button className="ghost x" onClick={onDismissError} aria-label="Dismiss">×</button>
-        </div>
-      )}
-      {self && !camOff && (
-        <div className="tile-controls">
-          <button className={`mediabtn ${media?.cam ? '' : 'off'}`} onClick={onToggleCam}
-            aria-pressed={!media?.cam} aria-label={media?.cam ? 'Camera on' : 'Camera off'}>
-            <span aria-hidden="true">{media?.cam ? '📷' : '🚫'}</span>
-            <span className="mb-label">{media?.cam ? 'Camera on' : 'Camera off'}</span>
-          </button>
-          <button className={`mediabtn ${media?.mic ? '' : 'off'}`} onClick={onToggleMic}
-            aria-pressed={!media?.mic} aria-label={media?.mic ? 'Mic on' : 'Mic off'}>
-            <span aria-hidden="true">{media?.mic ? '🎙' : '🔇'}</span>
-            <span className="mb-label">{media?.mic ? 'Mic on' : 'Mic off'}</span>
-          </button>
-        </div>
-      )}
-      <div className="tile-bar">
-        <span className="tile-name">{name}{self ? ' (you)' : ''}{isHost ? ' · host' : ''}</span>
-        {self ? (
-          <button className="cam-pref-btn" onClick={onCyclePref}
-            title="Signal whether you'd rather be on or off camera (tap to change)">
-            {pref ? <CamBadge pref={pref} compact /> : <span className="cam-set">＋ camera pref</span>}
-          </button>
-        ) : <CamBadge pref={pref} compact />}
-        {canKick && <button className="ghost kick" onClick={onKick}>Remove</button>}
-      </div>
-    </div>
-  );
-}
-
 function Timer({ endsAt, label }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, []);
@@ -169,10 +113,7 @@ function Timer({ endsAt, label }) {
 
 export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, camPref, onLeave, onBrowse }) {
   const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
-  const { selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status, local, debug } = room;
-  // On-screen diagnostics: open any room URL with ?debug=1 to see the live media
-  // connection state on a real device (no dev tools needed).
-  const showDebug = typeof location !== 'undefined' && /[?&]debug=1/.test(location.href);
+  const { selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, chat, config, status } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
   // Personal, editable task list (browser-only, never synced). Restored from this
@@ -223,7 +164,6 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   const peerIds = Object.keys(peers);
   const count = peerIds.length + 1;
   const inviteLink = `${window.location.origin}${window.location.pathname}#room/${encodeURIComponent(roomId)}`;
-  const camOff = phase === 'focus';
 
   // Send the pre-typed goal + camera preference once connected.
   const sentGoal = useRef(false);
@@ -405,15 +345,6 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
   return (
     <main className={`room ${phase === 'focus' ? 'focus-fit' : ''}`}>
-      {showDebug && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, zIndex: 999, background: 'rgba(0,0,0,.85)', color: '#0f0',
-          font: '11px/1.5 monospace', padding: '8px 10px', maxWidth: '100%', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-          {`ws:${status}  ice:${debug.ice}  conn:${debug.conn}\n`
-            + `turn:${debug.turn === null ? '?' : debug.turn ? 'YES' : 'NO'}  session:${debug.session ? 'up' : 'no'}  pulls:${debug.pulls}\n`
-            + `peers:${Object.keys(peers).length}  streams:${Object.values(peers).filter((p) => p.stream && p.stream.getTracks().length).length}  media:cam=${room.media.cam?1:0} mic=${room.media.mic?1:0}\n`
-            + `${debug.err ? 'ERR: ' + debug.err : ''}`}
-        </div>
-      )}
       {status === 'reconnecting' && <div className="reconnecting" role="status">Reconnecting…</div>}
       {status === 'down' && <div className="reconnecting" role="status">Nook's rooms are temporarily down — hang tight, we keep retrying and you'll reconnect automatically.</div>}
       {checkin && <CheckIn question={checkin} initialText={checkinDraft} onDraft={onCheckinDraft} onShare={shareCheckin} onClose={finishCheckin} />}
@@ -470,17 +401,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         </>
       ) : (
         <section className="stage">
-          <div className={`grid grid-${count}`}>
-            <Tile name={name} stream={local} self camOff={camOff} isHost={isHost}
-              media={room.media} onToggleCam={room.toggleCam} onToggleMic={room.toggleMic}
-              mediaError={room.mediaError} onDismissError={room.dismissMediaError}
-              pref={camPrefs[selfId]} onCyclePref={() => room.setCamPref(nextPref(camPrefs[selfId] || null))} />
-            {peerIds.map((id) => (
-              <Tile key={id} name={peers[id].name || 'Guest'} stream={peers[id].stream} camOff={camOff}
-                isHost={id === hostId} canKick={isHost && id !== selfId} onKick={() => room.kick(id)}
-                pref={camPrefs[id]} videoMuted={peers[id].camLive === false} />
-            ))}
-          </div>
+          <JitsiStage roomId={roomId} name={name} />
 
           <div className="rail">
             <aside className="panel">

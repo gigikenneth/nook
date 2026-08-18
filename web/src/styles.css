@@ -231,6 +231,19 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .grid-1 { grid-template-columns: 1fr; }
 .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
 
+/* Embedded JaaS (Jitsi) call — fills the stage's left column, Nook's own mic/cam
+   buttons below it (Jitsi's toolbar is hidden). */
+.jitsi-stage { display: flex; flex-direction: column; gap: 12px; }
+.jitsi-frame { position: relative; aspect-ratio: 4 / 3; border-radius: var(--r-md); overflow: hidden;
+  background: var(--olive); border: 3px solid var(--olive); }
+.jitsi-frame iframe { width: 100%; height: 100%; border: 0; display: block; }
+.jitsi-overlay { position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+  color: var(--on-slab); font-weight: 600; font-size: 14px; padding: 20px; }
+.jitsi-overlay .link-btn { color: var(--pink); text-decoration: underline; font-weight: 700; }
+.jitsi-controls { display: flex; gap: 10px; justify-content: center; }
+.jitsi-controls .mediabtn { background: var(--surface); color: var(--accent-text); box-shadow: var(--shadow); }
+.jitsi-controls .mediabtn:disabled { opacity: .5; }
+
 .tile { position: relative; aspect-ratio: 4 / 3; border-radius: var(--r-md); overflow: hidden; background: var(--olive); border: 3px solid var(--olive); }
 .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .tile.camoff { background: var(--olive2); }

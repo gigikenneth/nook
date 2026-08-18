@@ -1,5 +1,6 @@
 import { RoomDO } from './RoomDO.js';
 import { LobbyDO } from './LobbyDO.js';
+import { signJaasToken, jitsiRoomName } from './jaas.js';
 
 export { RoomDO, LobbyDO };
 
@@ -57,61 +58,23 @@ export default {
       });
     }
 
-    // ICE servers for WebRTC. Cloudflare Realtime TURN is the primary relay —
-    // free alongside the SFU and co-located with the same edge the media goes
-    // through, so strict-NAT clients (phones on cellular, locked-down wifi) can
-    // still reach it. The TURN token stays server-side; we mint short-lived
-    // creds per request. STUN-only is the last-resort fallback if TURN is down.
-    if (url.pathname === '/ice') {
-      const iceServers = [{ urls: 'stun:stun.cloudflare.com:3478' }];
-      if (env.TURN_KEY_ID && env.TURN_API_TOKEN) {
-        try {
-          const r = await fetch(
-            `https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`,
-            {
-              method: 'POST',
-              headers: { Authorization: `Bearer ${env.TURN_API_TOKEN}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ttl: 86400 }),
-            },
-          );
-          if (r.ok) {
-            const data = await r.json();
-            // Cloudflare returns iceServers as an array of one {urls,username,
-            // credential} object; spread it in (pushing the array nests it and
-            // browsers silently ignore the malformed entry -> no TURN).
-            if (Array.isArray(data.iceServers)) iceServers.push(...data.iceServers);
-            else if (data.iceServers) iceServers.push(data.iceServers);
-          }
-        } catch { /* fall back to STUN-only */ }
+    // Login-free video: mint a JaaS (8x8.vc) JWT so the visitor joins the
+    // embedded Jitsi call without an account. The RSA key stays a Worker secret;
+    // the room name is a stable hash of Nook's room id, so only people already in
+    // this Nook room (gated max-4 over the WebSocket) get a token for it.
+    if (url.pathname === '/jitsi-token') {
+      if (!env.JAAS_APP_ID || !env.JAAS_KID || !env.JAAS_PRIVATE_KEY) {
+        return json({ error: 'Video isn\'t configured yet.' }, 503);
       }
-      return Response.json({ iceServers }, { headers: cors });
-    }
-
-    // Cloudflare Realtime (SFU) signaling proxy. The client hits our Worker so
-    // the app token stays server-side; we forward to the Realtime Connection API
-    // 1:1 (sessions/new, sessions/:id/tracks/new, sessions/:id/renegotiate),
-    // injecting Authorization. Path after /realtime/ maps straight onto the API.
-    if (url.pathname.startsWith('/realtime/')) {
-      if (!env.REALTIME_APP_ID || !env.REALTIME_APP_TOKEN) {
-        return json({ error: 'Realtime is not configured.' }, 503);
-      }
-      const rest = url.pathname.slice('/realtime/'.length);
-      const target = `https://rtc.live.cloudflare.com/v1/apps/${env.REALTIME_APP_ID}/${rest}`;
+      const roomId = url.searchParams.get('room');
+      if (!roomId) return json({ error: 'room required' }, 400);
+      const name = (url.searchParams.get('name') || 'Guest').slice(0, 50);
       try {
-        const r = await fetch(target, {
-          method: req.method,
-          headers: {
-            Authorization: `Bearer ${env.REALTIME_APP_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.text(),
-        });
-        return new Response(await r.text(), {
-          status: r.status,
-          headers: { ...cors, 'Content-Type': 'application/json' },
-        });
+        const roomName = await jitsiRoomName(roomId);
+        const jwt = await signJaasToken(env, { room: roomName, name });
+        return json({ jwt, appId: env.JAAS_APP_ID, roomName });
       } catch {
-        return json({ error: 'Realtime upstream unavailable.' }, 502);
+        return json({ error: 'Could not start video right now.' }, 500);
       }
     }
 
