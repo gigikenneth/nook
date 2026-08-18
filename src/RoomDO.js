@@ -326,12 +326,20 @@ export class RoomDO {
           if (t) { try { t.close(4000, 'kicked'); } catch {} this.handleLeave(t); }
         }
         break;
-      case 'restart':
+      case 'restart': {
         // Anyone can start the next round (#55), like 'start' — so it doesn't
         // stall if the host dropped. Only from regroup, so no one can reset the
-        // room out from under a live focus block.
-        if (this.phase === 'regroup') this.toGreet();
+        // room out from under a live focus block. The HOST may also set a new
+        // length for the next round (clamped); everyone else just restarts at
+        // the current length.
+        if (this.phase !== 'regroup') break;
+        if (id === this.hostId()) {
+          if (m.focusMin != null) this.focusMin = clampInt(m.focusMin, this.focusMin, 1, 180);
+          if (m.regroupMin != null) this.regroupMin = clampInt(m.regroupMin, this.regroupMin, 0, 60);
+        }
+        this.toGreet(); // persists the (possibly new) length + broadcasts it via broadcastPhase
         break;
+      }
     }
   }
 
@@ -458,7 +466,8 @@ export class RoomDO {
   }
 
   broadcastPhase() {
-    this.broadcast({ type: 'phase', phase: this.phase, endsAt: this.endsAt, checkinSeed: this.checkinSeed, serverNow: Date.now() });
+    this.broadcast({ type: 'phase', phase: this.phase, endsAt: this.endsAt, checkinSeed: this.checkinSeed,
+      focusMin: this.focusMin, regroupMin: this.regroupMin, serverNow: Date.now() });
   }
 
   // Tell the lobby who's here (or that we're gone). Private rooms are reported

@@ -292,6 +292,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .todo-check li.done span,
 .todo-check li.done .task-text { text-decoration: line-through; color: var(--muted); }
 .tally { font-family: var(--wordmark); font-size: 36px; margin: 0; color: var(--accent-text); }
+/* Host-only "next session length" controls in the regroup panel. */
+.len-block { display: grid; gap: 10px; background: var(--field); border-radius: var(--r-md); padding: 14px; }
+.len-cap { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.len-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.len-preset { font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: var(--r-pill);
+  background: var(--surface); color: var(--accent-text); border: 1px solid var(--line); }
+.len-preset.sel { background: var(--olive); color: var(--on-slab); border-color: var(--olive); }
+.len-row { display: flex; gap: 12px; }
+.len-row .field.small { width: auto; flex: 1; }
 /* Drag-to-reorder handle on each task (#53) */
 .drag-handle { background: none; border: none; padding: 0 4px; margin: 0; font-size: 15px; line-height: 1; color: var(--muted); cursor: grab; touch-action: none; opacity: .55; }
 .drag-handle:hover { opacity: 1; }

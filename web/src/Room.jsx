@@ -422,7 +422,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
                   onReady={() => room.setReady(!iAmReady)} isHost={isHost} onStart={room.start} />
               )}
               {phase === 'regroup' && (
-                <RegroupPanel tasks={tasks} onRestart={room.restart} />
+                <RegroupPanel tasks={tasks} isHost={isHost} focusMin={config.focusMin} regroupMin={config.regroupMin} onRestart={room.restart} />
               )}
             </aside>
             {sharedListsEl}
@@ -564,8 +564,13 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, share
   );
 }
 
-function RegroupPanel({ tasks, onRestart }) {
+const LEN_PRESETS = [15, 25, 50]; // quick focus-length picks for the next round
+
+function RegroupPanel({ tasks, isHost, focusMin, regroupMin, onRestart }) {
   const finished = tasks.filter((t) => t.done).length;
+  // Host can retune the next round's length; seeded with the current length.
+  const [f, setF] = useState(focusMin);
+  const [r, setR] = useState(regroupMin);
   // The countdown lives in the phase banner (heading); no second timer here.
   return (
     <>
@@ -576,8 +581,35 @@ function RegroupPanel({ tasks, onRestart }) {
           <li key={t.id} className={t.done ? 'done' : ''}><span>{t.done ? '✓' : '·'} {t.text}</span></li>
         ))}
       </ul>
-      {/* Anyone can start the next round (#55), so it doesn't stall if the host left. */}
-      <button className="secondary" onClick={onRestart}>Run another session</button>
+      {/* Anyone can start the next round (#55), so it doesn't stall if the host
+          left. The host can also change the length for the next round. */}
+      {isHost ? (
+        <>
+          <div className="len-block">
+            <span className="len-cap">Next session length</span>
+            <div className="len-presets">
+              {LEN_PRESETS.map((p) => (
+                <button key={p} type="button" className={`len-preset ${f === p ? 'sel' : ''}`} onClick={() => setF(p)}>{p}m</button>
+              ))}
+            </div>
+            <div className="len-row">
+              <label className="field small"><span>Focus (min)</span>
+                <input type="number" min="1" max="180" value={f} onChange={(e) => setF(Number(e.target.value))} /></label>
+              <label className="field small"><span>Regroup (min)</span>
+                <input type="number" min="0" max="60" value={r} onChange={(e) => setR(Number(e.target.value))} /></label>
+            </div>
+            {f !== focusMin && <p className="hint">Was {focusMin}m last round.</p>}
+          </div>
+          <button className="secondary" onClick={() => onRestart({ focusMin: f, regroupMin: r })}>
+            Run another session{f ? ` · ${f} min` : ''}
+          </button>
+        </>
+      ) : (
+        <>
+          <button className="secondary" onClick={() => onRestart()}>Run another session</button>
+          <p className="hint">The host can shorten or lengthen the next round.</p>
+        </>
+      )}
     </>
   );
 }

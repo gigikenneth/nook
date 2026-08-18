@@ -93,6 +93,8 @@ export function useRoom(roomId, name, opts) {
           setPhase(m.phase);
           setEndsAt(m.endsAt);
           setCheckinSeed(m.checkinSeed ?? null);
+          // The host can change the length for the next round; keep config in step.
+          if (m.focusMin) setConfig({ focusMin: m.focusMin, regroupMin: m.regroupMin });
           break;
         case 'ready-state': setReady(m.ready); break;
         case 'shared-state': setShared(m.shared); break;
@@ -179,7 +181,7 @@ export function useRoom(roomId, name, opts) {
     setReady: (r) => sendWs({ type: r ? 'ready' : 'unready' }),
     start: () => sendWs({ type: 'start' }),
     kick: (id) => sendWs({ type: 'kick', id }),
-    restart: () => sendWs({ type: 'restart' }),
+    restart: (opts) => sendWs({ type: 'restart', ...(opts || {}) }),
     sendGoal: (text) => sendWs({ type: 'goal', text }),
     shareList: (tasks) => sendWs({ type: 'list', tasks }),
     setCamPref: (pref) => sendWs({ type: 'campref', pref }),

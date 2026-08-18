@@ -282,5 +282,41 @@ const store = new Map();
   assert.ok(!r.tracksMap().A, 'leaving drops the track roster entry');
 }
 
+// 12) Host adjusts the next round's length from regroup. The host's restart with
+//     a new length updates + persists the config and broadcasts it; a non-host's
+//     restart still starts the round but can't change the length.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  r.focusMin = 50; r.regroupMin = 5;
+  r.phase = 'regroup'; r.endsAt = NOW + 5 * 60000;
+  const host = join(r, st, { id: 'H', name: 'Host', joinedAt: NOW });      // oldest = host
+  const guest = join(r, st, { id: 'G', name: 'Guest', joinedAt: NOW + 1 });
+  assert.equal(r.hostId(), 'H', 'oldest socket is host');
+
+  // Non-host can't change the length, but still restarts the round.
+  msg(r, guest, { type: 'restart', focusMin: 99, regroupMin: 42 });
+  assert.equal(r.phase, 'greet', 'guest restart still starts a new round');
+  assert.equal(r.focusMin, 50, 'guest cannot change focus length');
+  assert.equal(r.regroupMin, 5, 'guest cannot change regroup length');
+
+  // Back to regroup, then the host shortens the next round (clamped).
+  r.phase = 'regroup';
+  msg(r, host, { type: 'restart', focusMin: 25, regroupMin: 3 });
+  assert.equal(r.phase, 'greet', 'host restart starts a new round');
+  assert.equal(r.focusMin, 25, 'host sets a shorter focus length');
+  assert.equal(r.regroupMin, 3, 'host sets a shorter regroup length');
+  assert.equal(st.store.get('sess').focusMin, 25, 'new length persisted');
+  assert.ok(host.sent.find((m) => m.type === 'phase' && m.focusMin === 25), 'new length broadcast to the room');
+
+  // Out-of-range values are clamped, not rejected.
+  r.phase = 'regroup';
+  msg(r, host, { type: 'restart', focusMin: 9999, regroupMin: -5 });
+  assert.equal(r.focusMin, 180, 'focus clamped to max 180');
+  assert.equal(r.regroupMin, 0, 'regroup clamped to min 0');
+}
+
 Date.now = realNow;
 console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 + session continuity): all passed');
