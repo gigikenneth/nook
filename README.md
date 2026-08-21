@@ -173,6 +173,19 @@ cd web && npm install && npm run dev  # web app on :5173
 
 Open http://localhost:5173. (Both processes need to be running.)
 
+## Support Nook
+
+Nook is free and runs on free infrastructure, and it stays that way. If it's
+useful to you, here are three ways to keep it going — all optional:
+
+- ⭐ **Star the repo** — it's the cheapest way to help more people find Nook.
+- 👋 **Bring someone** — Nook is better with company. Send a friend the link
+  and cowork together.
+- ☕ **[Buy me a coffee](https://ko-fi.com/gigikenneth)** — if you'd like to
+  chip in toward the time behind it.
+
+No tier is gated, nothing unlocks. Nook stays login-free and free for everyone.
+
 ## License
 
 MIT. See [LICENSE](LICENSE). Emoji art is [Twemoji](https://github.com/jdecked/twemoji)
