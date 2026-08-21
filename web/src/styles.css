@@ -486,6 +486,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   box-shadow: var(--shadow); display: grid; gap: 12px;
 }
 .report-card textarea { min-height: 92px; resize: vertical; }
+.support-ways { display: grid; gap: 10px; text-align: center; line-height: 1.5; }
 .report-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .hint.err { color: #c0392b; font-weight: 700; }
 .hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
