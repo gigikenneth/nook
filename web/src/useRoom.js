@@ -12,6 +12,7 @@ export function useRoom(roomId, name, opts) {
   const [hostId, setHostId] = useState(null);
   const [peers, setPeers] = useState({}); // id -> { name, list }
   const [phase, setPhase] = useState('greet');
+  const [startingAt, setStartingAt] = useState(null); // ms when the pre-focus countdown lands; null when not counting
   const [endsAt, setEndsAt] = useState(null);
   const [checkinSeed, setCheckinSeed] = useState(null);
   const [ready, setReady] = useState([]);
@@ -89,7 +90,12 @@ export function useRoom(roomId, name, opts) {
           setCamPrefs((c) => { const n = { ...c }; delete n[m.id]; return n; });
           break;
         }
+        case 'starting':
+          // Land the countdown on a local target, cancelling out server clock skew.
+          setStartingAt(Date.now() + (m.startAt - m.serverNow));
+          break;
         case 'phase':
+          setStartingAt(null); // countdown's done (or was cancelled) once the phase actually moves
           setPhase(m.phase);
           setEndsAt(m.endsAt);
           setCheckinSeed(m.checkinSeed ?? null);
@@ -178,7 +184,7 @@ export function useRoom(roomId, name, opts) {
   }, [roomId]);
 
   return {
-    selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status,
+    selfId, hostId, peers, phase, startingAt, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status,
     shareGoal: () => sendWs({ type: 'shared' }),
     toggleLock: () => sendWs({ type: 'lock', locked: !locked }),
     setReady: (r) => sendWs({ type: r ? 'ready' : 'unready' }),

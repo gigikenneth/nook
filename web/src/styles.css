@@ -134,6 +134,20 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
 .card.center { justify-items: center; text-align: center; gap: 16px; padding: 44px; background: var(--field); }
 .joining { margin: 0; color: var(--accent-text); font-weight: 700; }
 
+/* Shared pre-focus countdown overlay (#74). */
+.start-countdown {
+  position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(4px);
+}
+.start-countdown-inner { text-align: center; display: grid; gap: 6px; justify-items: center; }
+.start-countdown-label { margin: 0; font-weight: 700; color: var(--muted); text-transform: none; letter-spacing: .01em; }
+.start-countdown-num {
+  font-size: clamp(96px, 22vw, 200px); font-weight: 800; line-height: 1; color: var(--accent-text);
+  animation: countdown-pop .3s ease-out;
+}
+.start-countdown-sub { margin: 4px 0 0; color: var(--muted); }
+@keyframes countdown-pop { from { transform: scale(.7); opacity: .3; } to { transform: scale(1); opacity: 1; } }
+
 .field { display: grid; gap: 7px; }
 .field > span { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
 .field.small { width: 130px; }

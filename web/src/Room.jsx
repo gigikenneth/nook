@@ -142,7 +142,7 @@ function Timer({ endsAt, label }) {
 
 export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, camPref, onLeave, onBrowse }) {
   const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
-  const { selfId, hostId, peers, phase, endsAt, checkinSeed, ready, shared, order, locked, goals, chat, config, status } = room;
+  const { selfId, hostId, peers, phase, startingAt, endsAt, checkinSeed, ready, shared, order, locked, goals, chat, config, status } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
   // Personal, editable task list (browser-only, never synced). Restored from this
@@ -387,6 +387,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       {status === 'reconnecting' && <div className="reconnecting" role="status">Reconnecting…</div>}
       {status === 'down' && <div className="reconnecting" role="status">Nook's rooms are temporarily down — hang tight, we keep retrying and you'll reconnect automatically.</div>}
       {checkin && <CheckIn question={checkin} initialText={checkinDraft} onDraft={onCheckinDraft} onShare={shareCheckin} onClose={finishCheckin} />}
+      {startingAt && phase === 'greet' && <StartCountdown startingAt={startingAt} />}
       <header className="room-head">
         <div className="room-id">
           <Moon size={26} className="small" /><span>Nook</span>
@@ -474,6 +475,23 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>. <a href="https://discord.gg/7fvsBq79VU" target="_blank" rel="noopener noreferrer">Join the Discord</a>.</span>
       </footer>
     </main>
+  );
+}
+
+// Full-screen shared countdown between "start" and heads-down, so cameras and
+// audio stay live for a beat and nobody's cut off mid-sentence (#74).
+function StartCountdown({ startingAt }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 200); return () => clearInterval(t); }, []);
+  const secs = Math.max(0, Math.ceil((startingAt - now) / 1000));
+  return (
+    <div className="start-countdown" role="status" aria-live="assertive">
+      <div className="start-countdown-inner">
+        <p className="start-countdown-label">Heads down in</p>
+        <div className="start-countdown-num" key={secs}>{secs || 'go'}</div>
+        <p className="start-countdown-sub">Cameras and mics stay on until then.</p>
+      </div>
+    </div>
   );
 }
 

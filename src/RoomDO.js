@@ -27,6 +27,10 @@ const REACTIONS = new Set(['👍', '❤️', '🎉', '😂', '👀']); // allowe
 // rebuilding from scratch (#30). Kept in memory; a rare eviction inside the
 // window just downgrades a return to a plain join (acceptable — no chime since #32).
 const RECONNECT_TTL_MS = 60000;
+// After someone hits start, hold in greet for a beat with a shared countdown so
+// cameras/audio don't cut mid-sentence (#74). Everyone sees the same numbers off
+// a server-broadcast startAt; the real focus flip happens on the alarm.
+const COUNTDOWN_MS = 4000;
 // A room left empty this long is genuinely abandoned — wipe its stored session
 // so storage doesn't accumulate ghost rooms forever.
 const ABANDON_MS = 6 * 60 * 60 * 1000; // 6h
@@ -55,6 +59,8 @@ export class RoomDO {
     this.configured = false; // has the session config (lengths/visibility) been set?
     this.focusMin = 50;
     this.regroupMin = 5;
+    this.starting = false; // true during the pre-focus countdown (still in greet, cameras live)
+    this.startAt = null; // absolute ms the countdown lands on and focus begins
     this.roomId = null; // path segment, for lobby registration (persisted so alarms can sync after eviction)
     this.isPublic = false;
 
@@ -68,6 +74,7 @@ export class RoomDO {
       this.paused = !!s.paused; this.remainingMs = s.remainingMs ?? null;
       this.abandonAt = s.abandonAt ?? null;
       this.focusMin = s.focusMin; this.regroupMin = s.regroupMin;
+      this.starting = !!s.starting; this.startAt = s.startAt ?? null;
       this.isPublic = s.isPublic; this.locked = !!s.locked;
       this.roomId = s.roomId ?? null;
       this.configured = true;
@@ -78,6 +85,7 @@ export class RoomDO {
     return this.state.storage.put(SESSION_KEY, {
       phase: this.phase, endsAt: this.endsAt, checkinSeed: this.checkinSeed, paused: this.paused, remainingMs: this.remainingMs,
       abandonAt: this.abandonAt, focusMin: this.focusMin, regroupMin: this.regroupMin,
+      starting: this.starting, startAt: this.startAt,
       isPublic: this.isPublic, locked: this.locked, roomId: this.roomId,
     });
   }
@@ -412,7 +420,20 @@ export class RoomDO {
     this.syncLobby();
   }
 
-  async startFocus() {
+  // Kick off the shared pre-focus countdown. Everyone stays in greet (cameras and
+  // audio live) until the alarm fires and beginFocus() actually flips the phase.
+  startFocus() {
+    if (this.starting || this.phase !== 'greet') return;
+    this.starting = true;
+    this.startAt = Date.now() + COUNTDOWN_MS;
+    this.persist();
+    this.broadcast({ type: 'starting', startAt: this.startAt, serverNow: Date.now() });
+    this.state.storage.setAlarm(this.startAt);
+  }
+
+  async beginFocus() {
+    this.starting = false;
+    this.startAt = null;
     this.phase = 'focus';
     this.endsAt = Date.now() + this.focusMin * 60000;
     this.checkinSeed = Math.random(); // one shared question for this focus block's mid-session check-in
@@ -429,12 +450,18 @@ export class RoomDO {
     // empty (to wipe a genuinely abandoned room).
     const now = Date.now();
     if (this.count() === 0) {
+      // Everyone left mid-countdown: cancel it, don't drop an empty room into focus.
+      if (this.starting) { this.starting = false; this.startAt = null; }
       // Empty. If the DO was evicted while occupied (e.g. a deploy) and this alarm
       // fired before anyone reconnected, the session isn't paused yet — pause it
       // now so it resumes intact. Only wipe once the abandon window has passed.
       if (!this.paused) { this.pauseSession(); return; }
       if (this.abandonAt && now >= this.abandonAt - 500) this.wipe();
       else this.state.storage.setAlarm(this.abandonAt || now + ABANDON_MS);
+      return;
+    }
+    if (this.starting && now >= this.startAt - 500) {
+      await this.beginFocus();
       return;
     }
     if (this.endsAt && now >= this.endsAt - 500) {
