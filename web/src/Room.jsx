@@ -489,7 +489,7 @@ function StartCountdown({ startingAt }) {
       <div className="start-countdown-inner">
         <p className="start-countdown-label">Heads down in</p>
         <div className="start-countdown-num" key={secs}>{secs || 'go'}</div>
-        <p className="start-countdown-sub">Cameras and mics stay on until then.</p>
+        <p className="start-countdown-sub">The call stays live until then.</p>
       </div>
     </div>
   );
