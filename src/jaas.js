@@ -32,7 +32,7 @@ export async function jitsiRoomName(roomId) {
   return `nook-${hex.slice(0, 40)}`;
 }
 
-export async function signJaasToken(env, { room, name }) {
+export async function signJaasToken(env, { room, name, id }) {
   const appId = env.JAAS_APP_ID;
   const key = await crypto.subtle.importKey(
     'pkcs8', pemToArrayBuffer(env.JAAS_PRIVATE_KEY),
@@ -44,7 +44,10 @@ export async function signJaasToken(env, { room, name }) {
     aud: 'jitsi', iss: 'chat', sub: appId, room,
     exp: now + 7200, nbf: now - 10,
     context: {
-      user: { name: (name || 'Guest').slice(0, 50), moderator: 'true' },
+      // Stable per-visitor id (Nook's localStorage device id) so JaaS counts a
+      // recurring human as ONE monthly-active user across reconnects/hibernation
+      // wakes, instead of a fresh endpoint (= fresh MAU) every rejoin.
+      user: { id: (id || undefined), name: (name || 'Guest').slice(0, 50), moderator: 'true' },
       features: { livestreaming: 'false', recording: 'false', transcription: 'false', 'outbound-call': 'false' },
     },
   };

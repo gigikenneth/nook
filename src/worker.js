@@ -69,9 +69,10 @@ export default {
       const roomId = url.searchParams.get('room');
       if (!roomId) return json({ error: 'room required' }, 400);
       const name = (url.searchParams.get('name') || 'Guest').slice(0, 50);
+      const id = (url.searchParams.get('did') || '').slice(0, 64) || undefined;
       try {
         const roomName = await jitsiRoomName(roomId);
-        const jwt = await signJaasToken(env, { room: roomName, name });
+        const jwt = await signJaasToken(env, { room: roomName, name, id });
         return json({ jwt, appId: env.JAAS_APP_ID, roomName });
       } catch {
         return json({ error: 'Could not start video right now.' }, 500);
