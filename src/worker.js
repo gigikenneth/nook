@@ -1,6 +1,7 @@
 import { RoomDO } from './RoomDO.js';
 import { LobbyDO } from './LobbyDO.js';
 import { signJaasToken, jitsiRoomName } from './jaas.js';
+import { dailyRoomUrl } from './daily.js';
 
 export { RoomDO, LobbyDO };
 
@@ -76,6 +77,22 @@ export default {
         return json({ jwt, appId: env.JAAS_APP_ID, roomName });
       } catch {
         return json({ error: 'Could not start video right now.' }, 500);
+      }
+    }
+
+    // Backup video: when JaaS is over its free cap, the client fails over to a
+    // PUBLIC Daily.co room (join by URL, no token — keeps Nook login-free). Same
+    // hashed room name as the JaaS room. Optional: no key set = no backup.
+    if (url.pathname === '/daily-room') {
+      if (!env.DAILY_API_KEY || !env.DAILY_DOMAIN) {
+        return json({ error: 'Backup video isn\'t configured yet.' }, 503);
+      }
+      const roomId = url.searchParams.get('room');
+      if (!roomId) return json({ error: 'room required' }, 400);
+      try {
+        return json({ url: await dailyRoomUrl(env, roomId) });
+      } catch {
+        return json({ error: 'Could not start backup video.' }, 500);
       }
     }
 

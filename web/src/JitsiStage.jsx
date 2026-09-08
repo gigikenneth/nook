@@ -35,33 +35,30 @@ export function JitsiStage({ roomId, name }) {
 
   useEffect(() => {
     let disposed = false;
-    let api = null;
+    let adapter = null; // uniform { toggleVideo, toggleAudio, dispose } for whichever provider is live
     let joinTimer = null;
     let usingFallback = false;
 
-    // Same look/behaviour on either provider — Nook's own buttons drive mute.
-    const common = {
-      configOverwrite: {
-        prejoinPageEnabled: false, // legacy flag
-        prejoinConfig: { enabled: false }, // current flag — skip the "Join meeting" step
-        startWithAudioMuted: true,
-        startWithVideoMuted: true,
-        disableDeepLinking: true,
-        toolbarButtons: [], // Nook's own buttons drive mute; hide Jitsi's bar
-      },
-      interfaceConfigOverwrite: {
-        MOBILE_APP_PROMO: false,
-        SHOW_JITSI_WATERMARK: false,
-        SHOW_CHROME_EXTENSION_BANNER: false,
-      },
-    };
-
-    function mount(domain, room, jwt) {
-      const a = new window.JitsiMeetExternalAPI(domain, {
+    // Mount the JaaS (8x8) call and wrap it in the uniform adapter so Nook's own
+    // Camera/Mic buttons drive mute regardless of provider.
+    function mountJitsi(room, jwt) {
+      const a = new window.JitsiMeetExternalAPI('8x8.vc', {
         roomName: room,
-        ...(jwt ? { jwt } : {}),
+        jwt,
         parentNode: frameRef.current,
-        ...common,
+        configOverwrite: {
+          prejoinPageEnabled: false, // legacy flag
+          prejoinConfig: { enabled: false }, // current flag — skip the "Join meeting" step
+          startWithAudioMuted: true,
+          startWithVideoMuted: true,
+          disableDeepLinking: true,
+          toolbarButtons: [], // Nook's own buttons drive mute; hide Jitsi's bar
+        },
+        interfaceConfigOverwrite: {
+          MOBILE_APP_PROMO: false,
+          SHOW_JITSI_WATERMARK: false,
+          SHOW_CHROME_EXTENSION_BANNER: false,
+        },
       });
       a.addListener('videoConferenceJoined', () => {
         if (disposed) return;
@@ -70,26 +67,65 @@ export function JitsiStage({ roomId, name }) {
       });
       a.addListener('audioMuteStatusChanged', (e) => setMic(!e.muted));
       a.addListener('videoMuteStatusChanged', (e) => setCam(!e.muted));
-      return a;
+      return {
+        toggleVideo: () => a.executeCommand('toggleVideo'),
+        toggleAudio: () => a.executeCommand('toggleAudio'),
+        dispose: () => { try { a.dispose(); } catch { /* already gone */ } },
+      };
     }
 
-    // JaaS over its free MAU cap never fires a join event — it swaps the iframe
-    // for 8x8's "limit reached" page — so a stalled join is our only signal.
-    // Silently re-mount on the free public Jitsi (no JWT, no cap) so video
-    // degrades to a backup instead of dying. Lower-reliability than JaaS, fine
-    // for a few minutes of talking.
-    // ponytail: reuse the already-loaded external_api.js against a second domain
-    // (the lib is host-agnostic). If meet.jit.si ever needs its own copy, load
-    // it here — that's the upgrade path.
-    function failover(room) {
+    // Mount a PUBLIC Daily.co room as the backup, in the same iframe slot. Daily's
+    // client lib is loaded on demand (only when we actually fail over) so it never
+    // weighs down the primary JaaS path.
+    async function mountDaily(url) {
+      const { default: DailyIframe } = await import('@daily-co/daily-js');
+      const frame = DailyIframe.createFrame(frameRef.current, {
+        showLeaveButton: false,
+        iframeStyle: { width: '100%', height: '100%', border: '0' },
+      });
+      frame.on('participant-updated', (e) => {
+        if (e?.participant?.local) { setCam(!!e.participant.video); setMic(!!e.participant.audio); }
+      });
+      // join() resolves only once we're actually in the call — that's our
+      // authoritative "joined" signal. We deliberately don't lean on the
+      // 'joined-meeting' event: it fires mid-await, which raced the give-up timer.
+      await frame.join({ url, startVideoOff: true, startAudioOff: true });
+      const local = () => frame.participants().local || {};
+      return {
+        toggleVideo: () => frame.setLocalVideo(!local().video),
+        toggleAudio: () => frame.setLocalAudio(!local().audio),
+        dispose: () => { try { frame.destroy(); } catch { /* already gone */ } },
+      };
+    }
+
+    // JaaS over its free cap never fires a join event — it swaps the iframe for
+    // 8x8's "limit reached" page — so a stalled join is our only signal. Silently
+    // re-mount on a public Daily room (no login, no JaaS cap) so video degrades to
+    // a backup instead of dying. Falls through to the error state if Daily won't
+    // join either, or isn't configured.
+    async function failover() {
       if (disposed || usingFallback) return;
       usingFallback = true;
-      try { api && api.dispose(); } catch { /* already gone */ }
+      try { adapter && adapter.dispose(); } catch { /* already gone */ }
       if (disposed || !frameRef.current) return;
-      api = mount('meet.jit.si', room, null);
-      apiRef.current = api;
-      // If the free instance won't join either, surface the error.
-      joinTimer = setTimeout(() => { if (!disposed) setStatus('error'); }, 12000);
+      try {
+        const r = await fetch(`${apiBase}/daily-room?room=${encodeURIComponent(roomId)}`);
+        if (!r.ok) throw new Error('daily');
+        const { url } = await r.json();
+        if (disposed || !frameRef.current) return;
+        // Arm the give-up timer BEFORE the join await — it only guards a join
+        // that hangs. A successful join resolves below and clears it; it must
+        // never fire against a call that already connected.
+        joinTimer = setTimeout(() => { if (!disposed) setStatus('error'); }, 15000);
+        adapter = await mountDaily(url); // resolves once actually joined
+        clearTimeout(joinTimer);
+        if (disposed) { adapter.dispose(); return; }
+        apiRef.current = adapter;
+        setStatus('ready');
+      } catch {
+        clearTimeout(joinTimer);
+        if (!disposed) setStatus('error');
+      }
     }
 
     (async () => {
@@ -99,10 +135,10 @@ export function JitsiStage({ roomId, name }) {
         const { jwt, appId, roomName } = await r.json();
         await loadExternalApi(appId);
         if (disposed || !frameRef.current) return;
-        api = mount('8x8.vc', `${appId}/${roomName}`, jwt);
-        apiRef.current = api;
-        // No join within 10s = the JaaS cap (or a hard block). Fall back.
-        joinTimer = setTimeout(() => failover(roomName), 10000);
+        adapter = mountJitsi(`${appId}/${roomName}`, jwt);
+        apiRef.current = adapter;
+        // No join within 10s = the JaaS cap (or a hard block). Fall back to Daily.
+        joinTimer = setTimeout(failover, 10000);
       } catch {
         if (!disposed) setStatus('error');
       }
@@ -110,7 +146,7 @@ export function JitsiStage({ roomId, name }) {
     return () => {
       disposed = true;
       clearTimeout(joinTimer);
-      try { api && api.dispose(); } catch { /* already gone */ }
+      try { adapter && adapter.dispose(); } catch { /* already gone */ }
       apiRef.current = null;
     };
     // Re-join only when the room changes; a name edit mid-session doesn't remount.
@@ -129,12 +165,12 @@ export function JitsiStage({ roomId, name }) {
         )}
       </div>
       <div className="jitsi-controls">
-        <button className={`mediabtn ${cam ? '' : 'off'}`} onClick={() => apiRef.current?.executeCommand('toggleVideo')}
+        <button className={`mediabtn ${cam ? '' : 'off'}`} onClick={() => apiRef.current?.toggleVideo()}
           aria-pressed={!cam} aria-label={cam ? 'Camera on' : 'Camera off'} disabled={status !== 'ready'}>
           <span aria-hidden="true">{cam ? '📷' : '🚫'}</span>
           <span className="mb-label">{cam ? 'Camera on' : 'Camera off'}</span>
         </button>
-        <button className={`mediabtn ${mic ? '' : 'off'}`} onClick={() => apiRef.current?.executeCommand('toggleAudio')}
+        <button className={`mediabtn ${mic ? '' : 'off'}`} onClick={() => apiRef.current?.toggleAudio()}
           aria-pressed={!mic} aria-label={mic ? 'Mic on' : 'Mic off'} disabled={status !== 'ready'}>
           <span aria-hidden="true">{mic ? '🎙' : '🔇'}</span>
           <span className="mb-label">{mic ? 'Mic on' : 'Mic off'}</span>
