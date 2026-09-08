@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { apiBase } from './config';
 import { getDid } from './device';
 
-// Login-free video via JaaS (8x8.vc). We fetch a server-signed JWT, load 8x8's
-// external_api.js for our app, and embed the call — no account, no moderator
-// gate. Nook's own buttons drive mute (executeCommand); Jitsi's toolbar is
-// hidden so the room still looks like Nook.
+// Login-free video with two interchangeable providers, tried in an order the
+// server picks (/video-config -> primary): JaaS (8x8.vc, signed JWT) and a
+// public Daily.co room. Whichever we lead with, a stalled join falls over to the
+// other; Nook's own Camera/Mic buttons drive mute on either via a uniform adapter.
 //
 // Mounted only during greet/regroup (the phases with cameras). Focus unmounts it
 // — nobody's on camera then — so there's no in-call state to manage across phases.
@@ -35,49 +35,57 @@ export function JitsiStage({ roomId, name }) {
 
   useEffect(() => {
     let disposed = false;
-    let adapter = null; // uniform { toggleVideo, toggleAudio, dispose } for whichever provider is live
-    let joinTimer = null;
-    let usingFallback = false;
+    let adapter = null; // uniform { toggleVideo, toggleAudio, dispose } for whichever provider joined
 
-    // Mount the JaaS (8x8) call and wrap it in the uniform adapter so Nook's own
-    // Camera/Mic buttons drive mute regardless of provider.
-    function mountJitsi(room, jwt) {
-      const a = new window.JitsiMeetExternalAPI('8x8.vc', {
-        roomName: room,
-        jwt,
-        parentNode: frameRef.current,
-        configOverwrite: {
-          prejoinPageEnabled: false, // legacy flag
-          prejoinConfig: { enabled: false }, // current flag — skip the "Join meeting" step
-          startWithAudioMuted: true,
-          startWithVideoMuted: true,
-          disableDeepLinking: true,
-          toolbarButtons: [], // Nook's own buttons drive mute; hide Jitsi's bar
-        },
-        interfaceConfigOverwrite: {
-          MOBILE_APP_PROMO: false,
-          SHOW_JITSI_WATERMARK: false,
-          SHOW_CHROME_EXTENSION_BANNER: false,
-        },
+    // Attempt JaaS (8x8). Resolves with an adapter once actually joined; rejects
+    // (and cleans up its iframe) if no join lands within 10s — the only signal we
+    // get when JaaS is over its free cap (it shows a "limit reached" page instead).
+    async function attemptJitsi() {
+      const r = await fetch(`${apiBase}/jitsi-token?room=${encodeURIComponent(roomId)}&name=${encodeURIComponent(name || 'Guest')}&did=${encodeURIComponent(getDid())}`);
+      if (!r.ok) throw new Error('jaas token');
+      const { jwt, appId, roomName } = await r.json();
+      await loadExternalApi(appId);
+      if (disposed || !frameRef.current) throw new Error('gone');
+      return await new Promise((resolve, reject) => {
+        const a = new window.JitsiMeetExternalAPI('8x8.vc', {
+          roomName: `${appId}/${roomName}`,
+          jwt,
+          parentNode: frameRef.current,
+          configOverwrite: {
+            prejoinPageEnabled: false, // legacy flag
+            prejoinConfig: { enabled: false }, // current flag — skip the "Join meeting" step
+            startWithAudioMuted: true,
+            startWithVideoMuted: true,
+            disableDeepLinking: true,
+            toolbarButtons: [], // Nook's own buttons drive mute; hide Jitsi's bar
+          },
+          interfaceConfigOverwrite: {
+            MOBILE_APP_PROMO: false,
+            SHOW_JITSI_WATERMARK: false,
+            SHOW_CHROME_EXTENSION_BANNER: false,
+          },
+        });
+        const stall = setTimeout(() => { try { a.dispose(); } catch { /* gone */ } reject(new Error('jaas stall')); }, 10000);
+        a.addListener('videoConferenceJoined', () => {
+          clearTimeout(stall);
+          resolve({
+            toggleVideo: () => a.executeCommand('toggleVideo'),
+            toggleAudio: () => a.executeCommand('toggleAudio'),
+            dispose: () => { try { a.dispose(); } catch { /* gone */ } },
+          });
+        });
+        a.addListener('audioMuteStatusChanged', (e) => setMic(!e.muted));
+        a.addListener('videoMuteStatusChanged', (e) => setCam(!e.muted));
       });
-      a.addListener('videoConferenceJoined', () => {
-        if (disposed) return;
-        clearTimeout(joinTimer); // joined for real — no failover needed
-        setStatus('ready');
-      });
-      a.addListener('audioMuteStatusChanged', (e) => setMic(!e.muted));
-      a.addListener('videoMuteStatusChanged', (e) => setCam(!e.muted));
-      return {
-        toggleVideo: () => a.executeCommand('toggleVideo'),
-        toggleAudio: () => a.executeCommand('toggleAudio'),
-        dispose: () => { try { a.dispose(); } catch { /* already gone */ } },
-      };
     }
 
-    // Mount a PUBLIC Daily.co room as the backup, in the same iframe slot. Daily's
-    // client lib is loaded on demand (only when we actually fail over) so it never
-    // weighs down the primary JaaS path.
-    async function mountDaily(url) {
+    // Attempt a PUBLIC Daily.co room. Daily's lib is loaded on demand. join()
+    // resolving is the authoritative "joined" signal; a hung join rejects at 15s.
+    async function attemptDaily() {
+      const r = await fetch(`${apiBase}/daily-room?room=${encodeURIComponent(roomId)}`);
+      if (!r.ok) throw new Error('daily room');
+      const { url } = await r.json();
+      if (disposed || !frameRef.current) throw new Error('gone');
       const { default: DailyIframe } = await import('@daily-co/daily-js');
       const frame = DailyIframe.createFrame(frameRef.current, {
         showLeaveButton: false,
@@ -86,66 +94,46 @@ export function JitsiStage({ roomId, name }) {
       frame.on('participant-updated', (e) => {
         if (e?.participant?.local) { setCam(!!e.participant.video); setMic(!!e.participant.audio); }
       });
-      // join() resolves only once we're actually in the call — that's our
-      // authoritative "joined" signal. We deliberately don't lean on the
-      // 'joined-meeting' event: it fires mid-await, which raced the give-up timer.
-      await frame.join({ url, startVideoOff: true, startAudioOff: true });
+      const stall = new Promise((_, rej) => setTimeout(() => rej(new Error('daily stall')), 15000));
+      try {
+        await Promise.race([frame.join({ url, startVideoOff: true, startAudioOff: true }), stall]);
+      } catch (e) {
+        try { frame.destroy(); } catch { /* gone */ }
+        throw e;
+      }
       const local = () => frame.participants().local || {};
       return {
         toggleVideo: () => frame.setLocalVideo(!local().video),
         toggleAudio: () => frame.setLocalAudio(!local().audio),
-        dispose: () => { try { frame.destroy(); } catch { /* already gone */ } },
+        dispose: () => { try { frame.destroy(); } catch { /* gone */ } },
       };
     }
 
-    // JaaS over its free cap never fires a join event — it swaps the iframe for
-    // 8x8's "limit reached" page — so a stalled join is our only signal. Silently
-    // re-mount on a public Daily room (no login, no JaaS cap) so video degrades to
-    // a backup instead of dying. Falls through to the error state if Daily won't
-    // join either, or isn't configured.
-    async function failover() {
-      if (disposed || usingFallback) return;
-      usingFallback = true;
-      try { adapter && adapter.dispose(); } catch { /* already gone */ }
-      if (disposed || !frameRef.current) return;
-      try {
-        const r = await fetch(`${apiBase}/daily-room?room=${encodeURIComponent(roomId)}`);
-        if (!r.ok) throw new Error('daily');
-        const { url } = await r.json();
-        if (disposed || !frameRef.current) return;
-        // Arm the give-up timer BEFORE the join await — it only guards a join
-        // that hangs. A successful join resolves below and clears it; it must
-        // never fire against a call that already connected.
-        joinTimer = setTimeout(() => { if (!disposed) setStatus('error'); }, 15000);
-        adapter = await mountDaily(url); // resolves once actually joined
-        clearTimeout(joinTimer);
-        if (disposed) { adapter.dispose(); return; }
-        apiRef.current = adapter;
-        setStatus('ready');
-      } catch {
-        clearTimeout(joinTimer);
-        if (!disposed) setStatus('error');
-      }
-    }
-
     (async () => {
+      // Server decides which provider leads (config flip, no rebuild). Default
+      // daily while JaaS is capped, so newcomers never see the "limit" page.
+      let primary = 'daily';
       try {
-        const r = await fetch(`${apiBase}/jitsi-token?room=${encodeURIComponent(roomId)}&name=${encodeURIComponent(name || 'Guest')}&did=${encodeURIComponent(getDid())}`);
-        if (!r.ok) throw new Error('token');
-        const { jwt, appId, roomName } = await r.json();
-        await loadExternalApi(appId);
-        if (disposed || !frameRef.current) return;
-        adapter = mountJitsi(`${appId}/${roomName}`, jwt);
-        apiRef.current = adapter;
-        // No join within 10s = the JaaS cap (or a hard block). Fall back to Daily.
-        joinTimer = setTimeout(failover, 10000);
-      } catch {
-        if (!disposed) setStatus('error');
+        const cfg = await fetch(`${apiBase}/video-config`);
+        if (cfg.ok) primary = (await cfg.json()).primary === 'jaas' ? 'jaas' : 'daily';
+      } catch { /* fall back to the default order */ }
+      if (disposed) return;
+      const order = primary === 'jaas' ? [attemptJitsi, attemptDaily] : [attemptDaily, attemptJitsi];
+      for (const attempt of order) {
+        if (disposed) return;
+        try {
+          adapter = await attempt();
+          if (disposed) { adapter.dispose(); return; }
+          apiRef.current = adapter;
+          setStatus('ready');
+          return;
+        } catch { /* stalled/failed — try the other provider */ }
       }
+      if (!disposed) setStatus('error'); // both providers failed
     })();
+
     return () => {
       disposed = true;
-      clearTimeout(joinTimer);
       try { adapter && adapter.dispose(); } catch { /* already gone */ }
       apiRef.current = null;
     };

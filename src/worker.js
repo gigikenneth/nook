@@ -80,6 +80,12 @@ export default {
       }
     }
 
+    // Which video provider the client should try first. A config flip (no
+    // rebuild) so we can lead with Daily while JaaS is capped, then switch back.
+    if (url.pathname === '/video-config') {
+      return json({ primary: env.VIDEO_PRIMARY === 'jaas' ? 'jaas' : 'daily' });
+    }
+
     // Backup video: when JaaS is over its free cap, the client fails over to a
     // PUBLIC Daily.co room (join by URL, no token — keeps Nook login-free). Same
     // hashed room name as the JaaS room. Optional: no key set = no backup.

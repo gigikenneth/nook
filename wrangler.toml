@@ -8,6 +8,9 @@ compatibility_date = "2024-09-23"
 # DAILY_DOMAIN is the public *.daily.co host below.
 [vars]
 DAILY_DOMAIN = "nook.daily.co"
+# Which provider to try first: "daily" or "jaas". Daily while JaaS is capped —
+# flip back to "jaas" (redeploy) when the JaaS MAU cap resets.
+VIDEO_PRIMARY = "daily"
 
 # The Worker also serves the built React app. Static files are served directly;
 # unmatched paths (/rooms, /room/:id/ws) fall through to the Worker. Routing is
