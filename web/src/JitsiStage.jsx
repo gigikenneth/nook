@@ -27,6 +27,7 @@ export function JitsiStage({ roomId, name }) { // eslint-disable-line no-unused-
       const { default: DailyIframe } = await import('@daily-co/daily-js');
       const frame = DailyIframe.createFrame(frameRef.current, {
         showLeaveButton: false,
+        activeSpeakerMode: false, // grid — show everyone at once, not just the speaker
         iframeStyle: { width: '100%', height: '100%', border: '0' },
       });
       frame.on('participant-updated', (e) => {
