@@ -29,7 +29,10 @@ function ChatMessage({ m, selfId, onReact, onEdit }) {
   const startEdit = () => { setEdraft(m.text); setEditing(true); };
   return (
     <div className={`chat-msg ${m.mine ? 'mine' : ''}`} style={m.mine ? undefined : { '--tint': chatColor(m.name) }}>
-      <span className="who">{m.mine ? 'You' : m.name}</span>
+      <div className="chat-head">
+        <span className="who">{m.mine ? 'You' : m.name}</span>
+        {m.t && <time className="chat-time" dateTime={new Date(m.t).toISOString()}>{new Date(m.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>}
+      </div>
       {editing ? (
         // Inline editor for your own message (#70). Enter saves, Shift+Enter adds
         // a line, Esc cancels.

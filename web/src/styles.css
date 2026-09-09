@@ -340,6 +340,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .chat-msg.mine { background: var(--pink); justify-self: end; color: var(--on-accent); }
 .chat-msg.mine .who { color: rgba(23, 23, 23, 0.62); } /* keep the name label dark on the mint bubble in both themes */
 .chat-msg .who { font-size: 11px; font-weight: 800; color: var(--accent-text); text-transform: uppercase; letter-spacing: .04em; }
+.chat-head { display: flex; align-items: baseline; gap: 6px; }
+.chat-time { font-size: 10px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chat-msg.mine .chat-time { color: rgba(23, 23, 23, 0.5); } /* readable on the mint bubble */
 .chat-msg .body { font-size: 14px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; } /* preserve multi-line messages (#70) */
 .edited-tag { font-size: 11px; font-weight: 500; opacity: .6; }
 /* Inline editor for your own message (#70). */
