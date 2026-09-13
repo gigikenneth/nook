@@ -74,7 +74,9 @@ Or start your own:
 - **Invite only** — private and unlisted; share the link yourself.
 
 There's a lightweight **chat** during the session, and one-tap **Download list**
-or **Download chat** if you want to keep anything.
+or **Download chat** if you want to keep anything. **Import list** brings a saved
+list back so you can pick up where you left off — it reads Nook's own download,
+plain text, Markdown checklists, or JSON, and skips tasks you already have.
 
 ## Find someone to cowork
 

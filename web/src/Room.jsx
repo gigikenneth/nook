@@ -128,6 +128,32 @@ function download(filename, text) {
   URL.revokeObjectURL(url);
 }
 
+// Parse an imported list so a downloaded list can be brought back later.
+// Accepts Nook's own "[x] text" dump, Markdown checkboxes ("- [ ] text"),
+// plain bullet/numbered lines, and JSON (array of strings or {text,done}).
+function parseList(text) {
+  const t = text.trim();
+  if (t.startsWith('[') || t.startsWith('{')) {
+    try {
+      const j = JSON.parse(t);
+      const arr = Array.isArray(j) ? j : j.tasks || j.list || [];
+      return arr.map((x) =>
+        typeof x === 'string' ? { text: x.trim(), done: false }
+                              : { text: String(x.text ?? '').trim(), done: !!x.done }
+      ).filter((x) => x.text);
+    } catch { /* not JSON, fall through to line parsing */ }
+  }
+  return text.split(/\r?\n/).map((line) => {
+    const s = line.trim();
+    if (!s) return null;
+    if (/^nook (to-do list|chat log)$/i.test(s) || s === '(empty)') return null; // our headers
+    const box = s.match(/^[-*]?\s*\[([ xX])\]\s*(.+)$/);   // [x]/[ ] or "- [x]"
+    if (box) return { text: box[2].trim(), done: box[1].toLowerCase() === 'x' };
+    const bullet = s.replace(/^([-*]|\d+[.)])\s+/, '');     // strip -, *, "1." bullets
+    return { text: bullet.trim(), done: false };
+  }).filter(Boolean);
+}
+
 function Timer({ endsAt, label }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(t); }, []);
@@ -231,6 +257,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   // Keep the chat log pinned to the newest message.
   const logRef = useRef(null);
   const chatTaRef = useRef(null); // composer textarea, to reset its height after send
+  const fileRef = useRef(null);   // hidden file input for importing a list
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [chat.length]);
 
   // Keep the phone/desktop screen awake while you're in a room (#17).
@@ -331,6 +358,21 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     const body = chat.map((m) => `[${new Date(m.t).toLocaleTimeString()}] ${m.name}: ${m.text}`).join('\n');
     download('nook-chat.txt', `Nook chat log\n\n${body || '(no messages)'}\n`);
   }
+  function importList(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';                 // let the same file be re-picked
+    if (!file) return;
+    file.text().then((txt) => {
+      const parsed = parseList(txt);
+      if (!parsed.length) return;
+      setTasks((ts) => {
+        const seen = new Set(ts.map((t) => t.text));
+        const fresh = parsed.filter((p) => !seen.has(p.text))
+                            .map((p) => ({ id: nextTaskId(), text: p.text, done: p.done }));
+        return [...ts, ...fresh];
+      });
+    });
+  }
 
   if (status === 'kicked') return <Ended msg="You were removed from this room." onLeave={onLeave} />;
   if (status === 'full') return <Ended msg="That room is full. Four is the max." onLeave={onLeave} />;
@@ -380,6 +422,8 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       <p className="chat-note">Chat isn’t saved. It clears when you leave or the room closes.</p>
       <div className="dl-row">
         <button className="secondary sm" onClick={downloadTodos}>Download list</button>
+        <button className="secondary sm" onClick={() => fileRef.current?.click()}>Import list</button>
+        <input ref={fileRef} type="file" accept=".txt,.md,.csv,.json" hidden onChange={importList} />
         <button className="secondary sm" onClick={downloadChat} disabled={chat.length === 0}>Download chat</button>
       </div>
     </aside>
