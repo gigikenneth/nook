@@ -33,31 +33,26 @@ is down, the app shows "Can't reach the server" rather than a misleading error.
 In dev, `web/src/config.js` points the app at `http://localhost:8787` explicitly;
 in production it uses the same origin as the page.
 
-### Video (JaaS) in local dev
+### Video (Daily.co) in local dev
 
-Video is an embedded Jitsi call via JaaS (8x8.vc). To turn it on locally, put your
-JaaS credentials in a gitignored `.dev.vars` at the repo root (`wrangler dev` reads
-it):
+Video is an embedded Daily.co call. To turn it on locally, put your Daily API key
+in a gitignored `.dev.vars` at the repo root (`wrangler dev` reads it); the
+`DAILY_DOMAIN` var comes from `wrangler.toml`:
 
 ```
-JAAS_APP_ID=vpaas-magic-cookie-…
-JAAS_KID=vpaas-magic-cookie-…/abc123
-JAAS_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----
+DAILY_API_KEY=your-daily-api-key
 ```
 
-The PEM can be a single line (escaped newlines are fine). Without these,
-`GET /jitsi-token` returns `503` and video is simply off — the rest of the app
-(presence, rooms, chat, timer) still works under `wrangler dev`. To sanity-check a
-token by hand, `scripts/jaas-jwt.mjs` mints a test JWT from an App ID, Key ID, and
-PEM.
+Without it, `GET /daily-room` returns `503` and video is simply off — the rest of
+the app (presence, rooms, chat, timer) still works under `wrangler dev`.
 
 ### Testing a multi-person session
 
 1. Open <http://localhost:5173>, enter a name, and **Open room**.
 2. Copy the invite link (or the `#room/<id>` URL).
 3. Open it in a second browser profile / incognito window, enter a different name,
-   and join. You'll see the embedded Jitsi call, the shared timer, the goal-sharing
-   turns, chat, and kick all working across the two.
+   and join. You'll see the embedded Daily.co call, the shared timer, the
+   goal-sharing turns, chat, and kick all working across the two.
 
 ## Project structure
 
@@ -66,8 +61,9 @@ nook/
 ├── wrangler.toml            # Cloudflare config: Worker entry, assets, DO bindings
 ├── package.json             # root: wrangler dev/deploy scripts
 ├── src/                     # the Cloudflare Worker (server side)
-│   ├── worker.js            #   HTTP router: serves app, /rooms, /jitsi-token, /report, WS routes
-│   ├── jaas.js              #   JaaS JWT signer (WebCrypto RS256) + jitsiRoomName()
+│   ├── worker.js            #   HTTP router: serves app, /rooms, /daily-room, /report, WS routes
+│   ├── daily.js             #   creates/reuses a public Daily.co room per Nook room
+│   ├── jaas.js              #   room-name hash (jitsiRoomName); legacy JaaS signer, no longer wired up
 │   ├── RoomDO.js            #   Durable Object — one per room (state, persistence, timer, signaling)
 │   ├── LobbyDO.js           #   Durable Object — global directory + presence hub
 │   ├── RoomDO.test.mjs      #   node self-check: session persist/pause/resume + camera pref
@@ -81,8 +77,8 @@ nook/
         ├── App.jsx          #   top level: shows Home or Room based on session
         ├── Home.jsx         #   landing: live directory + "around now" + create/join form
         ├── Room.jsx         #   the session UI: phases, tasks, chat, check-in
-        ├── JitsiStage.jsx   #   embeds the Jitsi call (8x8.vc external_api.js), Nook mic/cam buttons drive it
-        ├── useRoom.js       #   the WebSocket + coworking-state hook (video is the embedded Jitsi call in JitsiStage.jsx)
+        ├── JitsiStage.jsx   #   embeds the Daily.co call (@daily-co/daily-js), Nook mic/cam buttons drive it (legacy filename)
+        ├── useRoom.js       #   the WebSocket + coworking-state hook (video is the embedded Daily.co call in JitsiStage.jsx)
         ├── useLobby.js      #   presence socket: roster, ping, watch mode, camera pref
         ├── useWakeLock.js   #   Screen Wake Lock while in a room
         ├── config.js        #   resolves the API / WebSocket origin
@@ -97,12 +93,13 @@ nook/
 - **Client state & networking:** `web/src/useRoom.js`. It owns the room WebSocket
   and all coworking state (presence, phases, timer, chat, tasks, goals, the
   camera-pref signal) and handles every server message. It's WebSocket-only —
-  video lives entirely in the embedded Jitsi call. If you're touching presence,
+  video lives entirely in the embedded Daily.co call. If you're touching presence,
   phases, or reconnection, it's here.
-- **Video:** `web/src/JitsiStage.jsx`. Embeds the JaaS (8x8.vc) Jitsi call,
-  login-free — Nook's own mic/cam buttons drive it, the Jitsi toolbar and prejoin
-  are hidden, and it's mounted only in greet/regroup. The Worker mints the JaaS
-  JWT (`src/jaas.js`, served at `GET /jitsi-token`).
+- **Video:** `web/src/JitsiStage.jsx` (legacy filename, now Daily-only). Embeds a
+  public Daily.co call via `@daily-co/daily-js`, login-free — Nook's own mic/cam
+  buttons drive it, Daily's prejoin screen is skipped, and it's mounted only in
+  greet/regroup. The Worker creates/reuses the room (`src/daily.js`, served at
+  `GET /daily-room`); the room name is an unguessable hash of the Nook room id.
 - **Session UI:** `web/src/Room.jsx`. Phase panels (greet/focus/regroup), the
   editable task list, mic/cam toggles, chat.
 - **Directory & entry:** `web/src/Home.jsx`. The live room list and the
@@ -154,7 +151,7 @@ node web/src/theme.test.mjs  # theme (dark mode) helper
 Everything else relies on manual, multi-tab testing (open a room in two profiles
 and exercise the flow). When adding non-trivial logic, verify at minimum:
 
-- Two people can join and see each other in the embedded Jitsi call in greet.
+- Two people can join and see each other in the embedded Daily.co call in greet.
 - The full phase cycle runs: greet → focus (timer counts) → regroup → greet.
 - Goal-sharing turns advance and the ready flow gates focus correctly.
 - Leaving/kicking updates everyone's view and migrates the host if needed.
@@ -178,7 +175,7 @@ and exercise the flow). When adding non-trivial logic, verify at minimum:
 
 - **Plain JavaScript**, no TypeScript, no build step for the Worker.
 - **No new dependencies** for something a few lines can do. The whole client is
-  React + the platform (WebSocket, Web Audio) plus the embedded Jitsi call (the
-  JaaS SDK, loaded from 8x8.vc) for video — keep it that way.
+  React + the platform (WebSocket, Web Audio) plus the embedded Daily.co call
+  (`@daily-co/daily-js`) for video — keep it that way.
 - **Comments name the reason.** e.g. why the call joins muted, why a full
   room closes with `4001` instead of rejecting the upgrade.

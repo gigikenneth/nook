@@ -5,6 +5,13 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'September 13, 2026',
+    items: [
+      'Import a list: bring back a list you downloaded before, or paste one in from notes, so you can pick up where you left off. Reads Nook’s own download, plain text, Markdown checklists, or JSON, and skips anything already on your list',
+      'Video now runs on a single, steadier provider end to end. Still no sign-in, and nothing said or shown is ever recorded',
+    ],
+  },
+  {
     date: 'August 26, 2026',
     items: [
       'A short countdown after someone hits start, so the call stays live for a few seconds instead of cutting to heads-down abruptly. Everyone sees the same “Heads down in 3, 2, 1”',
