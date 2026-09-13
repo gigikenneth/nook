@@ -11,7 +11,7 @@ import { apiBase } from './config';
 // path lived here previously — re-add an attemptJitsi + failover if we bring it
 // back. Mounted only during greet/regroup (the phases with cameras).
 
-export function JitsiStage({ roomId, name }) { // eslint-disable-line no-unused-vars
+export function JitsiStage({ roomId, name }) {
   const frameRef = useRef(null);
   const apiRef = useRef(null);
   const [status, setStatus] = useState('loading'); // loading | ready | error
@@ -37,7 +37,7 @@ export function JitsiStage({ roomId, name }) { // eslint-disable-line no-unused-
       // "joined" signal. A hung join rejects at 15s.
       const stall = new Promise((_, rej) => setTimeout(() => rej(new Error('daily stall')), 15000));
       try {
-        await Promise.race([frame.join({ url, startVideoOff: true, startAudioOff: true }), stall]);
+        await Promise.race([frame.join({ url, userName: name, startVideoOff: true, startAudioOff: true }), stall]);
       } catch (e) {
         try { frame.destroy(); } catch { /* gone */ }
         throw e;
