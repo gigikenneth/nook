@@ -12,9 +12,9 @@ signaling protocol, and the data model.
 1. **Free to run forever.** No always-on server, no video server, no database.
    Everything lives inside free tiers.
 2. **No personal data stored.** Names, to-do lists, chat, and video are ephemeral
-   — never written to disk. Video/audio run through an embedded Jitsi call (JaaS),
-   which Nook never records: recording and transcription are disabled in the token.
-   No accounts, no analytics. Two things *are* persisted, and neither identifies a
+   — never written to disk. Video/audio run through an embedded Daily.co call,
+   which Nook never records: it enables no recording property, and nothing is
+   written to disk. No accounts, no analytics. Two things *are* persisted, and neither identifies a
    person: the room's **session state** (phase + countdown + lengths), kept in that
    room's Durable Object storage so a session survives reconnects and deploys; and
    the **block graph** for ignore (#28), kept in the singleton lobby's storage as
@@ -22,7 +22,7 @@ signaling protocol, and the data model.
    [Session persistence](#session-persistence) and [On-device id + blocking](#on-device-id--blocking).
 3. **Small rooms.** Four people maximum. This is a product choice — a nook is
    meant to feel like a small table, not a webinar — and it also keeps the call
-   well inside JaaS's free tier.
+   well inside Daily.co's free tier.
 
 ## The pieces
 
@@ -32,23 +32,24 @@ signaling protocol, and the data model.
   │  Home  ─ live directory     │  HTTP  │  Worker (src/worker.js)       │
   │        ─ create / join      │ ─────► │   • serves the built app      │
   │                             │        │   • GET  /rooms   → LobbyDO   │
-  │  Room  ─ Jitsi call (JaaS)  │  WS    │   • WS   /room/:id/ws → RoomDO│
-  │        ─ timer / phases     │ ◄────► │   • GET  /jitsi-token → JaaS  │
+  │  Room  ─ Daily.co call      │  WS    │   • WS   /room/:id/ws → RoomDO│
+  │        ─ timer / phases     │ ◄────► │   • GET  /daily-room → Daily  │
   │        ─ tasks / chat       │        │  RoomDO   (one per room)      │
   │                             │        │  LobbyDO  (one, global)       │
   └──────────┬──────────────────┘        └──────────────────────────────┘
-             │  embedded call to 8x8.vc (JaaS SFU handles media + NAT)
+             │  embedded call to Daily.co (its SFU handles media + NAT)
              ▼
-        8x8.vc (Jitsi as a Service)
+        Daily.co
 ```
 
 | Component | File | Responsibility |
 |:--|:--|:--|
-| **Worker** | `src/worker.js` | HTTP entrypoint. Serves the static app, exposes the room directory (`/rooms`), signs Jitsi tokens (`/jitsi-token`), and upgrades the room WebSocket (`/room/:id/ws`). |
-| **JaaS signer** | `src/jaas.js` | WebCrypto RS256 signer. Builds a short-lived JaaS JWT (`signJaasToken`) and derives a stable Jitsi room name from a Nook room id (`jitsiRoomName`). |
+| **Worker** | `src/worker.js` | HTTP entrypoint. Serves the static app, exposes the room directory (`/rooms`), creates-or-returns the Daily room URL (`/daily-room`), and upgrades the room WebSocket (`/room/:id/ws`). (A legacy `/jitsi-token` endpoint remains but is inert — see below.) |
+| **Daily room helper** | `src/daily.js` | `dailyRoomUrl(env, roomId)` creates-or-reuses a public Daily.co room and returns its URL. |
+| **Room-name / JaaS signer (legacy)** | `src/jaas.js` | Only `jitsiRoomName(roomId)` is still used — it derives a stable, unguessable room name from a Nook room id (imported by `daily.js`). The RS256 JaaS JWT signer (`signJaasToken`) is inert: JaaS was pulled out of rotation (#81), so nothing calls it. |
 | **RoomDO** | `src/RoomDO.js` | One [Durable Object](https://developers.cloudflare.com/durable-objects/) per room. Holds live WebSocket sessions in memory, runs the phase timer via DO alarms, carries all coworking state, and enforces the cap of 4. Never touches media. |
 | **LobbyDO** | `src/LobbyDO.js` | A single global Durable Object. A live registry of open (public) rooms for the landing page, and the presence hub for the "who's around" list and cowork invites. |
-| **Web app** | `web/` | React + Vite front end. `useRoom.js` owns the WebSocket and coworking state (WS-only, no media); `JitsiStage.jsx` embeds the JaaS call. |
+| **Web app** | `web/` | React + Vite front end. `useRoom.js` owns the WebSocket and coworking state (WS-only, no media); `JitsiStage.jsx` (legacy filename, now Daily-only) embeds the Daily.co call. |
 
 ### Why Durable Objects
 
@@ -119,14 +120,14 @@ in-progress session back to greet. Now the session is durable:
 Per-person state (goals, ready/shared, camera prefs) is **not** persisted — it
 belongs to a live socket and is rebuilt when people (re)join.
 
-**Camera/mic rule:** the Jitsi call joins **muted** (`startWithAudioMuted` /
-`startWithVideoMuted`), so camera and mic default **off** and there is no
+**Camera/mic rule:** the Daily call joins **muted** (`startVideoOff: true` /
+`startAudioOff: true`), so camera and mic default **off** and there is no
 `getUserMedia` prompt on join — you appear as an avatar until you toggle. Nook's
-own "Camera on" / "Mic on" buttons drive Jitsi through
-`executeCommand('toggleVideo' | 'toggleAudio')` rather than owning any tracks
-themselves. Device errors (permission denied, no device, device in use) and
+own "Camera on" / "Mic on" buttons drive Daily through
+`frame.setLocalVideo(...)` / `frame.setLocalAudio(...)` rather than owning any
+tracks themselves. Device errors (permission denied, no device, device in use) and
 track loss (the OS or another app grabbing the camera, a phone backgrounding the
-tab) are Jitsi's problem now — the old `ensureMedia` / dead-track recovery /
+tab) are Daily's problem now — the old `ensureMedia` / dead-track recovery /
 `mediaErrorMessage` logic is gone.
 
 **Camera preference (a social signal).** Separate from the actual camera, each
@@ -134,7 +135,7 @@ person can flag how they'd rather be seen — `on` ("up for camera"), `off`
 ("camera-shy"), or unset. It's purely a hint carried over the WebSocket
 (`campref` message; carried in `welcome`, `syncLobby` occupants, and the lobby
 roster) and shown in directory rows and the "around now" list. It is **no longer
-rendered on video tiles** — those are now Jitsi's own grid — and it never touches
+rendered on video tiles** — those are now Daily's own grid — and it never touches
 the real track.
 
 **Greet heartbeat:** while a public room sits in greet waiting for people, the DO
@@ -165,7 +166,7 @@ connection — see [On-device id + blocking](#on-device-id--blocking)).
 The Worker routes it to the room's Durable Object, which relays JSON messages.
 Video and audio never go over this socket — it carries only coworking state
 (presence, phases, timer, chat, tasks, goals, camera preference). The actual
-media runs in a separate embedded Jitsi call (see [Video](#video-embedded-jitsi-jaas)).
+media runs in a separate embedded Daily.co call (see [Video](#video-embedded-dailyco)).
 
 ### Client → server
 
@@ -226,39 +227,43 @@ foregrounded) and the `online` event, with a fresh retry budget. Because the
 session is persisted and paused server-side, a reconnect resumes the same
 session — timer and phase intact — instead of restarting.
 
-## Video: embedded Jitsi (JaaS)
+## Video: embedded Daily.co
 
-Media is handled entirely by an embedded [Jitsi](https://jitsi.org/) call, hosted
-on [JaaS](https://jaas.8x8.vc/) (Jitsi as a Service, 8x8.vc). Nook owns no tracks,
-no peer connections, and no ICE — 8x8's SFU carries all media and does its own NAT
-traversal. Nook migrated to this from an earlier Cloudflare Realtime SFU (and,
-before that, a WebRTC mesh); both are gone from the code.
+Media is handled entirely by an embedded [Daily.co](https://daily.co/) call. Nook
+owns no tracks, no peer connections, and no ICE — Daily's SFU carries all media
+and does its own NAT traversal. Nook migrated to this from JaaS (Jitsi as a
+Service, pulled out of rotation in #81), and before that a Cloudflare Realtime SFU
+and a WebRTC mesh; all are gone from the code.
 
-- **`web/src/JitsiStage.jsx`** loads `https://8x8.vc/<appId>/external_api.js` and
-  embeds the call with `JitsiMeetExternalAPI`. It fetches a token from the Worker
-  and joins room `<appId>/<roomName>`. Nook hides Jitsi's own chrome —
-  `toolbarButtons: []`, prejoin skipped (`prejoinConfig.enabled: false` +
-  legacy `prejoinPageEnabled: false`) — and joins muted, so the only visible
-  controls are Nook's own Camera/Mic buttons, which drive Jitsi via
-  `executeCommand('toggleVideo' | 'toggleAudio')`. The stage is mounted **only
-  during greet and regroup**; in focus it unmounts entirely (cameras are off then).
-- **`src/jaas.js`** is a WebCrypto RS256 signer. `signJaasToken(env, {room, name})`
-  builds a JaaS JWT — header `kid: <appId>/<keyId>`; payload `aud: 'jitsi'`,
-  `iss: 'chat'`, `sub: <appId>`, the room, `exp` two hours out,
-  `context.user.{name, moderator: 'true'}`, and `context.features` with
-  recording, transcription, livestreaming, and outbound-call all `'false'`.
-  `jitsiRoomName(roomId)` returns `nook-<first 40 hex of SHA-256(roomId)>` — a
-  stable, collision-free, valid Jitsi room name derived from any Nook room id.
-- **Worker endpoint.** `GET /jitsi-token?room=<id>&name=<name>` returns
-  `{ jwt, appId, roomName }` (400 if no room; 503 if the `JAAS_*` secrets are
-  unset — see [DEPLOYMENT.md](DEPLOYMENT.md)).
+- **`web/src/JitsiStage.jsx`** (legacy filename, now Daily-only) embeds the call
+  with `@daily-co/daily-js` `DailyIframe.createFrame`. It fetches the room URL
+  from the Worker (`GET /daily-room?room=<id>` → `{ url }`) and joins with
+  `frame.join({ url, startVideoOff: true, startAudioOff: true })`, so it joins
+  muted and Daily's prejoin screen is skipped. The only visible controls are
+  Nook's own Camera/Mic buttons, which drive Daily via `frame.setLocalVideo(...)`
+  / `frame.setLocalAudio(...)`. A hung join rejects at 15s and shows a Reload
+  overlay. The stage is mounted **only during greet and regroup**; in focus it
+  unmounts entirely (cameras are off then).
+- **`src/daily.js`** `dailyRoomUrl(env, roomId)` creates-or-reuses a **public**
+  Daily room via `POST https://api.daily.co/v1/rooms` with `privacy: 'public'`
+  and `properties: { exp` (two hours out)`, enable_prejoin_ui: false,
+  start_video_off: true, start_audio_off: true }`. A 400 "already exists" means
+  the room is still live, so it's reused. Public rooms join by URL with **no
+  token**, which keeps Nook login-free, and they self-expire after 2h so none
+  accumulate. The room name is `jitsiRoomName(roomId)` (still in `src/jaas.js`) =
+  `nook-<first 40 hex of SHA-256(roomId)>` — a stable, unguessable name derived
+  from any Nook room id.
+- **Worker endpoint.** `GET /daily-room?room=<id>` returns `{ url }` (400 if no
+  room; 503 if the `DAILY_API_KEY` / `DAILY_DOMAIN` config is unset — see
+  [DEPLOYMENT.md](DEPLOYMENT.md)). The old `GET /jitsi-token` endpoint and the
+  `signJaasToken` signer remain in the code but are inert — nothing calls them.
 
-**Security model.** The visitor never authenticates; the Worker's server-side
-signature *is* the auth. Because the Jitsi room name is a hash of the Nook room
-id, only someone already admitted to the (max-4, WebSocket-gated) Nook room can
-obtain a valid token — Nook's WebSocket gate is the room's access control. And
-because recording and transcription are disabled in the token, no participant can
-record the call.
+**Security model.** There is no token to sign, so the access control is the
+unguessable room name plus Nook's WebSocket gate. Because the Daily room name is a
+SHA-256 hash of the Nook room id, only someone already admitted to the (max-4,
+WebSocket-gated) Nook room learns the URL — the URL is the capability, and its
+unguessable name is what protects it. Nook enables no recording property on the
+room, and nothing is written to disk.
 
 ## The lobby / live directory
 
@@ -410,12 +415,11 @@ list is React-only — `{id, text, done}` objects personal to you.
 - **Refresh keeps your seat.** A refresh (or a mobile lock/background) reconnects
   via `sessionStorage`, and the server-side session is paused and persisted, so
   you land back in the same phase with the timer intact.
-- **Media is off-loaded to JaaS.** 8x8 carries all media and NAT traversal, so
-  strict-NAT users connect without any STUN/TURN of Nook's own. JaaS's free tier
-  covers up to 25,000 monthly active users; everything else stays on free
-  Cloudflare tiers.
+- **Media is off-loaded to Daily.co.** Daily carries all media and NAT traversal,
+  so strict-NAT users connect without any STUN/TURN of Nook's own. Daily's free
+  tier covers small rooms; everything else stays on free Cloudflare tiers.
 - **Four-person rooms.** The cap is a product choice — a nook should feel like a
-  small table — and it keeps the call comfortably inside the JaaS free tier.
+  small table — and it keeps the call comfortably inside Daily.co's free tier.
 - **Ephemeral *personal* data.** No accounts, no history of who was there, no chat
   archive — names, lists, chat, and video are never stored. Two anonymous things
   persist: the room's session state (so you can resume it), wiped after 6h empty;

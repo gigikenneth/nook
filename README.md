@@ -110,7 +110,7 @@ stored**.
 
 - Your name, to-do list, and chat live only in your browser and in the room's live memory. A copy of your list and chat is kept in your own browser tab so a refresh or a dropped connection can restore them; it never leaves your device and clears when you close the tab.
 - Chat is relayed live and is never stored on a server — the shared history disappears when the room does.
-- Video and audio run over an **embedded Jitsi call** (Jitsi as a Service), encrypted in transit and live-only. **Recording is disabled in the token Nook issues — no one in the call can record it**, and nothing is ever written to disk. The call exists only while the room does.
+- Video and audio run over an **embedded Daily.co call**, encrypted in transit and live-only. **Nook never turns on recording**, and nothing is ever written to disk. The call exists only while the room does.
 - Two small pieces of state are kept on the server, and neither identifies you:
   - The room's own **session state** — its phase and countdown — so you can pick
     up a session where you left off. It holds no names, goals, or messages, and
@@ -123,24 +123,24 @@ stored**.
 
 **Do I need an account?** No. Type a name and you're in.
 
-**Is my video recorded?** No. Video and audio run over an embedded Jitsi call,
-encrypted in transit, and **recording is disabled in the token Nook issues** — no
-one in the call can record it, and nothing is ever written to disk. The call is
-live-only and gone the moment the room ends.
+**Is my video recorded?** No. Video and audio run over an embedded Daily.co call,
+encrypted in transit, and **Nook never turns recording on** — nothing is ever
+written to disk. The call is live-only and gone the moment the room ends.
 
-**What if my camera won't connect?** The Jitsi call handles device errors and NAT
+**What if my camera won't connect?** The Daily call handles device errors and NAT
 traversal itself, so it works across strict networks without any setup on your
 end. If your own camera won't start, Nook tells you why (blocked, no device, or in
 use by another app) instead of silently doing nothing. Even if video struggles,
 presence, the timer, chat, and your list keep working.
 
-**How does the video work?** The call is an embedded **Jitsi** room (Jitsi as a
-Service). When you turn on your camera, Nook's Worker mints a short-lived,
-signed token so you join with no account and no moderator gate — you log into
-nothing. The room name is a hash of Nook's room id, so only people already in the
-(max-four) Nook room can get a token for it. Jitsi's own toolbar is hidden and
-Nook's Camera/Mic buttons drive the call, so it still looks and feels like Nook.
-Media is encrypted in transit, and recording is disabled in the token.
+**How does the video work?** The call is an embedded **Daily.co** room. When you
+join, Nook's Worker creates (or reuses) a **public** Daily room and hands back its
+URL, so you join with no account and no moderator gate — you log into nothing. The
+room name is a hash of Nook's room id, so only people already in the (max-four)
+Nook room know it, and the room self-expires so none linger. Daily's prejoin
+screen is skipped and Nook's Camera/Mic buttons drive the call, so it still looks
+and feels like Nook. Media is encrypted in transit, and Nook never turns on
+recording.
 
 **Can I stop seeing someone?** Yes. Hit **Ignore** next to a person in "Around
 now" and neither of you shows up for the other there, and you can't pull each
@@ -152,8 +152,8 @@ from the "Ignored" list on the home screen.
 **Can more than four people join?** No — four is the cap, by design.
 
 **Is it really free?** Yes. It runs entirely on free infrastructure — Cloudflare's
-free tiers, plus Jitsi as a Service, which is free up to 25,000 monthly active
-users. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) if you want to run your own.
+free tiers, plus Daily.co's free tier for the video. See
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) if you want to run your own.
 
 ## Run it yourself
 
@@ -162,7 +162,7 @@ free on Cloudflare.
 
 - **[Development guide](docs/DEVELOPMENT.md)** — local setup, project layout, how to contribute.
 - **[Architecture](docs/ARCHITECTURE.md)** — how it works, the signaling protocol, the data model.
-- **[Deployment guide](docs/DEPLOYMENT.md)** — ship your own in one command, custom domains, setting up video via JaaS.
+- **[Deployment guide](docs/DEPLOYMENT.md)** — ship your own in one command, custom domains, setting up video via Daily.co.
 
 Quick start:
 

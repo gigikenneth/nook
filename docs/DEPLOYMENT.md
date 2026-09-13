@@ -84,56 +84,49 @@ VITE_API_BASE=https://nook.<you>.workers.dev npm --prefix web run build
 means "same origin as the page". The Worker already sends permissive CORS headers
 for the cross-origin case.
 
-## Setting up video (JaaS)
+## Setting up video (Daily.co)
 
-Video is an embedded **Jitsi** call via **JaaS** (Jitsi as a Service, 8x8.vc),
-login-free. There's no STUN/TURN/ICE to configure — 8x8 runs the media. Video
-needs three Worker secrets from a free JaaS account; without them `/jitsi-token`
+Video is an embedded **Daily.co** call, login-free. There's no STUN/TURN/ICE to
+configure — Daily runs the media and NAT traversal. Video needs one Worker secret
+(your Daily API key) plus the `DAILY_DOMAIN` var; without them `/daily-room`
 returns a friendly 503 and video is disabled (the rest of Nook still works).
 
-1. Create a free account at **jaas.8x8.vc** (free up to 25,000 monthly active
-   users). It provisions an app — copy the **App ID** (looks like
-   `vpaas-magic-cookie-...`).
-2. In the console go to **API Keys → Add API key → Generate key pair**. Download
-   the **private key** (`.pem`) and note the **Key ID**.
-3. Set the three secrets. `JAAS_APP_ID` is also sent to the browser (not really
-   secret, but stored as one); `JAAS_PRIVATE_KEY` is the RSA private key (PKCS8
-   PEM) that signs the JWTs — keep it secret:
+1. Create a free account at **daily.co**. Your account gets a domain like
+   `your-team.daily.co`.
+2. In the dashboard open **Developers** and copy your **API key**.
+3. Set the domain (a plain var in `wrangler.toml`) and the API key (a secret):
 
    ```bash
-   printf 'vpaas-magic-cookie-XXXX' | npx wrangler secret put JAAS_APP_ID
-   printf 'YOUR_KEY_ID'             | npx wrangler secret put JAAS_KID
-   npx wrangler secret put JAAS_PRIVATE_KEY < path/to/your-private-key.pem
+   # In wrangler.toml, point DAILY_DOMAIN at your own subdomain:
+   #   [vars]
+   #   DAILY_DOMAIN = "your-team.daily.co"
+   npx wrangler secret put DAILY_API_KEY
    ```
 
-   (The signer strips whitespace, so the multi-line PEM is fine piped as-is.)
-
 4. Redeploy: `npx wrangler deploy`. Verify with
-   `curl "https://<your-worker>/jitsi-token?room=test&name=x"` — you should get
-   JSON `{ jwt, appId, roomName }`.
+   `curl "https://<your-worker>/daily-room?room=test"` — you should get JSON
+   `{ url }`.
 
-For **local dev**, put the same three keys in a gitignored `.dev.vars` at the
-repo root so `wrangler dev` can sign tokens:
+For **local dev**, put the API key in a gitignored `.dev.vars` at the repo root
+(`DAILY_DOMAIN` comes from `wrangler.toml`):
 
 ```
-JAAS_APP_ID=vpaas-magic-cookie-XXXX
-JAAS_KID=YOUR_KEY_ID
-JAAS_PRIVATE_KEY="...single-line PEM..."
+DAILY_API_KEY=your-daily-api-key
 ```
 
-There's also a helper `scripts/jaas-jwt.mjs` (local, zero-dependency) that mints
-a JaaS JWT from your App ID + Key ID + PEM for manual testing:
-
-```bash
-node scripts/jaas-jwt.mjs <APP_ID> <KEY_ID> path/to/key.pem
-```
+Nook creates one **public** Daily room per Nook room, named by an unguessable
+SHA-256 hash of the room id, and lets it self-expire after 2h — so rooms don't
+accumulate, and only people already in the Nook room ever learn the URL.
 
 ### Dead secrets
 
-The old Cloudflare Realtime SFU / WebRTC-mesh setup is gone. If any of these
-secrets are still set, they're unused and safe to delete: `REALTIME_APP_ID`,
+JaaS (8x8) and the earlier Cloudflare Realtime SFU / WebRTC-mesh setups are gone.
+If any of these secrets are still set, they're unused and safe to delete:
+`JAAS_APP_ID`, `JAAS_KID`, `JAAS_PRIVATE_KEY`, `REALTIME_APP_ID`,
 `REALTIME_APP_TOKEN`, `TURN_KEY_ID`, `TURN_API_TOKEN`, `METERED_DOMAIN`,
-`METERED_SECRET_KEY`.
+`METERED_SECRET_KEY`. (`src/jaas.js` and `scripts/jaas-jwt.mjs` linger only for
+the room-name hash and legacy reference — the JaaS token path is no longer wired
+up.)
 
 ## In-app bug reports (optional)
 
@@ -156,8 +149,8 @@ Everything fits inside free tiers:
 - **Durable Objects** — roughly 100k requests/day on the free plan. Each room and
   the lobby are DOs; signaling messages are cheap.
 - **Static asset serving** — free with the Worker.
-- **Video** — runs on 8x8's JaaS (free up to 25,000 monthly active users), so it
-  uses zero of your server bandwidth.
+- **Video** — runs on Daily.co's free tier, so it uses zero of your server
+  bandwidth.
 
 A sustained spike past the free tier would need a paid Cloudflare plan, which is
 unlikely for a niche four-person tool.
@@ -168,5 +161,5 @@ unlikely for a niche four-person tool.
 |:--|:--|
 | `You need a workers.dev subdomain` (code 10063) | First-time account. Open **Workers & Pages** in the dashboard once (see First-time setup). |
 | "Can't reach the server" in the app | The Worker isn't reachable. In local dev, make sure the Worker is running on :8787 (`npm run dev`). |
-| Video is disabled / no call appears | The `JAAS_*` secrets aren't set, so `/jitsi-token` returns 503. Set up video (above). |
+| Video is disabled / no call appears | `DAILY_API_KEY` or `DAILY_DOMAIN` isn't set, so `/daily-room` returns 503. Set up video (above). |
 | Directory is empty | Only **public** rooms are listed, and only while occupied. Invite-only rooms never appear. |
