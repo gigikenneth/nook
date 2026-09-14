@@ -536,7 +536,7 @@ function StartCountdown({ startingAt }) {
       <div className="start-countdown-inner">
         <p className="start-countdown-label">Heads down in</p>
         <div className="start-countdown-num" key={secs}>{secs || 'go'}</div>
-        <p className="start-countdown-sub">The call stays live until then.</p>
+        <p className="start-countdown-sub">You can keep talking until then.</p>
       </div>
     </div>
   );
@@ -544,7 +544,7 @@ function StartCountdown({ startingAt }) {
 
 function PhaseBanner({ phase, endsAt, regroupMin }) {
   const copy = {
-    greet: { t: 'Say hello', s: 'When it’s your turn, share what you’re working on (out loud or typed), then pass on. Mark ready when you’re set.' },
+    greet: { t: 'Say hello', s: 'When it’s your turn, share what you’re working on, out loud or in the chat. Then pass it to the next person. Ready when you are.' },
     focus: { t: 'Heads down', s: 'Cameras off. Just you, your list, and the clock.' },
     regroup: { t: 'Regroup', s: regroupMin > 0 ? 'How did it go? Turn your camera on to chat.' : 'Wrapping up.' },
   }[phase];
@@ -596,19 +596,19 @@ function GreetPanel({ selfId, selfName, goal, setGoal, onShareGoal, onShared, go
         <button className="primary" onClick={onShared}>I’ve shared</button>
       )}
       {!allShared && !myTurn && currentSharer && (
-        <p className="hint">{nameOf(currentSharer)} is sharing… you’re up next in turn.</p>
+        <p className="hint">{nameOf(currentSharer)} is sharing… you’re up next.</p>
       )}
 
       {allShared && (
         <>
           <div className="ready-row">
             <span>{ready.length}/{count} ready</span>
-            <button className={`primary ${iAmReady ? 'is-on' : ''}`} onClick={onReady}>{iAmReady ? 'Ready ✓' : (ready.length === count - 1 ? 'I’m ready · Start Focus' : 'I’m ready')}</button>
+            <button className={`primary ${iAmReady ? 'is-on' : ''}`} onClick={onReady}>{iAmReady ? 'Ready ✓' : 'I’m ready'}</button>
           </div>
-          <p className="hint">Everyone’s shared. Focus begins when everyone’s ready.</p>
+          <p className="hint">Everyone’s shared. We’ll start when you’re all ready.</p>
         </>
       )}
-      <button className="link-btn" onClick={onStart}>Start now (don’t wait for others)</button>
+      <button className="link-btn" onClick={onStart}>Start focus now</button>
     </>
   );
 }
@@ -705,13 +705,13 @@ function RegroupPanel({ tasks, isHost, focusMin, regroupMin, onRestart }) {
             {f !== focusMin && <p className="hint">Was {focusMin}m last round.</p>}
           </div>
           <button className="secondary" onClick={() => onRestart({ focusMin: f, regroupMin: r })}>
-            Run another session{f ? ` · ${f} min` : ''}
+            Go another round{f ? ` · ${f} min` : ''}
           </button>
         </>
       ) : (
         <>
-          <button className="secondary" onClick={() => onRestart()}>Run another session</button>
-          <p className="hint">The host can shorten or lengthen the next round.</p>
+          <button className="secondary" onClick={() => onRestart()}>Go another round</button>
+          <p className="hint">The host can change the length of the next round.</p>
         </>
       )}
     </>

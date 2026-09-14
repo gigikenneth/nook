@@ -176,7 +176,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
       <Sparkles />
       {!embedded && invite && (
         <div className="invite-toast" role="alert">
-          <span><strong>{invite.fromName}</strong> wants to cowork ✌️</span>
+          <span><strong>{invite.fromName}</strong> wants to focus together ✌️</span>
           <div className="invite-actions">
             <button className="primary sm" onClick={acceptInvite}>Join</button>
             <button className="ghost sm" onClick={dismissInvite}>Dismiss</button>
@@ -192,7 +192,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
             <h1>Nook</h1><span className="beta-tag">beta</span>
             <ThemeToggle className="on-hero" />
             <button className="help-btn" onClick={() => setHelpOpen(true)} aria-label="How Nook works and what's new">? How it works</button>
-            <p className="tagline">Your focus crew for the next 50 minutes. Show up, say what you're on, and get it done alongside a few other people.</p>
+            <p className="tagline">Your focus crew for the next 50 minutes. Show up, say what you're working on, and get it done alongside a few other people.</p>
             <Moon size={40} />
           </header>
 
@@ -210,7 +210,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
           <span className="live-dot" title="live" />
         </div>
         {rooms.length === 0 ? (
-          <p className="chat-empty">No open rooms yet. Be the first. Open one below.</p>
+          <p className="chat-empty">No open rooms yet. Want to start one?</p>
         ) : (
           <ul className="room-list">
             {rooms.map((r) => {
@@ -287,7 +287,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
           <p className="chat-empty">
             {watching
               ? "Nobody else is around right now. When someone shows up you can invite them into your room."
-              : "You're here. When others show up you'll see them, and they can ping you to cowork."}
+              : "You're here. When someone else shows up, you'll see them here too."}
           </p>
         ) : (
           <ul className="people-list">
@@ -300,10 +300,10 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
                   <button className="primary sm" disabled={!canInvite || pinged.has(p.id)}
                     title={canInvite ? '' : (myRoom?.locked ? 'Unlock your room to invite' : myRoom ? 'Your room is full' : '')}
                     onClick={() => pingPerson(p)}>
-                    {pinged.has(p.id) ? 'Invited ✓' : 'Ping to join me'}
+                    {pinged.has(p.id) ? 'Invited ✓' : 'Invite to my room'}
                   </button>
                 ) : (
-                  <button className="primary sm" onClick={() => pingPerson(p)}>Ping to cowork</button>
+                  <button className="primary sm" onClick={() => pingPerson(p)}>Invite to focus</button>
                 )}
                 <button className="ghost sm" title="Ignore — you won't see each other around" onClick={() => ignorePerson(p)}>Ignore</button>
               </li>
