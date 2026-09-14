@@ -42,7 +42,7 @@ const CHANGELOG = [
       'Drag to reorder your to-do list by its handle',
       'React to any chat message with an emoji',
       'Anyone can start the next session from regroup, not just the host',
-      'A link to join the Discord, down in the footer',
+      'A link to the Groove Part 2 community Discord, down in the footer',
     ],
   },
   {
