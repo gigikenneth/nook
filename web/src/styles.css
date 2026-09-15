@@ -137,7 +137,7 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
 /* Shared pre-focus countdown overlay (#74). */
 .start-countdown {
   position: fixed; inset: 0; z-index: 50; display: grid; place-items: center;
-  background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(4px);
+  background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
 }
 .start-countdown-inner { text-align: center; display: grid; gap: 6px; justify-items: center; }
 .start-countdown-label { margin: 0; font-weight: 700; color: var(--muted); text-transform: none; letter-spacing: .01em; }
