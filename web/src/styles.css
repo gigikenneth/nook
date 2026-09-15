@@ -549,9 +549,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
    chat log (left) and the list column (right) each scroll inside themselves. */
 .room.focus-fit { height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; }
 .room.focus-fit .focus-cols { flex: 1 1 auto; min-height: 0; align-items: stretch; }
-.room.focus-fit .chat-panel { display: flex; flex-direction: column; min-height: 0; }
+/* height: 100% makes the stretched grid-item height definite so Safari's nested
+   flex actually shrinks the chat-log and scrolls it, instead of growing the panel
+   past its slot and overlapping the footer. overflow: hidden is the belt-and-braces. */
+.room.focus-fit .chat-panel { display: flex; flex-direction: column; min-height: 0; height: 100%; overflow: hidden; }
 .room.focus-fit .chat-panel .chat-log { flex: 1 1 auto; max-height: none; }
-.room.focus-fit .focus-right { min-height: 0; overflow-y: auto; padding-right: 2px; }
+.room.focus-fit .focus-right { min-height: 0; height: 100%; overflow-y: auto; padding-right: 2px; }
 
 @media (max-width: 820px) {
   .stage { grid-template-columns: 1fr; }
