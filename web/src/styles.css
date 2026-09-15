@@ -504,6 +504,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 }
 .report-card textarea { min-height: 92px; resize: vertical; }
 .support-ways { display: grid; gap: 10px; text-align: center; line-height: 1.5; }
+.support-thanks { text-align: center; border-top: 1px solid var(--field); padding-top: 12px; margin-top: 4px; }
+/* Chips wrap into rows and the box scrolls past a few rows, so the modal stays
+   the same size no matter how many supporters there are. */
+.support-names { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+  max-height: 96px; overflow-y: auto; }
+.support-names li { background: var(--field); border-radius: 999px; padding: 4px 10px; font-size: 13px; font-weight: 600; }
 .report-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .hint.err { color: #c0392b; font-weight: 700; }
 .hp-field { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
