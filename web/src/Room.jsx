@@ -80,16 +80,6 @@ function ChatMessage({ m, selfId, onReact, onEdit }) {
   );
 }
 
-// Optional mid-session check-ins (#16): one gentle prompt at the focus midpoint,
-// a fresh question each round. "Share" posts your answer to the room chat.
-const CHECKINS = [
-  "How's it going so far?",
-  'Still on track with your goal?',
-  'Anything to adjust for the rest of the session?',
-  "One word for how you're feeling right now?",
-  "What's your next small step?",
-];
-
 const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
 const CHIP = ['#29bcee', '#a5d67b', '#6be492', '#171a6b']; // cyan, lime, green, indigo (Groove complements)
 
@@ -171,7 +161,7 @@ function Timer({ endsAt, label }) {
 
 export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, camPref, onLeave, onBrowse }) {
   const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
-  const { selfId, hostId, peers, phase, startingAt, endsAt, checkinSeed, ready, shared, order, locked, goals, chat, config, status } = room;
+  const { selfId, hostId, peers, phase, startingAt, endsAt, ready, shared, order, locked, goals, chat, config, status } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
   // Personal, editable task list (browser-only, never synced). Restored from this
@@ -284,44 +274,6 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     return () => { clearInterval(t); document.title = base; };
   }, [endsAt]);
 
-  // Mid-session check-in (#16). The question comes from a server-picked seed so
-  // everyone in the room sees the same one; read via a ref for the latest value.
-  const [checkin, setCheckin] = useState(null);
-  const [checkinDraft, setCheckinDraft] = useState(() => {
-    try { return sessionStorage.getItem(`nook.checkin.draft.${roomId}`) || ''; } catch { return ''; }
-  });
-  const checkinSeedRef = useRef(checkinSeed);
-  checkinSeedRef.current = checkinSeed;
-  // "done" is persisted per focus block (keyed by endsAt) so a refresh re-shows an
-  // UNanswered check-in — immediately if the midpoint already passed while you
-  // were away — but never re-nags one you've answered or dismissed.
-  const checkinDone = () => {
-    try { const s = JSON.parse(sessionStorage.getItem(`nook.checkin.${roomId}`) || 'null'); return !!(s && s.endsAt === endsAt && s.done); }
-    catch { return false; }
-  };
-  const finishCheckin = () => {
-    try { sessionStorage.setItem(`nook.checkin.${roomId}`, JSON.stringify({ endsAt, done: true })); sessionStorage.removeItem(`nook.checkin.draft.${roomId}`); } catch { /* ignore */ }
-    setCheckin(null); setCheckinDraft('');
-  };
-  useEffect(() => { if (phase !== 'focus') setCheckin(null); }, [phase]); // no lingering card past focus
-  useEffect(() => {
-    if (phase !== 'focus' || !endsAt || checkinDone()) return;
-    const show = () => setCheckin(CHECKINS[Math.floor((checkinSeedRef.current ?? Math.random()) * CHECKINS.length)]);
-    const delay = endsAt - (config.focusMin * 60000) / 2 - Date.now();
-    if (delay <= 0) { if (checkinSeedRef.current != null) show(); return; } // past the midpoint (e.g. after a refresh)
-    const t = setTimeout(show, delay);
-    return () => clearTimeout(t);
-  }, [phase, endsAt, config.focusMin, roomId, checkinSeed]); // eslint-disable-line react-hooks/exhaustive-deps
-  function shareCheckin(text) {
-    const t = text.trim();
-    if (t) room.sendChat(`Mid-session check-in — ${t}`);
-    finishCheckin();
-  }
-  function onCheckinDraft(text) {
-    setCheckinDraft(text);
-    try { sessionStorage.setItem(`nook.checkin.draft.${roomId}`, text); } catch { /* ignore */ }
-  }
-
   // Five-minutes-left warning chime during focus (#23). Skipped for sessions that
   // are 5 min or shorter, and if you joined inside the final 5 minutes.
   const warnedRef = useRef(false);
@@ -433,7 +385,6 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     <main className={`room ${phase === 'focus' ? 'focus-fit' : ''}`}>
       {status === 'reconnecting' && <div className="reconnecting" role="status">Reconnecting…</div>}
       {status === 'down' && <div className="reconnecting" role="status">Nook's rooms are temporarily down — hang tight, we keep retrying and you'll reconnect automatically.</div>}
-      {checkin && <CheckIn question={checkin} initialText={checkinDraft} onDraft={onCheckinDraft} onShare={shareCheckin} onClose={finishCheckin} />}
       {startingAt && phase === 'greet' && <StartCountdown startingAt={startingAt} />}
       <header className="room-head">
         <div className="room-id">
@@ -715,25 +666,6 @@ function RegroupPanel({ tasks, isHost, focusMin, regroupMin, onRestart }) {
         </>
       )}
     </>
-  );
-}
-
-// Mid-session check-in card (#16): optional, dismissible. Share posts to chat.
-function CheckIn({ question, initialText = '', onDraft, onShare, onClose }) {
-  const [text, setText] = useState(initialText);
-  return (
-    <div className="checkin" role="dialog" aria-label="Mid-session check-in">
-      <div className="checkin-head">
-        <strong>Mid-session check-in</strong>
-        <button className="ghost x" onClick={onClose} aria-label="Dismiss">×</button>
-      </div>
-      <p className="checkin-q">{question}</p>
-      <form className="checkin-form" onSubmit={(e) => { e.preventDefault(); onShare(text); }}>
-        <input value={text} onChange={(e) => { setText(e.target.value); onDraft && onDraft(e.target.value); }} maxLength={200}
-          placeholder="Share a line with the room (optional)…" autoFocus />
-        <button className="primary sm" type="submit" disabled={!text.trim()}>Share</button>
-      </form>
-    </div>
   );
 }
 

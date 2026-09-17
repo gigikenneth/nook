@@ -14,7 +14,6 @@ export function useRoom(roomId, name, opts) {
   const [phase, setPhase] = useState('greet');
   const [startingAt, setStartingAt] = useState(null); // ms when the pre-focus countdown lands; null when not counting
   const [endsAt, setEndsAt] = useState(null);
-  const [checkinSeed, setCheckinSeed] = useState(null);
   const [ready, setReady] = useState([]);
   const [shared, setShared] = useState([]);
   const [order, setOrder] = useState([]);
@@ -71,7 +70,6 @@ export function useRoom(roomId, name, opts) {
           setOrder(m.order || []);
           setLocked(m.locked || false);
           setConfig({ focusMin: m.focusMin, regroupMin: m.regroupMin });
-          setCheckinSeed(m.checkinSeed ?? null);
           if (m.goals) setGoals(m.goals);
           if (m.camPrefs) setCamPrefs(m.camPrefs);
           setPeers((p) => {
@@ -98,7 +96,6 @@ export function useRoom(roomId, name, opts) {
           setStartingAt(null); // countdown's done (or was cancelled) once the phase actually moves
           setPhase(m.phase);
           setEndsAt(m.endsAt);
-          setCheckinSeed(m.checkinSeed ?? null);
           // The host can change the length for the next round; keep config in step.
           if (m.focusMin) setConfig({ focusMin: m.focusMin, regroupMin: m.regroupMin });
           break;
@@ -184,7 +181,7 @@ export function useRoom(roomId, name, opts) {
   }, [roomId]);
 
   return {
-    selfId, hostId, peers, phase, startingAt, endsAt, checkinSeed, ready, shared, order, locked, goals, camPrefs, chat, config, status,
+    selfId, hostId, peers, phase, startingAt, endsAt, ready, shared, order, locked, goals, camPrefs, chat, config, status,
     shareGoal: () => sendWs({ type: 'shared' }),
     toggleLock: () => sendWs({ type: 'lock', locked: !locked }),
     setReady: (r) => sendWs({ type: r ? 'ready' : 'unready' }),

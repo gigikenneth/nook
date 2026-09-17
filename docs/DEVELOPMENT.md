@@ -76,7 +76,7 @@ nook/
         ├── main.jsx         #   React entry
         ├── App.jsx          #   top level: shows Home or Room based on session
         ├── Home.jsx         #   landing: live directory + "around now" + create/join form
-        ├── Room.jsx         #   the session UI: phases, tasks, chat, check-in
+        ├── Room.jsx         #   the session UI: phases, tasks, chat
         ├── JitsiStage.jsx   #   embeds the Daily.co call (@daily-co/daily-js), Nook mic/cam buttons drive it (legacy filename)
         ├── useRoom.js       #   the WebSocket + coworking-state hook (video is the embedded Daily.co call in JitsiStage.jsx)
         ├── useLobby.js      #   presence socket: roster, ping, watch mode, camera pref

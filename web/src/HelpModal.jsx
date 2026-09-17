@@ -31,7 +31,7 @@ const CHANGELOG = [
       'Dark mode: tap the moon in the header to switch, and Nook remembers your choice on your device',
       'Group audio is steadier: if someone’s voice does not come through, the connection now repairs itself instead of staying silent',
       'Fixed a glitch where you could momentarily show up twice after reconnecting',
-      'Clearer wording in the greeting and the mid-session check-in',
+      'Clearer wording in the greeting',
     ],
   },
   {
@@ -84,7 +84,6 @@ const CHANGELOG = [
     items: [
       'Your session survives a refresh or a dropped connection, so you pick up where you left off',
       'A 5 minute warning chime before focus ends',
-      'A mid-session check-in to share how it is going',
       'The screen stays awake while a session is running',
       'The countdown now shows in the browser tab title',
       'Signal whether you are up for camera or camera-shy',

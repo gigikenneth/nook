@@ -52,7 +52,6 @@ export class RoomDO {
     this.locked = false; // host can close the room to newcomers (mid-session join off)
     this.phase = 'greet'; // greet | focus | regroup
     this.endsAt = null; // absolute ms while the timer runs; null when paused/greet
-    this.checkinSeed = null; // 0..1, picked per focus so everyone gets the same mid-session check-in
     this.paused = false; // true while the room is empty — timer frozen
     this.remainingMs = null; // ms left on the timer when it was paused
     this.abandonAt = null; // wipe the stored session after this if still empty
@@ -70,7 +69,6 @@ export class RoomDO {
       const s = await state.storage.get(SESSION_KEY);
       if (!s) return;
       this.phase = s.phase; this.endsAt = s.endsAt ?? null;
-      this.checkinSeed = s.checkinSeed ?? null;
       this.paused = !!s.paused; this.remainingMs = s.remainingMs ?? null;
       this.abandonAt = s.abandonAt ?? null;
       this.focusMin = s.focusMin; this.regroupMin = s.regroupMin;
@@ -83,7 +81,7 @@ export class RoomDO {
 
   persist() {
     return this.state.storage.put(SESSION_KEY, {
-      phase: this.phase, endsAt: this.endsAt, checkinSeed: this.checkinSeed, paused: this.paused, remainingMs: this.remainingMs,
+      phase: this.phase, endsAt: this.endsAt, paused: this.paused, remainingMs: this.remainingMs,
       abandonAt: this.abandonAt, focusMin: this.focusMin, regroupMin: this.regroupMin,
       starting: this.starting, startAt: this.startAt,
       isPublic: this.isPublic, locked: this.locked, roomId: this.roomId,
@@ -208,7 +206,6 @@ export class RoomDO {
       peers,
       phase: this.phase,
       endsAt: this.endsAt,
-      checkinSeed: this.checkinSeed,
       serverNow: Date.now(),
       focusMin: this.focusMin,
       regroupMin: this.regroupMin,
@@ -436,7 +433,6 @@ export class RoomDO {
     this.startAt = null;
     this.phase = 'focus';
     this.endsAt = Date.now() + this.focusMin * 60000;
-    this.checkinSeed = Math.random(); // one shared question for this focus block's mid-session check-in
     for (const x of this.roster()) this.patch(x.ws, (r) => { r.ready = false; }); // clear ready
     this.persist();
     this.broadcastPhase();
@@ -502,7 +498,7 @@ export class RoomDO {
   }
 
   broadcastPhase() {
-    this.broadcast({ type: 'phase', phase: this.phase, endsAt: this.endsAt, checkinSeed: this.checkinSeed,
+    this.broadcast({ type: 'phase', phase: this.phase, endsAt: this.endsAt,
       focusMin: this.focusMin, regroupMin: this.regroupMin, serverNow: Date.now() });
   }
 

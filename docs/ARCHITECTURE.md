@@ -149,8 +149,6 @@ Small ambient helpers that live entirely in the browser (no server involvement):
 - **Chimes** (`web/src/sound.js`, Web Audio, no files): phase transitions, a
   light rise when someone new joins, and a soft two-note warning when focus has
   **5 minutes left**.
-- **Mid-session check-in:** one optional, dismissible card at the focus midpoint
-  with a rotating question; "Share" posts your answer to the room chat.
 - **Screen Wake Lock** (`web/src/useWakeLock.js`): holds a screen lock while
   you're in a room (re-acquired on `visibilitychange`) so a phone left open
   doesn't sleep. No-op where the API is unsupported.
