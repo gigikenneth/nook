@@ -148,9 +148,14 @@ export function useRoom(roomId, name, opts) {
       socket.onmessage = (ev) => handle(JSON.parse(ev.data));
       socket.onclose = (e) => {
         if (dead) return;
+        // A stale socket we've already replaced (a reconnect raced ahead, or the
+        // server superseded an old zombie). Its late close must not touch a healthy
+        // session — otherwise a normal reconnect looks like a random kick (#89).
+        if (socket !== ws.current) return;
         if (e.code === 4000) return setStatus('kicked');
         if (e.code === 4001) return setStatus('full');
         if (e.code === 4002) return setStatus('locked');
+        if (e.code === 4003) return setStatus('superseded'); // this device opened the room elsewhere
         if (e.code === 1000 || e.code === 1005) return setStatus('closed');
         setPeers({});
         // A socket that never opened means the server is unreachable (Nook down,

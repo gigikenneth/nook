@@ -371,7 +371,9 @@ export class RoomDO {
     if (zombie) {
       const za = zombie.deserializeAttachment();
       const goal = za.goal || '', pref = za.camPref || null;
-      try { zombie.close(1000, 'superseded'); } catch { /* already gone */ }
+      // 4003, not 1000: a distinct code the client can tell apart from a normal
+      // close, so a stale/superseded socket never looks like a real "session over".
+      try { zombie.close(4003, 'superseded'); } catch { /* already gone */ }
       this.handleLeave(zombie);
       return { reconnecting: true, goal, pref };
     }
