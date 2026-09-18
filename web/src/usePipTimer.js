@@ -43,15 +43,16 @@ export function usePipTimer() {
       const c = canvasRef.current;
       if (!c) return;
       const g = c.getContext('2d');
+      const W = c.width, H = c.height;
       g.fillStyle = '#10124e';
-      g.fillRect(0, 0, c.width, c.height);
+      g.fillRect(0, 0, W, H);
       g.textAlign = 'center';
       g.fillStyle = 'rgba(255,255,255,.65)';
-      g.font = '700 20px system-ui,sans-serif';
-      g.fillText((PHASE_LABEL[phase] || '').toUpperCase(), c.width / 2, 56);
+      g.font = `700 ${Math.round(H * 0.13)}px system-ui,sans-serif`;
+      g.fillText((PHASE_LABEL[phase] || '').toUpperCase(), W / 2, H * 0.32);
       g.fillStyle = '#fff';
-      g.font = '800 78px ui-monospace,monospace';
-      g.fillText(clock(endsAt), c.width / 2, 138);
+      g.font = `800 ${Math.round(H * 0.5)}px ui-monospace,monospace`;
+      g.fillText(clock(endsAt), W / 2, H * 0.82);
       return;
     }
     const w = winRef.current;
@@ -75,6 +76,8 @@ export function usePipTimer() {
     streamRef.current?.getTracks().forEach((t) => { try { t.stop(); } catch { /* ignore */ } });
     const v = vidRef.current;
     if (v) { try { v.remove(); } catch { /* ignore */ } }
+    const c = canvasRef.current;
+    if (c) { try { c.remove(); } catch { /* ignore */ } }
     modeRef.current = null;
     winRef.current = null;
     vidRef.current = null;
@@ -126,36 +129,56 @@ export function usePipTimer() {
   const openVideo = async () => {
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = 320; canvas.height = 180;
+      canvas.width = 160; canvas.height = 90;
+      // Off-screen but IN the DOM — WebKit only captures frames from an attached,
+      // actively-drawn canvas; a detached one emits nothing and play() hangs.
+      canvas.style.cssText = 'position:fixed;left:-9999px;top:0;';
+      document.body.appendChild(canvas);
       canvasRef.current = canvas;
       modeRef.current = 'video';
       draw(); // paint a frame before capture so the tile isn't blank
 
       const video = document.createElement('video');
-      video.muted = true;
-      video.playsInline = true;
-      // Present but invisible; display:none would stop some browsers entering PiP.
-      video.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:-10px;bottom:-10px;';
-      const stream = canvas.captureStream(2); // 2fps is plenty for a clock
+      video.muted = true; video.defaultMuted = true;
+      video.autoplay = true; video.playsInline = true;
+      video.setAttribute('playsinline', ''); video.setAttribute('muted', '');
+      // Must be painted on-page or Safari composites empty (black) frames into the
+      // PiP tile — so it can't be off-screen or display:none. Tuck it behind the
+      // app (z-index:-1) where the opaque background hides it while it still paints.
+      video.style.cssText = 'position:fixed;left:0;bottom:0;width:160px;height:90px;z-index:-1;';
+      const stream = canvas.captureStream(10);
       streamRef.current = stream;
       video.srcObject = stream;
       document.body.appendChild(video);
       vidRef.current = video;
-      await video.play();
 
-      if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
-        await video.requestPictureInPicture();
-        video.addEventListener('leavepictureinpicture', handleClosed);
-      } else if (video.webkitSetPresentationMode) {
-        video.webkitSetPresentationMode('picture-in-picture');
+      // Pump frames for ~0.7s so the stream actually starts (a static canvas may
+      // never emit a first frame, leaving play() pending forever on Safari).
+      let pumps = 0;
+      const pump = () => { draw(); if (++pumps < 40 && modeRef.current === 'video') requestAnimationFrame(pump); };
+      requestAnimationFrame(pump);
+      drawRef.current = setInterval(draw, 500);
+
+      // Don't await — on Safari play() can stay pending; fire it and move on.
+      video.play().catch(() => { /* frames still flow into PiP */ });
+
+      const hasWebkit = typeof video.webkitSetPresentationMode === 'function';
+      if (hasWebkit) {
+        // Safari: synchronous, so it stays inside the click gesture. Try now, and
+        // again once the video is actually playing (whichever WebKit accepts).
         video.addEventListener('webkitpresentationmodechanged', () => {
           if (video.webkitPresentationMode !== 'picture-in-picture') handleClosed();
         });
+        const enter = () => { try { video.webkitSetPresentationMode('picture-in-picture'); } catch { /* not ready yet */ } };
+        enter();
+        video.addEventListener('playing', enter, { once: true });
+      } else if (document.pictureInPictureEnabled && video.requestPictureInPicture) {
+        await video.requestPictureInPicture();
+        video.addEventListener('leavepictureinpicture', handleClosed);
       } else {
         teardown();
         return false;
       }
-      drawRef.current = setInterval(draw, 500); // redraw the canvas; the stream picks it up
       setIsOpen(true);
       return true;
     } catch {
