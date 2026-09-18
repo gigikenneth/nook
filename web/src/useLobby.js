@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { wsBase } from './config';
 import { getDid, loadBlocks, addBlock, removeBlock } from './device';
+import { chime } from './sound';
 
 // Presence for the home screen: while you're opted in, hold a WebSocket to the
 // LobbyDO so you appear in "who's around" and can be pinged to cowork. Closing
@@ -29,7 +30,7 @@ export function useLobby(enabled, name, mode = 'here', pref = null) {
       const m = JSON.parse(ev.data);
       if (m.type === 'welcome') setSelfId(m.id);
       else if (m.type === 'roster') setRoster(m.people);
-      else if (m.type === 'invite') setInvite({ fromName: m.fromName, roomId: m.roomId });
+      else if (m.type === 'invite') { setInvite({ fromName: m.fromName, roomId: m.roomId }); chime('join'); } // ping so you notice the invite
       else if (m.type === 'blocked') setBlocks(addBlock(m.did, m.name)); // ack: remember locally for the un-ignore list
       else if (m.type === 'unblocked') setBlocks(removeBlock(m.did));
       else if (m.type === 'blocked-list') {

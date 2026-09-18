@@ -7,6 +7,7 @@ import { Moon, Sparkles, CamBadge, CamPrefPicker } from './graphics.jsx';
 import { HelpModal } from './HelpModal.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
 import { loadPrefs } from './device';
+import { unlockAudio } from './sound';
 
 const uid = () => crypto.randomUUID();
 const phaseLabel = { greet: 'greeting', focus: 'focusing', regroup: 'regrouping' };
@@ -40,6 +41,18 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   const undoTimers = useRef(new Map()); // id -> timeout, so Undo can cancel the pending block
   const [undoBlock, setUndoBlock] = useState(null); // { id, name } — the "Ignored X · Undo" toast
   const others = roster.filter((p) => p.id !== selfId && !hiddenIds.has(p.id));
+
+  // Prime audio on the first interaction so the invite ping isn't silent on
+  // Safari (WebKit only starts an AudioContext inside a user gesture).
+  useEffect(() => {
+    const prime = () => unlockAudio();
+    window.addEventListener('pointerdown', prime, { once: true });
+    window.addEventListener('keydown', prime, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', prime);
+      window.removeEventListener('keydown', prime);
+    };
+  }, []);
 
   // Ignore is reversible: hide them now, actually send the block after a short
   // window. Undo within it and nothing is sent — no server churn on a misclick.
