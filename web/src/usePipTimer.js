@@ -17,6 +17,23 @@ const clock = (endsAt) => {
   return `${String(Math.floor(rem / 60000)).padStart(2, '0')}:${String(Math.floor((rem % 60000) / 1000)).padStart(2, '0')}`;
 };
 
+// A Worker-backed ticker. Main-thread setInterval is clamped to ~1s when the tab
+// is hidden/minimised, which makes the Safari PiP countdown stutter; a Worker's
+// timer keeps firing, so redraws stay smooth. Falls back to setInterval if a
+// Blob Worker can't be created (e.g. a strict CSP).
+const makeTicker = (ms, cb) => {
+  try {
+    const url = URL.createObjectURL(new Blob([`setInterval(()=>postMessage(0),${ms})`], { type: 'text/javascript' }));
+    const wk = new Worker(url);
+    URL.revokeObjectURL(url);
+    wk.onmessage = cb;
+    return { stop: () => wk.terminate() };
+  } catch {
+    const id = setInterval(cb, ms);
+    return { stop: () => clearInterval(id) };
+  }
+};
+
 export function usePipTimer() {
   const hasDocPip = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
   // Element PiP (Safari/Firefox): the standard API, or Safari's webkit presentation
@@ -33,7 +50,7 @@ export function usePipTimer() {
   const vidRef = useRef(null);        // <video> in the PiP tile (video backend)
   const canvasRef = useRef(null);     // canvas we draw the timer onto (video backend)
   const streamRef = useRef(null);     // canvas capture stream (video backend)
-  const drawRef = useRef(null);       // parent-side redraw interval (video backend)
+  const drawRef = useRef(null);       // Worker-backed redraw ticker (video backend)
   const pollRef = useRef(null);       // parent-side close watchdog (window backends)
   const dataRef = useRef({ endsAt: null, phase: 'greet' });
 
@@ -68,7 +85,7 @@ export function usePipTimer() {
   const setData = (endsAt, phase) => { dataRef.current = { endsAt, phase }; draw(); };
 
   const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
-  const stopDraw = () => { if (drawRef.current) { clearInterval(drawRef.current); drawRef.current = null; } };
+  const stopDraw = () => { if (drawRef.current) { drawRef.current.stop(); drawRef.current = null; } };
 
   const teardown = () => {
     stopPoll();
@@ -157,7 +174,8 @@ export function usePipTimer() {
       let pumps = 0;
       const pump = () => { draw(); if (++pumps < 40 && modeRef.current === 'video') requestAnimationFrame(pump); };
       requestAnimationFrame(pump);
-      drawRef.current = setInterval(draw, 500);
+      // Worker-backed so the countdown stays smooth while Safari is minimised.
+      drawRef.current = makeTicker(250, draw);
 
       // Don't await — on Safari play() can stay pending; fire it and move on.
       video.play().catch(() => { /* frames still flow into PiP */ });
