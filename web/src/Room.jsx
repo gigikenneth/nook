@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRoom } from './useRoom';
 import { useWakeLock } from './useWakeLock';
 import { usePipTimer } from './usePipTimer';
-import { chime } from './sound';
+import { chime, unlockAudio } from './sound';
 import { ReportBug } from './ReportBug.jsx';
 import { SupportNook } from './SupportNook.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
@@ -244,6 +244,19 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     }
   }, [phase]);
 
+  // Safety net for audio: prime the context on the first interaction of any kind,
+  // so even someone who joined mid-focus (and never clicked Ready/Start) still
+  // hears the chimes. Safari only starts audio inside a user gesture.
+  useEffect(() => {
+    const prime = () => unlockAudio();
+    window.addEventListener('pointerdown', prime, { once: true });
+    window.addEventListener('keydown', prime, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', prime);
+      window.removeEventListener('keydown', prime);
+    };
+  }, []);
+
   // Keep the chat log pinned to the newest message.
   const logRef = useRef(null);
   const chatTaRef = useRef(null); // composer textarea, to reset its height after send
@@ -447,6 +460,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
                 <GreetPanel selfId={selfId} selfName={name} goal={goal} setGoal={setGoal}
                   onShareGoal={() => goal.trim() && room.sendGoal(goal.trim())}
                   onShared={() => {
+                    unlockAudio();
                     const g = goal.trim();
                     if (g) {
                       room.sendGoal(g);
@@ -457,7 +471,8 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
                   }}
                   goals={goals} peers={peers} order={order} shared={shared}
                   ready={ready} iAmReady={iAmReady} count={count}
-                  onReady={() => room.setReady(!iAmReady)} isHost={isHost} onStart={room.start} />
+                  onReady={() => { unlockAudio(); room.setReady(!iAmReady); }} isHost={isHost}
+                  onStart={() => { unlockAudio(); room.start(); }} />
               )}
               {phase === 'regroup' && (
                 <RegroupPanel tasks={tasks} isHost={isHost} focusMin={config.focusMin} regroupMin={config.regroupMin} onRestart={room.restart} />

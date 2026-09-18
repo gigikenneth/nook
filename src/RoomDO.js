@@ -250,6 +250,9 @@ export class RoomDO {
     const id = a.id;
 
     switch (m.type) {
+      case 'ping': // client liveness probe (Safari zombie-socket detection after a backgrounded tab)
+        try { ws.send(JSON.stringify({ type: 'pong' })); } catch { /* gone */ }
+        break;
       case 'publish': { // client reports its Cloudflare Realtime session + track ids
         // so roommates can pull them. video is absent when the camera is off.
         const cam = {

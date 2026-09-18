@@ -123,6 +123,7 @@ export function useRoom(roomId, name, opts) {
         case 'edited': // someone edited their message (#70)
           setChat((c) => c.map((msg) => (msg.mid === m.mid ? { ...msg, text: m.text, edited: true } : msg)));
           break;
+        case 'pong': clearLive(); break; // socket proved alive; cancel the zombie-reconnect
         case 'host': setHostId(m.id); break;
         case 'peer-list':
           setPeers((p) => (p[m.id] ? { ...p, [m.id]: { ...p[m.id], list: m.tasks } } : p));
@@ -165,7 +166,29 @@ export function useRoom(roomId, name, opts) {
       attempts = 0;
       connect();
     }
-    const onVisible = () => { if (document.visibilityState === 'visible') reconnectNow(); };
+
+    // Zombie-socket watchdog. Safari freezes a backgrounded tab and can leave the
+    // socket reporting readyState 1 (OPEN) while no frames actually flow — so a
+    // phase→regroup broadcast sent while you were away is silently lost and the UI
+    // stays stuck on focus. On refocus, ping and wait for a pong; if none comes,
+    // force a reconnect so a fresh welcome resyncs the phase/timer we missed.
+    let liveTimeout = null;
+    const clearLive = () => { if (liveTimeout) { clearTimeout(liveTimeout); liveTimeout = null; } };
+    const onVisible = () => {
+      if (dead || document.visibilityState !== 'visible') return;
+      const s = ws.current;
+      if (!s || s.readyState !== 1) return reconnectNow();
+      clearLive();
+      try { s.send(JSON.stringify({ type: 'ping' })); } catch { return reconnectNow(); }
+      liveTimeout = setTimeout(() => {
+        liveTimeout = null;
+        if (dead || ws.current !== s) return; // pong arrived, or we already moved on
+        s.onclose = null;                      // a deliberate replace — don't flip status/retry
+        try { s.close(); } catch { /* already closed */ }
+        attempts = 0;
+        connect();
+      }, 2500);
+    };
     window.addEventListener('online', reconnectNow);
     document.addEventListener('visibilitychange', onVisible);
 
@@ -173,6 +196,7 @@ export function useRoom(roomId, name, opts) {
 
     return () => {
       dead = true;
+      clearLive();
       window.removeEventListener('online', reconnectNow);
       document.removeEventListener('visibilitychange', onVisible);
       try { ws.current && ws.current.close(); } catch { /* already closed */ }
