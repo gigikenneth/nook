@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { wsBase } from './config';
 import { getDid } from './device';
+import { chime } from './sound';
 
 // Nook's room transport. A single WebSocket to the room's Durable Object carries
 // ALL the coworking state — presence, phases, timer, chat, tasks, goals — and is
@@ -36,6 +37,7 @@ export function useRoom(roomId, name, opts) {
 
   const ws = useRef(null);
   const everConnected = useRef(false); // did the room socket ever open? distinguishes a brief mid-session drop from "never reached the server" (outage / offline)
+  const phaseRef = useRef('greet'); // latest phase, for the join chime's greet-only gate
 
   const selfIdRef = useRef(null);
   const cidRef = useRef(null);
@@ -63,7 +65,7 @@ export function useRoom(roomId, name, opts) {
           setSelfId(m.selfId);
           selfIdRef.current = m.selfId;
           setHostId(m.hostId);
-          setPhase(m.phase);
+          setPhase(m.phase); phaseRef.current = m.phase;
           setEndsAt(m.endsAt);
           setReady(m.ready || []);
           setShared(m.shared || []);
@@ -81,6 +83,10 @@ export function useRoom(roomId, name, opts) {
           break;
         case 'peer-join':
           setPeers((p) => ({ ...p, [m.id]: { ...(p[m.id] || {}), name: m.name } }));
+          // Ping when a new person arrives while you're waiting to start (#87). Only
+          // in greet, and never for reconnects — the server flags those, which is
+          // what kept the old always-on join sound spamming on flaky connections (#32).
+          if (!m.reconnect && phaseRef.current === 'greet') chime('join');
           break;
         case 'peer-leave': {
           setPeers((p) => { const n = { ...p }; delete n[m.id]; return n; });
@@ -94,7 +100,7 @@ export function useRoom(roomId, name, opts) {
           break;
         case 'phase':
           setStartingAt(null); // countdown's done (or was cancelled) once the phase actually moves
-          setPhase(m.phase);
+          setPhase(m.phase); phaseRef.current = m.phase;
           setEndsAt(m.endsAt);
           // The host can change the length for the next round; keep config in step.
           if (m.focusMin) setConfig({ focusMin: m.focusMin, regroupMin: m.regroupMin });

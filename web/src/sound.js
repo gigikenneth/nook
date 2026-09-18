@@ -10,6 +10,7 @@ const TUNES = {
   end: [783.99, 659.25, 523.25, 392.0, 261.63], // G5 E5 C5 G4 C4
   regroup: [587.33, 880.0],         // D5 A5, two-note ping — come back
   warn: [698.46, 587.33],           // F5 D5, soft two-note — 5 min left, wrap up
+  join: [659.25, 987.77],           // E5 B5, light rise — a new person arrived while you wait
 };
 
 // Prime the AudioContext from a real user gesture (the Ready/Start click). Safari
