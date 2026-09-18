@@ -478,6 +478,14 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
                 <RegroupPanel tasks={tasks} isHost={isHost} focusMin={config.focusMin} regroupMin={config.regroupMin} onRestart={room.restart} />
               )}
             </aside>
+            {/* In greet, surface the list you're carrying into the next round (#88) —
+                otherwise you only see the room's shared lists, not your own. */}
+            {phase === 'greet' && tasks.length > 0 && (
+              <aside className="panel">
+                <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
+                  onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList} />
+              </aside>
+            )}
             {sharedListsEl}
             {chatPanelEl}
           </div>
