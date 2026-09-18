@@ -241,6 +241,8 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .timer-clock { font-family: var(--mono); font-size: 40px; font-weight: 500; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
 
 .stage { display: grid; grid-template-columns: minmax(0, 1fr) 420px; gap: 18px; align-items: start; }
+/* Left column: video, then chat filling the space beneath it. */
+.stage-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .grid { display: grid; gap: 14px; }
 .grid-1 { grid-template-columns: 1fr; }
 .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr 1fr; }
@@ -545,7 +547,15 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .room.focus-fit .focus-right { min-height: 0; height: 100%; overflow-y: auto; padding-right: 2px; }
 
 @media (max-width: 820px) {
-  .stage { grid-template-columns: 1fr; }
+  /* Stacked phone order: video, then what-you're-working-on, then chat, then lists.
+     display:contents flattens the two columns so all panels share one order axis. */
+  .stage { display: flex; flex-direction: column; }
+  .stage-main, .rail { display: contents; }
+  .stage .jitsi-stage { order: 1; }
+  .stage .stage-lead { order: 2; }
+  .stage .chat-panel { order: 3; }
+  .stage .your-list { order: 4; }
+  .stage .shared-lists { order: 5; }
   .rail { position: static; }
   /* On a stacked phone layout the page scrolls normally; don't viewport-lock. */
   .room.focus-fit { height: auto; display: grid; }

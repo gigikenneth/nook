@@ -452,10 +452,17 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         </>
       ) : (
         <section className="stage">
-          <JitsiStage roomId={roomId} name={name} />
+          {/* Left column: the video, and chat filling the space beneath it. With
+              cameras off (or someone who can't join on camera) chat is the main
+              channel, and a wide column under the faces is far easier to read
+              than a narrow rail. */}
+          <div className="stage-main">
+            <JitsiStage roomId={roomId} name={name} />
+            {chatPanelEl}
+          </div>
 
           <div className="rail">
-            <aside className="panel">
+            <aside className="panel stage-lead">
               {phase === 'greet' && (
                 <GreetPanel selfId={selfId} selfName={name} goal={goal} setGoal={setGoal}
                   onShareGoal={() => goal.trim() && room.sendGoal(goal.trim())}
@@ -481,13 +488,12 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
             {/* In greet, surface the list you're carrying into the next round (#88) —
                 otherwise you only see the room's shared lists, not your own. */}
             {phase === 'greet' && tasks.length > 0 && (
-              <aside className="panel">
+              <aside className="panel your-list">
                 <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
                   onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList} />
               </aside>
             )}
             {sharedListsEl}
-            {chatPanelEl}
           </div>
         </section>
       )}
