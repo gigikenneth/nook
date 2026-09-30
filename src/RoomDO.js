@@ -34,6 +34,11 @@ const COUNTDOWN_MS = 4000;
 // A room left empty this long is genuinely abandoned — wipe its stored session
 // so storage doesn't accumulate ghost rooms forever.
 const ABANDON_MS = 6 * 60 * 60 * 1000; // 6h
+// An empty room's clock keeps running this long before it freezes (#92). A closed
+// tab, a sleeping laptop, a wifi blip and a plain reconnect all empty the room for
+// a moment, and freezing on each one pushed the end time later every time. Longer
+// than the client's whole reconnect budget (capped 8s backoff, 10 tries).
+const EMPTY_GRACE_MS = 90000;
 
 function clampInt(v, def, min, max) {
   const n = parseInt(v, 10);
@@ -104,6 +109,16 @@ export class RoomDO {
     this.endsAt = this.remainingMs != null ? Date.now() + this.remainingMs : null;
     this.paused = false; this.remainingMs = null; this.abandonAt = null;
     this.persist();
+  }
+
+  // Room just emptied: leave the timer running and check back after the grace
+  // window. The alarm's empty branch is what freezes it (pauseSession), so a
+  // return inside the window costs nothing and adds nothing to the clock (#92).
+  // A pre-focus countdown is cancelled outright: nobody is here to watch it, and
+  // a stale startAt would otherwise flip a returning room into focus unasked.
+  startEmptyGrace() {
+    if (this.starting) { this.starting = false; this.startAt = null; this.persist(); }
+    this.state.storage.setAlarm(Date.now() + EMPTY_GRACE_MS);
   }
 
   // A room sat empty past the abandon window — clear it for good.
@@ -424,10 +439,11 @@ export class RoomDO {
     this.broadcast({ type: 'shared-state', shared: this.sharedIds() });
     this.broadcast({ type: 'order', order: remaining.map((x) => x.a.id) });
     if (remaining.length === 0) {
-      // Last person left: freeze the session where it is and persist it. A rejoin
-      // (a refresh, or both people returning much later, or after an eviction /
-      // deploy) resumes from exactly here instead of restarting at greet.
-      this.pauseSession();
+      // Last person left. The clock keeps running for a grace window first, so a
+      // blip doesn't extend the session (#92); only if the room is still empty
+      // when the alarm fires does it freeze, so someone returning much later (or
+      // after an eviction / deploy) still resumes where it stopped.
+      this.startEmptyGrace();
     } else if (a.joinedAt <= remaining[0].a.joinedAt) {
       // The host (oldest) left — the new oldest becomes host.
       this.broadcast({ type: 'host', id: remaining[0].a.id });
@@ -475,9 +491,10 @@ export class RoomDO {
     if (this.count() === 0) {
       // Everyone left mid-countdown: cancel it, don't drop an empty room into focus.
       if (this.starting) { this.starting = false; this.startAt = null; }
-      // Empty. If the DO was evicted while occupied (e.g. a deploy) and this alarm
-      // fired before anyone reconnected, the session isn't paused yet — pause it
-      // now so it resumes intact. Only wipe once the abandon window has passed.
+      // Empty and still running: either the grace window after the last person
+      // left has expired (#92), or the DO was evicted while occupied (e.g. a
+      // deploy) and this alarm beat everyone back. Freeze it either way, so it
+      // resumes intact. Only wipe once the abandon window has passed.
       if (!this.paused) { this.pauseSession(); return; }
       if (this.abandonAt && now >= this.abandonAt - 500) this.wipe();
       else this.state.storage.setAlarm(this.abandonAt || now + ABANDON_MS);
