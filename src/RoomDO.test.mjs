@@ -388,4 +388,55 @@ Date.now = realNow;
   }
 }
 
-console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 + session continuity): all passed');
+// 15) The room closes itself for the round (#96) and opens again at regroup... but
+//     only the lock it set itself. A lock someone set by hand is theirs.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  r.isPublic = true;
+  const a = join(r, st, { id: 'a', name: 'Gigi' });
+  join(r, st, { id: 'b', name: 'Jeff' });
+
+  await r.beginFocus();
+  assert.equal(r.locked, true, 'focus closes the room to newcomers');
+  assert.equal(r.autoLock, true, 'flagged as the room closing itself');
+  assert.ok(a.sent.find((m) => m.type === 'locked-state' && m.locked === true), 'everyone told it closed');
+  assert.equal(store_get(st, 'locked'), true, 'persisted, so an eviction keeps it closed');
+
+  r.toGreet();
+  assert.equal(r.locked, false, 'open again at greet');
+  assert.equal(r.autoLock, false, 'flag cleared with it');
+
+  // Anyone inside can open it mid-focus, not just the host, and their decision
+  // survives the next greet.
+  await r.beginFocus();
+  msg(r, r.socketOf('b'), { type: 'lock', locked: false });
+  assert.equal(r.locked, false, 'a non-host opened the room');
+  assert.equal(r.autoLock, false, 'the room stops managing the lock once a person decides');
+
+  // A hand-set lock during greet is left alone by both transitions.
+  r.toGreet();
+  msg(r, r.socketOf('a'), { type: 'lock', locked: true });
+  await r.beginFocus();
+  assert.equal(r.autoLock, false, 'already closed, so the room did not claim it');
+  r.toGreet();
+  assert.equal(r.locked, true, 'a lock someone set by hand stays set');
+}
+
+// 16) An invite-only room is not closed by focus (#96): the link is its door, and
+//     someone you sent it to should still get in when they're late.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true; r.isPublic = false;
+  join(r, st, { id: 'a', name: 'Gigi' });
+  await r.beginFocus();
+  assert.equal(r.locked, false, 'private room stays open mid-focus');
+  assert.equal(r.autoLock, false, 'nothing for greet to undo');
+}
+function store_get(st, key) { return st.store.get('sess')[key]; }
+
+console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #96 + session continuity): all passed');

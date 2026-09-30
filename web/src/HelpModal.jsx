@@ -121,10 +121,10 @@ export function HelpModal({ onClose }) {
             <h4 className="help-subhead">Good to know</h4>
             <ul className="help-tips">
               <li><strong>Private group:</strong> start a room as <strong>Invite only</strong> and share the link with just the people you want. It stays off the public directory.</li>
-              <li><strong>Lock a room:</strong> the host can lock a room to keep it to the current group, so no newcomers join.</li>
+              <li><strong>Listed rooms close while you focus:</strong> once a session starts it stops taking newcomers, and opens again at regroup. Anyone inside can open it sooner to let someone in, or close it during greet to keep the room to the current group. Invite-only rooms are never closed for you, since the link is the door.</li>
               <li><strong>Pop out the timer:</strong> on desktop, pop the countdown into a little always-on-top window so it stays visible when you minimise the tab.</li>
               <li><strong>Camera preference:</strong> signal whether you’re up for camera or camera-shy, so the group knows the vibe.</li>
-              <li><strong>Join any time:</strong> you can join an open room even mid-session, and drop into whatever phase it’s in.</li>
+              <li><strong>Or start your own:</strong> a session in progress is closed, not something you have to wait for. Opening a room alongside it is normal, and it gives whoever arrives next a choice of rooms.</li>
             </ul>
             <p className="hint">Nothing here is recorded or saved. The video call is live only, and your to-do list and chat stay in your own browser. Your camera and mic are off until you turn them on.</p>
           </div>
