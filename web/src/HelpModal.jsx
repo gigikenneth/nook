@@ -5,6 +5,19 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'September 30, 2026',
+    items: [
+      'Rooms now close while everyone is heads-down, and open again at regroup. A session in progress is no longer something you feel you have to join, and anyone inside can open the room to let a person in. Invite-only rooms are never closed for you',
+      'Regroup takes turns: the reporting order is numbered, the person reporting is framed, and you get an “I’ve reported” button on your own turn',
+      'A quiet tick when someone else posts in the chat, so a message does not go unnoticed while you are heads-down',
+      'Fixed: the session timer no longer stretches when a tab closes, a laptop sleeps, or a connection blips. The clock keeps its own time through a short drop',
+      'Fixed: you stay visible in “Around now” for as long as you are on the home screen. The presence connection now keeps itself alive and comes back on its own',
+      'Fixed: on phones the video, chat, and panels now fill the screen instead of shrinking to a narrow strip, and the header buttons take up far less room',
+      'Fixed: a dropped connection can no longer hold a seat in a full room, block a ready room from starting, or lock you out of your own room when you come back',
+      'The screen stays awake during a session on more browsers, including Firefox and older iPhones',
+    ],
+  },
+  {
     date: 'September 13, 2026',
     items: [
       'Import a list: bring back a list you downloaded before, or paste one in from notes, so you can pick up where you left off. Reads Nook’s own download, plain text, Markdown checklists, or JSON, and skips anything already on your list',
