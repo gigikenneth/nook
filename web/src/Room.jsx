@@ -257,6 +257,18 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     };
   }, []);
 
+  // A quiet tick when someone else posts to the chat (#91), so a message doesn't
+  // go unnoticed while you're heads-down. Own messages stay silent, and the count
+  // starts from whatever is already on screen so a reload (chat is restored from
+  // sessionStorage) doesn't replay a tick for old messages.
+  const seenChat = useRef(chat.length);
+  useEffect(() => {
+    if (chat.length > seenChat.current) {
+      if (!chat[chat.length - 1]?.mine) chime('tick');
+    }
+    seenChat.current = chat.length;
+  }, [chat]);
+
   // Keep the chat log pinned to the newest message.
   const logRef = useRef(null);
   const chatTaRef = useRef(null); // composer textarea, to reset its height after send
