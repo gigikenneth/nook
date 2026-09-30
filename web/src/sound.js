@@ -11,7 +11,12 @@ const TUNES = {
   regroup: [587.33, 880.0],         // D5 A5, two-note ping — come back
   warn: [698.46, 587.33],           // F5 D5, soft two-note — 5 min left, wrap up
   join: [659.25, 987.77],           // E5 B5, light rise — a new person arrived while you wait
+  tick: [1174.66],                  // D6, single blip, a new chat message (#91)
 };
+
+// Per-kind envelope. The chat tick has to be noticeable but never intrusive, so
+// it is much quieter and far shorter than the phase chimes.
+const ENV = { tick: { peak: 0.06, decay: 0.09 } };
 
 // Prime the AudioContext from a real user gesture (the Ready/Start click). Safari
 // only *starts* audio inside a gesture — a resume() from a setTimeout is ignored —
@@ -40,6 +45,7 @@ export function chime(kind) {
     ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
     if (ctx.state === 'suspended') ctx.resume();
     const now = ctx.currentTime;
+    const { peak = 0.22, decay = 0.5 } = ENV[kind] || {};
     notes.forEach((f, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -47,12 +53,12 @@ export function chime(kind) {
       osc.frequency.value = f;
       const t0 = now + i * 0.16;
       gain.gain.setValueAtTime(0, t0);
-      gain.gain.linearRampToValueAtTime(0.22, t0 + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.5);
+      gain.gain.linearRampToValueAtTime(peak, t0 + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + decay);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start(t0);
-      osc.stop(t0 + 0.55);
+      osc.stop(t0 + decay + 0.05);
     });
   } catch {
     // Audio not available — silent is fine.
