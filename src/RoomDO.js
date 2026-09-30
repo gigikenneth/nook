@@ -130,7 +130,12 @@ export class RoomDO {
       .sort((x, y) => x.a.joinedAt - y.a.joinedAt);
   }
 
-  count() { return this.sockets().length; }
+  // Live members only. A socket whose attachment has been nulled has already
+  // left (handleLeave), but it can linger in getWebSockets() when a supersede's
+  // close() frame never reaches the client under hibernation (#89). Counting it
+  // would hold a seat in a 4-person room, block the all-ready auto-start, and
+  // keep an empty room from ever freezing — so the count is delivery-independent.
+  count() { return this.roster().length; }
 
   // Host = the oldest live member. Makes host-promotion on leave automatic.
   hostId() { const r = this.roster(); return r.length ? r[0].a.id : null; }
@@ -144,6 +149,22 @@ export class RoomDO {
     if (req.headers.get('Upgrade') !== 'websocket') {
       return new Response('expected websocket', { status: 426 });
     }
+    const url = new URL(req.url);
+    const pathId = url.pathname.match(/^\/room\/([^/]+)\/ws$/);
+    if (pathId) this.roomId = decodeURIComponent(pathId[1]);
+
+    // A stable per-tab client id lets us recognise a returning connection.
+    // Reconnect key: prefer the persistent `did` (survives a full tab close),
+    // fall back to the per-tab `cid` (covers a refresh when localStorage is
+    // blocked). Either way it's an opaque, anonymous id — nothing relational.
+    const rkey = (url.searchParams.get('did') || url.searchParams.get('cid')) || null;
+
+    // Restore a returning tab's goal/pref, evicting any live zombie socket that
+    // shares this rkey (#57) so the person never appears twice. This runs BEFORE
+    // the capacity and lock checks: a reconnecting member's own zombie must not
+    // be the thing that turns them away from their own room (#89).
+    const { reconnecting, goal: restoredGoal, pref: restoredPref } = this.supersedeStale(rkey);
+
     const count = this.count();
     if (count >= MAX) {
       // Signal "full" over the socket (code 4001) — a 403 on the upgrade just
@@ -151,15 +172,12 @@ export class RoomDO {
       // server being down. Accept, then close with a code the client can read.
       return this.rejectWs(4001, 'full');
     }
-    if (this.locked && count > 0) {
+    if (this.locked && count > 0 && !reconnecting) {
       // Host closed the room to newcomers. (Never lock out the very first joiner,
-      // who creates the room.) Signal with 4002 so the client can explain it.
+      // who creates the room, or a member whose socket just dropped.) Signal with
+      // 4002 so the client can explain it.
       return this.rejectWs(4002, 'locked');
     }
-
-    const url = new URL(req.url);
-    const pathId = url.pathname.match(/^\/room\/([^/]+)\/ws$/);
-    if (pathId) this.roomId = decodeURIComponent(pathId[1]);
 
     // First person in sets the session lengths and whether the room is listed.
     // Only on a brand-new room — never on a resume, which would clobber the
@@ -174,15 +192,6 @@ export class RoomDO {
 
     const name = (url.searchParams.get('name') || 'Guest').slice(0, 32);
     const id = crypto.randomUUID();
-    // A stable per-tab client id lets us recognise a returning connection.
-    // Reconnect key: prefer the persistent `did` (survives a full tab close),
-    // fall back to the per-tab `cid` (covers a refresh when localStorage is
-    // blocked). Either way it's an opaque, anonymous id — nothing relational.
-    const rkey = (url.searchParams.get('did') || url.searchParams.get('cid')) || null;
-
-    // Restore a returning tab's goal/pref, evicting any live zombie socket that
-    // shares this rkey (#57) so the person never appears twice.
-    const { reconnecting, goal: restoredGoal, pref: restoredPref } = this.supersedeStale(rkey);
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
