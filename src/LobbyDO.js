@@ -154,6 +154,10 @@ export class LobbyDO {
         }
         break;
       }
+      case 'keepalive': // client liveness probe: keeps the presence socket off the
+        // idle-drop path and lets the client spot a zombie socket (#79).
+        try { ws.send(JSON.stringify({ type: 'alive' })); } catch { /* gone */ }
+        break;
       case 'rename':
         this.patch(ws, (x) => { x.name = String(m.name || 'Someone').slice(0, 32); });
         this.broadcastRoster();

@@ -141,4 +141,18 @@ async function newLobby() { const st = makeState(); const lobby = new LobbyDO(st
   assert.equal((await res3.json()).rooms.length, 0, 'closed room stays gone after eviction');
 }
 
-console.log('LobbyDO hibernation self-check (watch + camera-pref + block(#28) + leave): all passed');
+// Keepalive: the probe is answered and leaves presence untouched (#79). Without an
+// answer the client treats the socket as a zombie and reconnects, so a silent
+// server here would mean everyone churns their presence socket every 30s.
+{
+  const { st, lobby } = await newLobby();
+  const alice = conn(st, 'alice');
+  feed(lobby, alice, { type: 'hello', name: 'Alice' });
+  alice.sent.length = 0;
+  feed(lobby, alice, { type: 'keepalive' });
+  assert.deepEqual(alice.sent, [{ type: 'alive' }], 'keepalive is answered');
+  assert.equal(lobby.rosterFor(null).people.length, 1, 'still listed after a keepalive');
+  assert.equal(alice.deserializeAttachment().name, 'Alice', 'keepalive does not clobber the attachment');
+}
+
+console.log('LobbyDO hibernation self-check (watch + camera-pref + block(#28) + leave + keepalive(#79)): all passed');
