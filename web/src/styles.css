@@ -294,6 +294,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .share-row { border: 2px solid transparent; border-radius: var(--r-md); padding: 8px 10px; transition: border-color .2s var(--spring), background .2s; }
 .share-row.current { border-color: var(--accent-text); background: var(--field); }
 .share-row.shared { opacity: .6; }
+/* Regroup reporting order (#90): a plain position number, so the turn is legible
+   without reading the highlight. */
+.turn-num { flex: none; align-self: center; width: 18px; font-family: var(--display); font-weight: 800; font-size: 13px; color: var(--muted); text-align: center; }
+.turn-list { margin-bottom: 4px; }
 .share-tick { margin-left: auto; align-self: center; color: var(--pink-deep); font-weight: 800; }
 
 .ready-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }

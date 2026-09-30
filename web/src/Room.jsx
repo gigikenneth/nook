@@ -483,7 +483,9 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
                   onStart={() => { unlockAudio(); room.start(); }} />
               )}
               {phase === 'regroup' && (
-                <RegroupPanel tasks={tasks} isHost={isHost} focusMin={config.focusMin} regroupMin={config.regroupMin} onRestart={room.restart} />
+                <RegroupPanel tasks={tasks} isHost={isHost} focusMin={config.focusMin} regroupMin={config.regroupMin} onRestart={room.restart}
+                  selfId={selfId} selfName={name} peers={peers} order={order} shared={shared}
+                  onReported={() => room.shareGoal()} />
               )}
             </aside>
             {/* In greet, surface the list you're carrying into the next round (#88) —
@@ -651,14 +653,45 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, share
 
 const LEN_PRESETS = [15, 25, 50]; // quick focus-length picks for the next round
 
-function RegroupPanel({ tasks, isHost, focusMin, regroupMin, onRestart }) {
+function RegroupPanel({ tasks, isHost, focusMin, regroupMin, onRestart,
+  selfId, selfName, peers, order, shared, onReported }) {
   const finished = tasks.filter((t) => t.done).length;
   // Host can retune the next round's length; seeded with the current length.
   const [f, setF] = useState(focusMin);
   const [r, setR] = useState(regroupMin);
+  // Reporting order (#90): nobody should have to negotiate who goes first, so the
+  // frame walks the join order exactly like greet does. The server clears the
+  // greet round's flags on the flip into regroup, so the numbering starts fresh.
+  const current = order.find((id) => !shared.includes(id));
+  const allReported = order.length > 0 && !current;
+  const myTurn = current === selfId;
+  const nameOf = (id) => (id === selfId ? 'You' : peers[id]?.name || 'Guest');
   // The countdown lives in the phase banner (heading); no second timer here.
   return (
     <>
+      {order.length > 1 && (
+        <>
+          <h3 className="panel-title">Reporting order</h3>
+          <ul className="goal-list turn-list">
+            {order.map((id, i) => (
+              <li key={id} className={`share-row ${id === current ? 'current' : ''} ${shared.includes(id) ? 'shared' : ''}`}>
+                <span className="turn-num">{i + 1}</span>
+                <span className="goal-chip" style={{ background: CHIP[i % CHIP.length] }}>
+                  {initials(id === selfId ? selfName : nameOf(id))}
+                </span>
+                <div className="goal-body">
+                  <strong>{nameOf(id)}</strong>
+                  <span>{id === current ? 'reporting now…' : shared.includes(id) ? 'done' : 'waiting'}</span>
+                </div>
+                {shared.includes(id) && <span className="share-tick" aria-label="reported">✓</span>}
+              </li>
+            ))}
+          </ul>
+          {myTurn && <button className="primary" onClick={onReported}>I’ve reported</button>}
+          {!myTurn && current && <p className="hint">{nameOf(current)} is reporting… you’re up after them.</p>}
+          {allReported && <p className="hint">Everyone’s reported.</p>}
+        </>
+      )}
       <h3 className="panel-title">How it went</h3>
       <p className="tally">{finished}/{tasks.length || 0} done</p>
       <ul className="todo-check">

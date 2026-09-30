@@ -508,8 +508,12 @@ export class RoomDO {
       if (this.phase === 'focus') {
         this.phase = 'regroup';
         this.endsAt = Date.now() + this.regroupMin * 60000;
+        // Regroup takes turns the same way greet does, so clear the greet round's
+        // flags and let the frame walk the join order again (#90).
+        this.clearShared();
         this.persist();
         this.broadcastPhase();
+        this.broadcast({ type: 'shared-state', shared: [] });
       } else if (this.phase === 'regroup') {
         this.toGreet();
       }
@@ -578,6 +582,9 @@ export class RoomDO {
   order() { return this.roster().map((x) => x.a.id); }
   readyIds() { return this.roster().filter((x) => x.a.ready).map((x) => x.a.id); }
   sharedIds() { return this.roster().filter((x) => x.a.shared).map((x) => x.a.id); }
+  // Reset everyone's "I've had my turn" flag, so the next phase's turn frame
+  // starts from the top of the join order again.
+  clearShared() { for (const x of this.roster()) this.patch(x.ws, (r) => { r.shared = false; }); }
   goalsMap() { const o = {}; for (const x of this.roster()) if (x.a.goal) o[x.a.id] = x.a.goal; return o; }
   listsMap() { const o = {}; for (const x of this.roster()) if (x.a.list) o[x.a.id] = x.a.list; return o; }
   camPrefsMap() { const o = {}; for (const x of this.roster()) if (x.a.camPref) o[x.a.id] = x.a.camPref; return o; }
