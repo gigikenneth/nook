@@ -11,6 +11,7 @@ import { RoomDO } from './RoomDO.js';
 
 const HOUR = 3600_000;
 const ABANDON_MS = 6 * HOUR; // mirror of the constant in RoomDO.js
+const EMPTY_GRACE_MS = 90_000; // mirror: how long an empty room's clock keeps running (#92)
 
 // Fake DO state: a shared storage Map (so we can simulate eviction by making a
 // fresh RoomDO over the same store), one alarm slot, a synchronous
@@ -73,23 +74,47 @@ async function soloFocusRoom(state) {
   return { r, ws, id: 'solo' };
 }
 
-// 1) Last person leaves mid-focus: session pauses (not reset), and is persisted.
+// 1) Last person leaves mid-focus: the clock keeps running through the grace
+//    window (#92), then the alarm freezes the session (not reset) and persists it.
 const store = new Map();
 {
   const st = makeState(store);
   const { r, ws } = await soloFocusRoom(st);
+  const endsAt = r.endsAt;
   disconnect(r, ws);
   assert.equal(r.phase, 'focus', 'phase kept on empty');
+  assert.equal(r.paused, false, 'not frozen yet — a blip must not extend the session');
+  assert.equal(r.endsAt, endsAt, 'end time untouched during the grace window');
+  assert.equal(r.hostId(), null, 'no host while empty');
+  assert.equal(st.alarm, NOW + EMPTY_GRACE_MS, 'grace alarm armed');
+
+  NOW += EMPTY_GRACE_MS; // nobody came back
+  await r.alarm();
   assert.equal(r.endsAt, null, 'timer frozen (no absolute end while paused)');
   assert.equal(r.paused, true, 'session paused');
-  assert.equal(r.remainingMs, 50 * 60000, 'full 50 min frozen');
-  assert.equal(r.hostId(), null, 'no host while empty');
+  assert.equal(r.remainingMs, 50 * 60000 - EMPTY_GRACE_MS, 'frozen at what was actually left');
   assert.equal(st.alarm, NOW + ABANDON_MS, 'abandon alarm armed');
   const saved = store.get('sess');
   assert.equal(saved.phase, 'focus', 'persisted phase');
   assert.equal(saved.paused, true, 'persisted paused');
-  assert.equal(saved.remainingMs, 50 * 60000, 'persisted remaining');
+  assert.equal(saved.remainingMs, 50 * 60000 - EMPTY_GRACE_MS, 'persisted remaining');
   assert.equal(saved.roomId, 'test', 'roomId persisted so alarms can sync the lobby after eviction');
+}
+
+// 1b) A blip inside the grace window costs nothing: the tab drops and comes back,
+//     and the session still ends at exactly the same moment (#92).
+{
+  const st = makeState();
+  const { r, ws } = await soloFocusRoom(st);
+  const endsAt = r.endsAt;
+  disconnect(r, ws);
+  NOW += 20_000; // wifi drop / tab reopened 20s later
+  join(r, st, { id: 'solo-again', name: 'Gigi' });
+  r.resumeSession(); // what the join path calls
+  assert.equal(r.paused, false, 'never froze');
+  assert.equal(r.endsAt, endsAt, 'end time unchanged by the reconnect');
+  await r.alarm(); // occupied again: normal heartbeat, no pause
+  assert.equal(r.paused, false, 'still running with someone here');
 }
 
 // 2) Eviction / deploy: a fresh DO over the same storage restores the paused
@@ -100,7 +125,7 @@ const store = new Map();
   await r2._restore;
   assert.equal(r2.phase, 'focus', 'restored phase after eviction');
   assert.equal(r2.paused, true, 'restored paused');
-  assert.equal(r2.remainingMs, 50 * 60000, 'restored remaining');
+  assert.equal(r2.remainingMs, 50 * 60000 - EMPTY_GRACE_MS, 'restored remaining');
   assert.equal(r2.configured, true, 'config restored (no URL clobber)');
   assert.equal(r2.roomId, 'test', 'roomId restored');
 
@@ -108,14 +133,16 @@ const store = new Map();
   r2.resumeSession();
   assert.equal(r2.paused, false, 'resumed');
   assert.equal(r2.phase, 'focus', 'still focus — did NOT restart at greet');
-  assert.equal(r2.endsAt, NOW + 50 * 60000, 're-anchored with the same time left');
+  assert.equal(r2.endsAt, NOW + 50 * 60000 - EMPTY_GRACE_MS, 're-anchored with the same time left');
 }
 
 // 3) Genuinely abandoned: paused past the abandon window, the alarm wipes it.
 {
   const st = makeState();
   const { r, ws } = await soloFocusRoom(st);
-  disconnect(r, ws); // pause
+  disconnect(r, ws);
+  NOW += EMPTY_GRACE_MS;
+  await r.alarm(); // grace expired: freeze
   NOW += ABANDON_MS + 1; // 6h+ pass with nobody back
   await r.alarm();
   assert.equal(r.phase, 'greet', 'wiped to greet');
