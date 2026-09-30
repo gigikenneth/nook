@@ -158,6 +158,22 @@ export class RoomDO {
 
   socketOf(id) { return this.sockets().find((ws) => ws.deserializeAttachment()?.id === id); }
 
+  // Drop sockets the runtime has already closed. Their close event can lag, and
+  // under hibernation it may never arrive at all, so the person is gone while
+  // their seat is still held: a four-person room stays "full" and the owner of
+  // that seat is turned away as 'full' when they try to come back. supersedeStale
+  // only rescues them when their reconnect key matches (a new tab with
+  // localStorage blocked gets a fresh one, so it often doesn't).
+  //
+  // Only CLOSING/CLOSED counts as gone. A missing or CONNECTING readyState never
+  // evicts anyone, so this can't throw a live member out.
+  sweepDead() {
+    for (const ws of this.sockets()) {
+      const rs = ws.readyState;
+      if ((rs === 2 || rs === 3) && ws.deserializeAttachment()) this.handleLeave(ws);
+    }
+  }
+
   // Read-modify-write a socket's attachment.
   patch(ws, fn) { const a = ws.deserializeAttachment() || {}; fn(a); ws.serializeAttachment(a); return a; }
 
@@ -165,6 +181,10 @@ export class RoomDO {
     if (req.headers.get('Upgrade') !== 'websocket') {
       return new Response('expected websocket', { status: 426 });
     }
+    // Before anyone is counted or turned away, let go of seats held by sockets
+    // that are already closed.
+    this.sweepDead();
+
     const url = new URL(req.url);
     const pathId = url.pathname.match(/^\/room\/([^/]+)\/ws$/);
     if (pathId) this.roomId = decodeURIComponent(pathId[1]);
@@ -488,6 +508,7 @@ export class RoomDO {
     // the directory and fire phase transitions), and once far in the future while
     // empty (to wipe a genuinely abandoned room).
     const now = Date.now();
+    this.sweepDead(); // so a room frees held seats without waiting for someone to try the door
     if (this.count() === 0) {
       // Everyone left mid-countdown: cancel it, don't drop an empty room into focus.
       if (this.starting) { this.starting = false; this.startAt = null; }

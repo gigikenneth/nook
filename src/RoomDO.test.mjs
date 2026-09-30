@@ -33,11 +33,11 @@ function makeState(store = new Map()) {
 
 // A stand-in for a hibernatable WebSocket: attachment get/set + spies.
 function fakeWs() {
-  const ws = { _att: null, _open: true, sent: [] };
+  const ws = { _att: null, _open: true, sent: [], readyState: 1 }; // 1 = OPEN, like the runtime
   ws.serializeAttachment = (v) => { ws._att = v; };
   ws.deserializeAttachment = () => ws._att;
   ws.send = (s) => ws.sent.push(JSON.parse(s));
-  ws.close = () => { ws._open = false; }; // leaves state.getWebSockets(), like the runtime
+  ws.close = () => { ws._open = false; ws.readyState = 3; }; // leaves state.getWebSockets(), like the runtime
   return ws;
 }
 
@@ -495,4 +495,57 @@ function store_get(st, key) { return st.store.get('sess')[key]; }
   assert.deepEqual(r.sharedIds(), ['a'], 'first reporter advances the frame');
 }
 
-console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 #96 + session continuity): all passed');
+// 18) A closed socket must not hold its seat. The runtime's close event can lag
+//     (under hibernation, forever), so the person is gone while the room still
+//     counts them: it reads as full and turns them away when they come back with
+//     a reconnect key that doesn't match the one they left with.
+{
+  const realPair = globalThis.WebSocketPair, realResponse = globalThis.Response;
+  let lastPair = null; // 'full' is signalled by closing the accepted socket, not by the status
+  globalThis.WebSocketPair = function () {
+    const mk = () => { const w = fakeWs(); w.accept = () => {}; w.close = (code) => { w._open = false; w.readyState = 3; w.closedWith = code; }; return w; };
+    const client = mk(), server = mk();
+    lastPair = { client, server };
+    return { 0: client, 1: server };
+  };
+  globalThis.Response = class { constructor(body, init = {}) { this.body = body; Object.assign(this, init); } };
+  try {
+    const st = makeState();
+    const r = new RoomDO(st, null);
+    await r._restore;
+    r.roomId = 'test'; r.configured = true;
+    const live = join(r, st, { id: 'live', name: 'Mags', rkey: 'dev-mags' });
+    join(r, st, { id: 'b', name: 'Jeff', rkey: 'dev-jeff' });
+    join(r, st, { id: 'c', name: 'Pat', rkey: 'dev-pat' });
+    const gone = join(r, st, { id: 'gone', name: 'Sam', rkey: 'dev-sam-old' });
+    assert.equal(r.count(), 4, 'room is full');
+
+    // Sam's connection died: the runtime marks the socket closed, but no close
+    // event ever reaches us, and the attachment is still intact.
+    gone.readyState = 3;
+
+    // Sam comes back in a fresh tab with no stored device id, so their reconnect
+    // key is new and supersedeStale can't match them to the seat they left.
+    live.sent.length = 0;
+    const back = await r.fetch(new Request('https://room/room/test/ws?name=Sam&cid=dev-sam-new', { headers: { Upgrade: 'websocket' } }));
+    assert.equal(back.status, 101, 'socket accepted');
+    assert.equal(lastPair.server.closedWith, undefined, 'let back in, not closed with 4001 full');
+    assert.equal(r.count(), 4, 'their old seat was released, not doubled up');
+    assert.ok(!r.order().includes('gone'), 'the dead socket left the roster');
+    assert.ok(live.sent.find((m) => m.type === 'peer-leave' && m.id === 'gone'), 'peers were told they left');
+
+    // The heartbeat frees seats too, without waiting for someone to try the door.
+    const alsoGone = r.socketOf('c');
+    alsoGone.readyState = 3;
+    await r.alarm();
+    assert.equal(r.count(), 3, 'the alarm swept the closed socket');
+
+    // A live member is never swept.
+    assert.ok(r.order().includes('live'), 'open sockets are left alone');
+  } finally {
+    globalThis.WebSocketPair = realPair;
+    globalThis.Response = realResponse;
+  }
+}
+
+console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 #96 + dead-socket seats + session continuity): all passed');
