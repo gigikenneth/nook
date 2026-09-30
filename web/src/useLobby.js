@@ -23,11 +23,10 @@ export function useLobby(enabled, name, mode = 'here', pref = null) {
 
   useEffect(() => {
     if (!enabled) return;
-    const socket = new WebSocket(`${wsBase}/lobby/ws`);
-    ws.current = socket;
-    socket.onopen = () => socket.send(JSON.stringify({ type: mode === 'watch' ? 'watch' : 'hello', name: nameRef.current, pref: prefRef.current, did: getDid() }));
-    socket.onmessage = (ev) => {
-      const m = JSON.parse(ev.data);
+    let dead = false;
+    let attempts = 0;
+
+    function handle(m) {
       if (m.type === 'welcome') setSelfId(m.id);
       else if (m.type === 'roster') setRoster(m.people);
       else if (m.type === 'invite') { setInvite({ fromName: m.fromName, roomId: m.roomId }); chime('join'); } // ping so you notice the invite
@@ -41,9 +40,76 @@ export function useLobby(enabled, name, mode = 'here', pref = null) {
         try { localStorage.setItem('nook.blocks', JSON.stringify(reconciled)); } catch { /* ignore */ }
         setBlocks(reconciled);
       }
+    }
+
+    function connect() {
+      const socket = new WebSocket(`${wsBase}/lobby/ws`);
+      ws.current = socket;
+      socket.onopen = () => {
+        attempts = 0;
+        socket.send(JSON.stringify({ type: mode === 'watch' ? 'watch' : 'hello', name: nameRef.current, pref: prefRef.current, did: getDid() }));
+      };
+      socket.onmessage = (ev) => { clearLive(); handle(JSON.parse(ev.data)); };
+      socket.onclose = () => {
+        // Presence has no UI for being disconnected, so it just keeps retrying:
+        // a dropped lobby socket means nobody can see you're around (#79), and
+        // silently staying dropped is the bug. Ignore a stale socket we already
+        // replaced, so a raced reconnect doesn't kill the live one.
+        if (dead || socket !== ws.current) return;
+        setRoster([]);
+        attempts += 1;
+        setTimeout(() => { if (!dead) connect(); }, Math.min(1000 * 2 ** (attempts - 1), 15000));
+      };
+    }
+
+    function replace(s) {
+      s.onclose = null; // deliberate replace, don't let it schedule its own retry
+      try { s.close(); } catch { /* already closed */ }
+      attempts = 0;
+      connect();
+    }
+
+    function reconnectNow() {
+      if (dead) return;
+      const s = ws.current;
+      if (s && (s.readyState === 0 || s.readyState === 1)) return;
+      attempts = 0;
+      connect();
+    }
+
+    // Keepalive + zombie watchdog, the same shape useRoom uses. An idle presence
+    // socket gets dropped by proxies and frozen backgrounded tabs can leave one
+    // reporting OPEN while no frames flow — either way the server drops you from
+    // everyone's roster and, without this, you never come back (#79). Any reply
+    // clears the probe (clearLive in onmessage); silence forces a reconnect.
+    let liveTimeout = null;
+    const clearLive = () => { if (liveTimeout) { clearTimeout(liveTimeout); liveTimeout = null; } };
+    const probe = () => {
+      if (dead) return;
+      const s = ws.current;
+      if (!s || s.readyState !== 1) return reconnectNow();
+      if (liveTimeout) return; // a probe is already in flight
+      try { s.send(JSON.stringify({ type: 'keepalive' })); } catch { return reconnectNow(); }
+      liveTimeout = setTimeout(() => {
+        liveTimeout = null;
+        if (dead || ws.current !== s) return; // answered, or we already moved on
+        replace(s);
+      }, 5000);
     };
+    const beat = setInterval(probe, 30000); // well inside the ~100s idle cutoff
+    const onVisible = () => { if (document.visibilityState === 'visible') probe(); };
+    window.addEventListener('online', reconnectNow);
+    document.addEventListener('visibilitychange', onVisible);
+
+    connect();
+
     return () => {
-      try { socket.close(); } catch { /* already closed */ }
+      dead = true;
+      clearLive();
+      clearInterval(beat);
+      window.removeEventListener('online', reconnectNow);
+      document.removeEventListener('visibilitychange', onVisible);
+      try { ws.current && ws.current.close(); } catch { /* already closed */ }
       ws.current = null;
       setRoster([]);
       setSelfId(null);
