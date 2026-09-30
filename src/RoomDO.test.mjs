@@ -466,4 +466,33 @@ Date.now = realNow;
 }
 function store_get(st, key) { return st.store.get('sess')[key]; }
 
-console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #96 + session continuity): all passed');
+// 17) Regroup takes turns too (#90): the flip out of focus clears the greet
+//     round's "I've shared" flags and tells everyone, so the reporting order
+//     starts from the top of the join order instead of reading as all-done.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  const a = join(r, st, { id: 'a', name: 'Gigi' });
+  const b = join(r, st, { id: 'b', name: 'Jeff' });
+  r.phase = 'greet';
+  msg(r, a, { type: 'shared' });
+  msg(r, b, { type: 'shared' });
+  assert.deepEqual(r.sharedIds(), ['a', 'b'], 'both shared during greet');
+
+  r.phase = 'focus';
+  r.endsAt = NOW - 1; // focus is over
+  a.sent.length = 0; b.sent.length = 0;
+  await r.alarm();
+  assert.equal(r.phase, 'regroup', 'flipped to regroup');
+  assert.deepEqual(r.sharedIds(), [], 'turn flags cleared for the report round');
+  const told = a.sent.find((m) => m.type === 'shared-state');
+  assert.ok(told && told.shared.length === 0, 'clients told the order restarted');
+  assert.deepEqual(r.order(), ['a', 'b'], 'reporting order is join order');
+
+  msg(r, a, { type: 'shared' });
+  assert.deepEqual(r.sharedIds(), ['a'], 'first reporter advances the frame');
+}
+
+console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 #96 + session continuity): all passed');
