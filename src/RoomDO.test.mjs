@@ -319,4 +319,73 @@ const store = new Map();
 }
 
 Date.now = realNow;
-console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 + session continuity): all passed');
+// 13) Orphan sockets don't hold seats or block the room (#89 follow-up). A
+//     superseded socket whose close() frame never reached the client stays in
+//     getWebSockets() with a nulled attachment, so anything counting raw sockets
+//     saw a phantom occupant.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  const live = join(r, st, { id: 'live', name: 'Mags', rkey: 'dev-mags' });
+  const orphan = join(r, st, { id: 'orphan', name: 'Jeff', rkey: 'dev-jeff' });
+  orphan.serializeAttachment(null); // handleLeave ran; the close never landed
+  assert.equal(r.sockets().length, 2, 'the orphan socket is still connected');
+  assert.equal(r.count(), 1, 'but it is not counted as a member');
+
+  // The all-ready auto-start compares readyIds() with count(): with the phantom
+  // in the count it could never match, so a ready room never started.
+  r.phase = 'greet';
+  msg(r, live, { type: 'ready' });
+  assert.equal(r.phase, 'greet', 'no auto-start yet (countdown flag instead)');
+  assert.equal(r.starting, true, 'ready room starts once everyone real is ready');
+
+  // Empty-but-orphaned: the alarm must still treat the room as empty.
+  live.serializeAttachment(null);
+  assert.equal(r.count(), 0, 'a room holding only orphans is empty');
+}
+
+// 14) A member whose socket dropped can get back into a locked room (#89). The
+//     lock is for newcomers; their own zombie must not turn them away, and
+//     neither must the count it inflated.
+{
+  const realPair = globalThis.WebSocketPair, realResponse = globalThis.Response;
+  let lastPair = null; // the pair fetch/rejectWs just built, so we can read its close code
+  globalThis.WebSocketPair = function () {
+    const mk = () => {
+      const w = fakeWs();
+      w.accept = () => {};
+      w.close = (code) => { w._open = false; w.closedWith = code; };
+      return w;
+    };
+    const client = mk(), server = mk();
+    lastPair = { client, server };
+    return { 0: client, 1: server };
+  };
+  globalThis.Response = class { constructor(body, init = {}) { this.body = body; Object.assign(this, init); } };
+  try {
+    const st = makeState();
+    const r = new RoomDO(st, null);
+    await r._restore;
+    r.roomId = 'test'; r.configured = true; r.locked = true;
+    join(r, st, { id: 'host', name: 'Gigi', rkey: 'dev-gigi' });
+    const zombie = join(r, st, { id: 'jeff-old', name: 'Jeff', rkey: 'dev-jeff' });
+
+    const req = (key) => new Request(`https://room/room/test/ws?name=Jeff&did=${key}`, { headers: { Upgrade: 'websocket' } });
+    const back = await r.fetch(req('dev-jeff'));
+    assert.equal(back.status, 101, 'the returning member is let in');
+    assert.equal(zombie._open, false, 'their zombie was superseded, not counted');
+    assert.equal(r.count(), 2, 'host + the one Jeff, no duplicate');
+
+    const stranger = await r.fetch(req('dev-stranger'));
+    assert.equal(stranger.status, 101, 'stranger is accepted at the socket level');
+    assert.equal(lastPair.server.closedWith, 4002, 'then closed as locked out');
+    assert.equal(r.count(), 2, 'the locked-out stranger never joined the roster');
+  } finally {
+    globalThis.WebSocketPair = realPair;
+    globalThis.Response = realResponse;
+  }
+}
+
+console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 + session continuity): all passed');
