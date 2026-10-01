@@ -272,11 +272,8 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
                     {minsLeft != null && <span className="time-left">~{minsLeft}m left</span>}
                     {r.locked && <span className="badge badge-locked" title="Closed to new people">🔒</span>}
                     <span className="count">{r.count}/4</span>
-                    {/* Rooms close themselves while everyone's heads-down (#96), so a
-                        session in progress isn't something you have to join — starting
-                        your own alongside it is the normal thing to do. */}
                     <button className="primary sm" disabled={full || !canGo || r.locked}
-                      title={r.locked ? 'Closed while they focus — try their next regroup, or start your own room'
+                      title={r.locked ? 'This group closed their room to new people'
                         : !canGo ? 'Add your name first' : full ? 'Room is full' : ''}
                       onClick={() => go(r.roomId, true)}>Join</button>
                   </div>

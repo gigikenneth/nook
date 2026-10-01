@@ -415,58 +415,33 @@ Date.now = realNow;
   }
 }
 
-// 15) The room closes itself for the round (#96) and opens again at regroup... but
-//     only the lock it set itself. A lock someone set by hand is theirs.
+// 15) Anyone in the room can close it to newcomers, not just the host, and the
+//     room never decides that for them: starting focus leaves the lock alone.
 {
   const st = makeState();
   const r = new RoomDO(st, null);
   await r._restore;
-  r.roomId = 'test'; r.configured = true;
-  r.isPublic = true;
+  r.roomId = 'test'; r.configured = true; r.isPublic = true;
   const a = join(r, st, { id: 'a', name: 'Gigi' });
-  join(r, st, { id: 'b', name: 'Jeff' });
+  const b = join(r, st, { id: 'b', name: 'Jeff' });
 
   await r.beginFocus();
-  assert.equal(r.locked, true, 'focus closes the room to newcomers');
-  assert.equal(r.autoLock, true, 'flagged as the room closing itself');
-  assert.ok(a.sent.find((m) => m.type === 'locked-state' && m.locked === true), 'everyone told it closed');
-  assert.equal(store_get(st, 'locked'), true, 'persisted, so an eviction keeps it closed');
+  assert.equal(r.locked, false, 'focus leaves the room open');
+
+  b.sent.length = 0;
+  msg(r, b, { type: 'lock', locked: true }); // b is not the host
+  assert.equal(r.locked, true, 'a non-host can close the room');
+  assert.ok(b.sent.find((m) => m.type === 'locked-state' && m.locked === true), 'everyone told');
+  assert.equal(st.store.get('sess').locked, true, 'persisted, so an eviction keeps it closed');
 
   r.toGreet();
-  assert.equal(r.locked, false, 'open again at greet');
-  assert.equal(r.autoLock, false, 'flag cleared with it');
+  assert.equal(r.locked, true, 'their lock survives the next round');
 
-  // Anyone inside can open it mid-focus, not just the host, and their decision
-  // survives the next greet.
-  await r.beginFocus();
-  msg(r, r.socketOf('b'), { type: 'lock', locked: false });
-  assert.equal(r.locked, false, 'a non-host opened the room');
-  assert.equal(r.autoLock, false, 'the room stops managing the lock once a person decides');
-
-  // A hand-set lock during greet is left alone by both transitions.
-  r.toGreet();
-  msg(r, r.socketOf('a'), { type: 'lock', locked: true });
-  await r.beginFocus();
-  assert.equal(r.autoLock, false, 'already closed, so the room did not claim it');
-  r.toGreet();
-  assert.equal(r.locked, true, 'a lock someone set by hand stays set');
+  msg(r, a, { type: 'lock', locked: false });
+  assert.equal(r.locked, false, 'and anyone can open it again');
 }
 
-// 16) An invite-only room is not closed by focus (#96): the link is its door, and
-//     someone you sent it to should still get in when they're late.
-{
-  const st = makeState();
-  const r = new RoomDO(st, null);
-  await r._restore;
-  r.roomId = 'test'; r.configured = true; r.isPublic = false;
-  join(r, st, { id: 'a', name: 'Gigi' });
-  await r.beginFocus();
-  assert.equal(r.locked, false, 'private room stays open mid-focus');
-  assert.equal(r.autoLock, false, 'nothing for greet to undo');
-}
-function store_get(st, key) { return st.store.get('sess')[key]; }
-
-// 17) Regroup takes turns too (#90): the flip out of focus clears the greet
+// 16) Regroup takes turns too (#90): the flip out of focus clears the greet
 //     round's "I've shared" flags and tells everyone, so the reporting order
 //     starts from the top of the join order instead of reading as all-done.
 {
@@ -495,7 +470,7 @@ function store_get(st, key) { return st.store.get('sess')[key]; }
   assert.deepEqual(r.sharedIds(), ['a'], 'first reporter advances the frame');
 }
 
-// 18) A closed socket must not hold its seat. The runtime's close event can lag
+// 17) A closed socket must not hold its seat. The runtime's close event can lag
 //     (under hibernation, forever), so the person is gone while the room still
 //     counts them: it reads as full and turns them away when they come back with
 //     a reconnect key that doesn't match the one they left with.
@@ -548,4 +523,4 @@ function store_get(st, key) { return st.store.get('sess')[key]; }
   }
 }
 
-console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 #96 + dead-socket seats + session continuity): all passed');
+console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 + dead-socket seats + session continuity): all passed');

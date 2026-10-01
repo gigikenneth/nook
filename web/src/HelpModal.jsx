@@ -7,7 +7,7 @@ const CHANGELOG = [
   {
     date: 'September 30, 2026',
     items: [
-      'Rooms now close while everyone is heads-down, and open again at regroup. A session in progress is no longer something you feel you have to join, and anyone inside can open the room to let a person in. Invite-only rooms are never closed for you',
+      'Anyone in a room can now close it to new people, not just the host, so a group that wants to keep to itself can say so without hunting for whoever started the session',
       'Regroup takes turns: the reporting order is numbered, the person reporting is framed, and you get an “I’ve reported” button on your own turn',
       'A quiet tick when someone else posts in the chat, so a message does not go unnoticed while you are heads-down',
       'Fixed: the session timer no longer stretches when a tab closes, a laptop sleeps, or a connection blips. The clock keeps its own time through a short drop',
@@ -134,10 +134,10 @@ export function HelpModal({ onClose }) {
             <h4 className="help-subhead">Good to know</h4>
             <ul className="help-tips">
               <li><strong>Private group:</strong> start a room as <strong>Invite only</strong> and share the link with just the people you want. It stays off the public directory.</li>
-              <li><strong>Listed rooms close while you focus:</strong> once a session starts it stops taking newcomers, and opens again at regroup. Anyone inside can open it sooner to let someone in, or close it during greet to keep the room to the current group. Invite-only rooms are never closed for you, since the link is the door.</li>
+              <li><strong>Close a room:</strong> anyone in a room can close it to new people, so a group that wants to keep to itself can say so. Open it again any time.</li>
               <li><strong>Pop out the timer:</strong> on desktop, pop the countdown into a little always-on-top window so it stays visible when you minimise the tab.</li>
               <li><strong>Camera preference:</strong> signal whether you’re up for camera or camera-shy, so the group knows the vibe.</li>
-              <li><strong>Or start your own:</strong> a session in progress is closed, not something you have to wait for. Opening a room alongside it is normal, and it gives whoever arrives next a choice of rooms.</li>
+              <li><strong>Join any time:</strong> you can join an open room even mid-session, and drop into whatever phase it’s in. Starting your own room alongside a running one is just as normal.</li>
             </ul>
             <p className="hint">Nothing here is recorded or saved. The video call is live only, and your to-do list and chat stay in your own browser. Your camera and mic are off until you turn them on.</p>
           </div>
