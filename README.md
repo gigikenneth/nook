@@ -64,12 +64,10 @@ The home screen shows a **live directory** of open rooms: who's around, what
 they're working on, each session's **focus length** (e.g. "50m focus", shown on
 every card so you can see the time commitment before you join — even during greet,
 before the timer starts), and how long a session has left. Join anyone with a free
-seat who's still greeting, and you'll wrap up together. Listed rooms **close themselves
-when focus starts** and open again at regroup, so a session in progress is never
-something you feel you have to join, and starting one in parallel is the normal
-move. Anyone inside a room can open it sooner to let a person in, or close it
-during greet to keep the room to the current group. Invite-only rooms are never
-closed automatically: the link is the door, so a latecomer you invited still gets in.
+seat, even mid-session — you'll drop into whatever phase they're in and wrap up
+together. Starting your own room alongside a running one is just as normal.
+Anyone inside a room can **close** it to keep the room to the current group, or
+leave it **open** so latecomers can join.
 
 Or start your own:
 

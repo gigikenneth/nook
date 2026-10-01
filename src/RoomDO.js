@@ -65,7 +65,6 @@ export class RoomDO {
     this.regroupMin = 5;
     this.starting = false; // true during the pre-focus countdown (still in greet, cameras live)
     this.startAt = null; // absolute ms the countdown lands on and focus begins
-    this.autoLock = false; // the room closed itself when focus started (#96), so it may reopen itself at the next greet
     this.roomId = null; // path segment, for lobby registration (persisted so alarms can sync after eviction)
     this.isPublic = false;
 
@@ -79,7 +78,7 @@ export class RoomDO {
       this.abandonAt = s.abandonAt ?? null;
       this.focusMin = s.focusMin; this.regroupMin = s.regroupMin;
       this.starting = !!s.starting; this.startAt = s.startAt ?? null;
-      this.isPublic = s.isPublic; this.locked = !!s.locked; this.autoLock = !!s.autoLock;
+      this.isPublic = s.isPublic; this.locked = !!s.locked;
       this.roomId = s.roomId ?? null;
       this.configured = true;
     });
@@ -90,7 +89,7 @@ export class RoomDO {
       phase: this.phase, endsAt: this.endsAt, paused: this.paused, remainingMs: this.remainingMs,
       abandonAt: this.abandonAt, focusMin: this.focusMin, regroupMin: this.regroupMin,
       starting: this.starting, startAt: this.startAt,
-      isPublic: this.isPublic, locked: this.locked, autoLock: this.autoLock, roomId: this.roomId,
+      isPublic: this.isPublic, locked: this.locked, roomId: this.roomId,
     });
   }
 
@@ -124,7 +123,7 @@ export class RoomDO {
   // A room sat empty past the abandon window — clear it for good.
   wipe() {
     this.phase = 'greet'; this.endsAt = null; this.paused = false; this.remainingMs = null;
-    this.abandonAt = null; this.locked = false; this.autoLock = false; this.configured = false;
+    this.abandonAt = null; this.locked = false; this.configured = false;
     this.state.storage.delete(SESSION_KEY);
     this.state.storage.deleteAlarm();
     this.syncLobby();
@@ -375,12 +374,9 @@ export class RoomDO {
         if (this.phase === 'greet') this.startFocus();
         break;
       case 'lock':
-        // Anyone in the room opens or closes it to newcomers (#96): the room closes
-        // itself at focus, so whoever wants to let someone in shouldn't have to
-        // find the host to do it. A person deciding also ends the room's own
-        // management of the lock, so it isn't reopened under them at the next greet.
+        // Anyone in the room opens or closes it to newcomers. A group that doesn't
+        // want company locks the door itself; the room never decides that for them.
         this.locked = !!m.locked;
-        this.autoLock = false;
         this.persist();
         this.broadcast({ type: 'locked-state', locked: this.locked });
         this.syncLobby();
@@ -488,17 +484,8 @@ export class RoomDO {
     this.phase = 'focus';
     this.endsAt = Date.now() + this.focusMin * 60000;
     for (const x of this.roster()) this.patch(x.ws, (r) => { r.ready = false; }); // clear ready
-    // Close a listed room for the round (#96). Landing on Nook and finding one
-    // session mid-focus made joining it feel obligatory, and starting a parallel
-    // room feel rude; a closed room turns "the only option" into "one of the
-    // options", and nobody heads-down gets a newcomer walking in. Anyone inside can
-    // open it again. A lock the room set itself lifts at the next greet; one a
-    // person set is theirs to undo. Invite-only rooms are left alone: their door is
-    // the link, and someone you sent it to should still get in when they're late.
-    if (this.isPublic && !this.locked) { this.locked = true; this.autoLock = true; }
     this.persist();
     this.broadcastPhase();
-    this.broadcast({ type: 'locked-state', locked: this.locked });
     this.syncLobby();
     this.scheduleTick();
   }
@@ -558,12 +545,8 @@ export class RoomDO {
     this.phase = 'greet';
     this.endsAt = null;
     for (const x of this.roster()) this.patch(x.ws, (r) => { r.ready = false; r.shared = false; });
-    // The round is over, so undo the room's own closing (#96) and let newcomers in
-    // again. A lock someone set by hand stays set.
-    if (this.autoLock) { this.locked = false; this.autoLock = false; }
     this.persist();
     this.broadcastPhase();
-    this.broadcast({ type: 'locked-state', locked: this.locked });
     this.broadcast({ type: 'ready-state', ready: [] });
     this.broadcast({ type: 'shared-state', shared: [] });
     this.syncLobby();

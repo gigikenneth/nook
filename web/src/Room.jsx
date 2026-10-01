@@ -353,7 +353,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
 
   if (status === 'kicked') return <Ended msg="You were removed from this room." onLeave={onLeave} />;
   if (status === 'full') return <Ended msg="That room is full. Four is the max." onLeave={onLeave} />;
-  if (status === 'locked') return <Ended msg="That room is closed to new people. Rooms close while everyone's heads-down, so try again at their next regroup — or start your own room." onLeave={onLeave} />;
+  if (status === 'locked') return <Ended msg="That room is closed to new people right now. Try again later, or start your own room." onLeave={onLeave} />;
   if (status === 'offline') return <Ended msg="Lost connection to the room. This may be your internet, or Nook may be briefly down — try rejoining in a moment." onLeave={onLeave} />;
   if (status === 'superseded') return <Ended msg="You opened this room in another tab or window, so this one stepped aside." onLeave={onLeave} />;
   if (status === 'closed') return <Ended msg="You left the room." onLeave={onLeave} />;
@@ -417,14 +417,16 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
           <Moon size={26} className="small" /><span>Nook</span>
           <span className="dot">·</span><span className="count">{count}/4 here</span>
           {isPublic ? <span className="badge badge-greet">open</span> : <span className="badge">invite only</span>}
-          {locked && <span className="badge badge-locked">{phase === 'focus' ? '🔒 closed for this round' : '🔒 closed'}</span>}
+          {locked && <span className="badge badge-locked">🔒 closed</span>}
         </div>
         <div className="room-actions">
           <ThemeToggle className="sm" />
+          {/* Anyone in the room can close it: a group that doesn't want company
+              locks the door themselves, rather than the room deciding for them. */}
           <button className={`ghost sm ${locked ? 'is-locked' : ''}`} onClick={room.toggleLock}
             title={locked
               ? 'Closed to new people. Open it to let someone in.'
-              : 'Anyone with space can join. Closes on its own when focus starts.'}>
+              : 'Anyone with space can join, even mid-session. Close it to keep the room to this group.'}>
             {locked ? '🔒 Closed' : '🔓 Open'}
           </button>
           {onBrowse && <button className="ghost sm" onClick={onBrowse}>Home</button>}
