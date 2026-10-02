@@ -523,4 +523,20 @@ Date.now = realNow;
   }
 }
 
+// 18) The liveness probe is answered (#89). Normally the runtime's auto-response
+//     handles it without waking the room, but on a runtime without that, or for a
+//     frame that doesn't match it exactly, the message handler must still reply:
+//     an unanswered probe makes the client tear down a healthy socket.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  const ws = join(r, st, { id: 'a', name: 'Gigi' });
+  ws.sent.length = 0;
+  msg(r, ws, { type: 'ping' });
+  assert.deepEqual(ws.sent, [{ type: 'pong' }], 'probe answered');
+  assert.equal(r.count(), 1, 'and it changes nothing else');
+}
+
 console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 + dead-socket seats + session continuity): all passed');

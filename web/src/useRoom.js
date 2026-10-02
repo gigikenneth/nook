@@ -156,7 +156,11 @@ export function useRoom(roomId, name, opts) {
         if (e.code === 4001) return setStatus('full');
         if (e.code === 4002) return setStatus('locked');
         if (e.code === 4003) return setStatus('superseded'); // this device opened the room elsewhere
-        if (e.code === 1000 || e.code === 1005) return setStatus('closed');
+        // Anything else, including a polite 1000/1005, is a drop and not a
+        // decision: leaving is a local act (the effect tears down with dead=true,
+        // so its close never reaches here). The runtime closes sockets normally
+        // when a Durable Object is evicted or redeployed, and treating that as
+        // "You left the room" ended a live session out of nowhere (#89).
         setPeers({});
         // A socket that never opened means the server is unreachable (Nook down,
         // or the user is offline). Don't give up — keep retrying at the capped
@@ -178,18 +182,26 @@ export function useRoom(roomId, name, opts) {
       connect();
     }
 
-    // Zombie-socket watchdog. Safari freezes a backgrounded tab and can leave the
-    // socket reporting readyState 1 (OPEN) while no frames actually flow — so a
-    // phase→regroup broadcast sent while you were away is silently lost and the UI
-    // stays stuck on focus. On refocus, ping and wait for a pong; if none comes,
-    // force a reconnect so a fresh welcome resyncs the phase/timer we missed.
+    // Keepalive and zombie-socket watchdog. Two problems, one probe:
+    //
+    // Nothing flows on this socket during a quiet 50 minute focus block, and an
+    // idle WebSocket gets dropped by proxies and NAT tables. The client reconnects,
+    // but a drop that lands badly reads as being thrown out of the session (#89),
+    // so a tick every 30s keeps the connection warm. The lobby socket already
+    // works this way.
+    //
+    // Safari also freezes a backgrounded tab and can leave the socket reporting
+    // readyState 1 (OPEN) while no frames actually flow, so a phase→regroup
+    // broadcast sent while you were away is silently lost and the UI stays stuck
+    // on focus. Either way: ping, wait for the pong, and if none comes force a
+    // reconnect so a fresh welcome resyncs the phase and timer we missed.
     let liveTimeout = null;
     const clearLive = () => { if (liveTimeout) { clearTimeout(liveTimeout); liveTimeout = null; } };
-    const onVisible = () => {
-      if (dead || document.visibilityState !== 'visible') return;
+    const probe = () => {
+      if (dead) return;
       const s = ws.current;
       if (!s || s.readyState !== 1) return reconnectNow();
-      clearLive();
+      if (liveTimeout) return; // a probe is already in flight
       try { s.send(JSON.stringify({ type: 'ping' })); } catch { return reconnectNow(); }
       liveTimeout = setTimeout(() => {
         liveTimeout = null;
@@ -200,6 +212,8 @@ export function useRoom(roomId, name, opts) {
         connect();
       }, 2500);
     };
+    const onVisible = () => { if (document.visibilityState === 'visible') probe(); };
+    const beat = setInterval(probe, 30000); // well inside the usual idle cutoffs
     window.addEventListener('online', reconnectNow);
     document.addEventListener('visibilitychange', onVisible);
 
@@ -208,6 +222,7 @@ export function useRoom(roomId, name, opts) {
     return () => {
       dead = true;
       clearLive();
+      clearInterval(beat);
       window.removeEventListener('online', reconnectNow);
       document.removeEventListener('visibilitychange', onVisible);
       try { ws.current && ws.current.close(); } catch { /* already closed */ }

@@ -68,6 +68,18 @@ export class RoomDO {
     this.roomId = null; // path segment, for lobby registration (persisted so alarms can sync after eviction)
     this.isPublic = false;
 
+    // The client ticks every 30s so its socket doesn't go idle (#89). Let the
+    // runtime answer those ticks itself: an auto-response never wakes a hibernating
+    // room, so keeping four sockets warm costs nothing. The 'ping' case in
+    // webSocketMessage still handles anything that doesn't match this exact frame.
+    try {
+      if (state.setWebSocketAutoResponse && typeof WebSocketRequestResponsePair === 'function') {
+        state.setWebSocketAutoResponse(new WebSocketRequestResponsePair(
+          JSON.stringify({ type: 'ping' }), JSON.stringify({ type: 'pong' }),
+        ));
+      }
+    } catch { /* older runtime: the message handler answers instead */ }
+
     // Restore the persisted session before any request/alarm/message is handled,
     // so an evicted/redeployed room resumes instead of starting fresh at greet.
     this._restore = state.blockConcurrencyWhile(async () => {
@@ -294,7 +306,7 @@ export class RoomDO {
     const id = a.id;
 
     switch (m.type) {
-      case 'ping': // client liveness probe (Safari zombie-socket detection after a backgrounded tab)
+      case 'ping': // client liveness probe and 30s keepalive (#89); normally answered by the auto-response above
         try { ws.send(JSON.stringify({ type: 'pong' })); } catch { /* gone */ }
         break;
       case 'publish': { // client reports its Cloudflare Realtime session + track ids
