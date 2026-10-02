@@ -356,7 +356,6 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   if (status === 'locked') return <Ended msg="That room is closed to new people right now. Try again later, or start your own room." onLeave={onLeave} />;
   if (status === 'offline') return <Ended msg="Lost connection to the room. This may be your internet, or Nook may be briefly down — try rejoining in a moment." onLeave={onLeave} />;
   if (status === 'superseded') return <Ended msg="You opened this room in another tab or window, so this one stepped aside." onLeave={onLeave} />;
-  if (status === 'closed') return <Ended msg="You left the room." onLeave={onLeave} />;
 
   // Roommates who opted to share their list (#47), read-only.
   const sharedListsEl = peerIds.some((id) => Array.isArray(peers[id].list) && peers[id].list.length) ? (
