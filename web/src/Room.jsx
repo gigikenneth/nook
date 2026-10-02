@@ -151,10 +151,17 @@ function Timer({ endsAt, label }) {
   const remaining = Math.max(0, endsAt - now);
   const mm = String(Math.floor(remaining / 60000)).padStart(2, '0');
   const ss = String(Math.floor((remaining % 60000) / 1000)).padStart(2, '0');
+  // The wall-clock time the phase lands on, so you can plan around the session
+  // without doing the arithmetic. Read off this device's own clock and locale, so
+  // it shows 3:30 PM or 15:30 to match how you already read time.
+  const at = new Date(endsAt);
   return (
     <div className="timer">
       <span className="timer-label">{label}</span>
       <span className="timer-clock">{mm}:{ss}</span>
+      <time className="timer-at" dateTime={at.toISOString()}>
+        ends {at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+      </time>
     </div>
   );
 }
