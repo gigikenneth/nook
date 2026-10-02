@@ -8,8 +8,36 @@ import { SupportNook } from './SupportNook.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
 import { JitsiStage } from './JitsiStage.jsx';
 import { Moon, ChatDoodle } from './graphics.jsx';
+import { prepareImage, isImage, bytesOf } from './image';
 
 const REACTIONS = ['👍', '❤️', '🎉', '😂', '👀']; // quick emoji reactions (#53)
+
+// Turn bare URLs in a message into links. Nothing is fetched and nothing is sent
+// anywhere: this is purely how the text is drawn. The label drops the scheme and
+// any trailing slash, so a long link reads as the place it goes rather than as a
+// wall of query string.
+const URL_RE = /\bhttps?:\/\/[^\s<>"')]+/gi;
+const linkLabel = (url) => {
+  const bare = url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+  return bare.length > 48 ? `${bare.slice(0, 47)}…` : bare;
+};
+function linkify(text) {
+  const out = [];
+  let last = 0;
+  for (const match of String(text).matchAll(URL_RE)) {
+    if (match.index > last) out.push(text.slice(last, match.index));
+    out.push(
+      <a key={match.index} className="chat-link" href={match[0]} target="_blank" rel="noopener noreferrer nofollow">
+        {linkLabel(match[0])}
+      </a>,
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+const sizeLabel = (bytes) => (bytes >= 1024 * 1024 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
 // A chat message with emoji reactions: existing reactions show as chips (click
 // to toggle your own), and a ＋ opens the quick palette. Reactions are relayed
@@ -33,6 +61,18 @@ function ChatMessage({ m, selfId, onReact, onEdit }) {
         <span className="who">{m.mine ? 'You' : m.name}</span>
         {m.t && <time className="chat-time" dateTime={new Date(m.t).toISOString()}>{new Date(m.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>}
       </div>
+      {m.img && (
+        <a href={m.img} target="_blank" rel="noopener noreferrer" className="chat-img-link">
+          <img className="chat-img" src={m.img} alt={`Shared by ${m.mine ? 'you' : m.name}`} loading="lazy" />
+        </a>
+      )}
+      {m.img && (
+        <div className="chat-img-meta">
+          {m.mime === 'image/gif' && <span className="gif-tag">GIF</span>}
+          <span>{sizeLabel(bytesOf(m.img))}</span>
+        </div>
+      )}
+      {m.imgDropped && <div className="chat-img-gone">Picture not kept after a refresh.</div>}
       {editing ? (
         // Inline editor for your own message (#70). Enter saves, Shift+Enter adds
         // a line, Esc cancels.
@@ -49,7 +89,7 @@ function ChatMessage({ m, selfId, onReact, onEdit }) {
           </div>
         </form>
       ) : (
-        <span className="body">{m.text}{m.edited && <span className="edited-tag"> (edited)</span>}</span>
+        <span className="body">{linkify(m.text || '')}{m.edited && <span className="edited-tag"> (edited)</span>}</span>
       )}
       {/* Chips only appear once a message has reactions, so un-reacted messages
           don't grow. The actions are a hover overlay in the corner, not a row. */}
@@ -272,6 +312,10 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   // Keep the chat log pinned to the newest message.
   const logRef = useRef(null);
   const chatTaRef = useRef(null); // composer textarea, to reset its height after send
+  const picRef = useRef(null);    // hidden file input behind the picture button
+  const [preparing, setPreparing] = useState(false); // shrinking a picture right now
+  const [imgError, setImgError] = useState('');      // why the last one couldn't go
+  const [dragging, setDragging] = useState(false);   // a file is hovering the chat panel
   const fileRef = useRef(null);   // hidden file input for importing a list
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [chat.length]);
 
@@ -327,6 +371,31 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       if (chatTaRef.current) chatTaRef.current.style.height = 'auto'; // collapse the grown textarea
     }
   }
+
+  // Share a picture: shrink it here, hand the result to the room, show the reason
+  // if it can't go. Anything that isn't a picture is ignored rather than explained.
+  async function sendPicture(file) {
+    if (!isImage(file)) return;
+    setImgError('');
+    setPreparing(true);
+    try {
+      const { data, mime } = await prepareImage(file);
+      room.sendImage(data, mime);
+    } catch (err) {
+      setImgError(err.message || 'That picture could not be shared.');
+    } finally {
+      setPreparing(false);
+    }
+  }
+  const onPickFile = (e) => { const f = e.target.files?.[0]; if (f) sendPicture(f); e.target.value = ''; };
+  const onPasteChat = (e) => {
+    const file = [...(e.clipboardData?.files || [])][0];
+    if (file && isImage(file)) { e.preventDefault(); sendPicture(file); }
+  };
+  const onDropChat = (e) => {
+    const file = [...(e.dataTransfer?.files || [])][0];
+    if (file && isImage(file)) { e.preventDefault(); setDragging(false); sendPicture(file); }
+  };
   function downloadTodos() {
     const body = tasks.map((t) => `[${t.done ? 'x' : ' '}] ${t.text}`).join('\n');
     download('nook-todo.txt', `Nook to-do list\n\n${body || '(empty)'}\n`);
@@ -375,7 +444,10 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   ) : null;
 
   const chatPanelEl = (
-    <aside className="panel chat-panel">
+    <aside className={`panel chat-panel ${dragging ? 'dropping' : ''}`}
+      onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); setDragging(true); } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
+      onDrop={onDropChat}>
       <div className="panel-head">
         <h3 className="panel-title">Chat</h3>
         <span className="hint" title="Never stored on a server. A copy stays in your browser so a refresh can restore it, and it clears when you close the tab.">not on our servers</span>
@@ -390,13 +462,19 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       <form className="chat-form" onSubmit={send}>
         {/* Multi-line composer (#70): grows to a few lines. Enter sends,
             Shift+Enter adds a line. */}
+        {/* Picture: picker here, or paste into the composer, or drop on the panel. */}
+        <input ref={picRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={onPickFile} />
+        <button type="button" className="attach-btn" onClick={() => picRef.current?.click()} disabled={preparing}
+          aria-label="Share a picture" title="Share a picture">{preparing ? '…' : '🖼'}</button>
         <textarea ref={chatTaRef} className="chat-input" value={draft} placeholder="Message…" maxLength={500} rows={1}
           onChange={(e) => setDraft(e.target.value)}
+          onPaste={onPasteChat}
           onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = `${Math.min(e.target.scrollHeight, 84)}px`; }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e); } }} />
         <button className="primary chat-send" type="submit" disabled={!draft.trim()}>Send</button>
       </form>
-      <p className="chat-note">Chat isn’t saved. It clears when you leave or the room closes.</p>
+      {imgError && <p className="chat-img-error" role="alert">{imgError}</p>}
+      <p className="chat-note">Chat isn’t saved, and pictures are passed straight through, never stored. Both clear when you leave or the room closes.</p>
       <div className="dl-row">
         <button className="secondary sm" onClick={downloadTodos}>Download list</button>
         <button className="secondary sm" onClick={() => fileRef.current?.click()}>Import list</button>
