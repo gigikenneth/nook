@@ -5,6 +5,18 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'October 8, 2026',
+    items: [
+      'Share pictures and GIFs in the chat: pick one, paste it, or drop it on the chat panel. Photos are shrunk in your browser and their location data is stripped before they leave your device, and like the rest of the chat, nothing is stored. Changed your mind? Delete your own picture for everyone',
+      'An emoji button in the chat box drops an emoji in wherever your cursor is',
+      'Links in the chat are clickable, including ones typed as www.example.com or example.com/page, and a full stop or comma at the end stays out of the link',
+      'The timer also shows the time a phase ends, like “ends 2:55 PM”, so you can plan around the session at a glance',
+      'Fixed: hitting start no longer sometimes stalls on the countdown for up to a minute when someone joins at the same moment',
+      'Fixed: a dropped connection no longer tells you that you left the room. Nook reconnects you instead, and notices a quiet drop during focus much sooner',
+      'Something new is hiding on the home page for slow mornings. Try saying good morning to the moon',
+    ],
+  },
+  {
     date: 'September 30, 2026',
     items: [
       'Anyone in a room can now close it to new people, not just the host, so a group that wants to keep to itself can say so without hunting for whoever started the session',
