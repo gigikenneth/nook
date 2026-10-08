@@ -37,6 +37,14 @@ function linkify(text) {
   return out;
 }
 
+const dataUrlToBlobUrl = (dataUrl) => {
+  const [head, b64] = dataUrl.split(',');
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: head.slice(5, head.indexOf(';')) }));
+};
+
 const sizeLabel = (bytes) => (bytes >= 1024 * 1024 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
 // A chat message with emoji reactions: existing reactions show as chips (click
@@ -62,7 +70,9 @@ function ChatMessage({ m, selfId, onReact, onEdit }) {
         {m.t && <time className="chat-time" dateTime={new Date(m.t).toISOString()}>{new Date(m.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>}
       </div>
       {m.img && (
-        <a href={m.img} target="_blank" rel="noopener noreferrer" className="chat-img-link">
+        // Browsers refuse to open a data: URI in a new tab, so hand it over as a blob URL.
+        <a href={m.img} target="_blank" rel="noopener noreferrer" className="chat-img-link"
+          onClick={(e) => { e.preventDefault(); window.open(dataUrlToBlobUrl(m.img), '_blank', 'noopener'); }}>
           <img className="chat-img" src={m.img} alt={`Shared by ${m.mine ? 'you' : m.name}`} loading="lazy" />
         </a>
       )}
@@ -103,7 +113,7 @@ function ChatMessage({ m, selfId, onReact, onEdit }) {
       )}
       {m.mid && !editing && (
         <div className="msg-actions">
-          {m.mine && <button className="msg-act" aria-label="Edit message" title="Edit" onClick={startEdit}>✎</button>}
+          {m.mine && !m.img && !m.imgDropped && <button className="msg-act" aria-label="Edit message" title="Edit" onClick={startEdit}>✎</button>}
           <button className="msg-act" aria-label="Add reaction" title="React" onClick={() => setPickerOpen((o) => !o)}>＋</button>
         </div>
       )}
@@ -401,7 +411,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     download('nook-todo.txt', `Nook to-do list\n\n${body || '(empty)'}\n`);
   }
   function downloadChat() {
-    const body = chat.map((m) => `[${new Date(m.t).toLocaleTimeString()}] ${m.name}: ${m.text}`).join('\n');
+    const body = chat.map((m) => `[${new Date(m.t).toLocaleTimeString()}] ${m.name}: ${m.text ?? '[picture]'}`).join('\n');
     download('nook-chat.txt', `Nook chat log\n\n${body || '(no messages)'}\n`);
   }
   function importList(e) {
