@@ -550,6 +550,9 @@ export class RoomDO {
     const now = Date.now();
     let next = now + HEARTBEAT_MS;
     if (this.endsAt && this.endsAt < next) next = this.endsAt;
+    // Never push a pending pre-focus countdown out to the next heartbeat: a join or
+    // reconnect during the countdown would otherwise stall focus for up to 60s.
+    if (this.starting && this.startAt < next) next = this.startAt;
     this.state.storage.setAlarm(next);
   }
 
