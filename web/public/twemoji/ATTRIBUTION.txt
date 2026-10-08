@@ -13,3 +13,4 @@ Files used:
   2615.svg   hot beverage
   1fab4.svg  potted plant
   1f4ac.svg  speech balloon (empty chat)
+  2600.svg   sun (homepage moon easter egg)
