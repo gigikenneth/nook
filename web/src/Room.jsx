@@ -9,6 +9,7 @@ import { ThemeToggle } from './ThemeToggle.jsx';
 import { JitsiStage } from './JitsiStage.jsx';
 import { Moon, ChatDoodle } from './graphics.jsx';
 import { prepareImage, isImage, bytesOf } from './image';
+import { findLinks } from './links';
 
 const REACTIONS = ['👍', '❤️', '🎉', '😂', '👀']; // quick emoji reactions (#53)
 // Composer emoji tray. A short hand-picked set, not a full picker: the OS emoji
@@ -16,26 +17,18 @@ const REACTIONS = ['👍', '❤️', '🎉', '😂', '👀']; // quick emoji rea
 const COMPOSER_EMOJIS = ['😀', '😂', '😊', '😍', '🥳', '😎', '🤔', '😅', '😭', '😴', '🫠', '🙃',
   '👍', '👏', '🙌', '🙏', '💪', '👋', '🔥', '✨', '🎉', '❤️', '💜', '💙', '☕', '📚', '✅', '🌱'];
 
-// Turn bare URLs in a message into links. Nothing is fetched and nothing is sent
-// anywhere: this is purely how the text is drawn. The label drops the scheme and
-// any trailing slash, so a long link reads as the place it goes rather than as a
-// wall of query string.
-const URL_RE = /\bhttps?:\/\/[^\s<>"')]+/gi;
-const linkLabel = (url) => {
-  const bare = url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
-  return bare.length > 48 ? `${bare.slice(0, 47)}…` : bare;
-};
+// Draw a message with its links clickable (see links.js for what counts as one).
 function linkify(text) {
   const out = [];
   let last = 0;
-  for (const match of String(text).matchAll(URL_RE)) {
-    if (match.index > last) out.push(text.slice(last, match.index));
+  for (const l of findLinks(text)) {
+    if (l.start > last) out.push(text.slice(last, l.start));
     out.push(
-      <a key={match.index} className="chat-link" href={match[0]} target="_blank" rel="noopener noreferrer nofollow">
-        {linkLabel(match[0])}
+      <a key={l.start} className="chat-link" href={l.href} target="_blank" rel="noopener noreferrer nofollow">
+        {l.label}
       </a>,
     );
-    last = match.index + match[0].length;
+    last = l.end;
   }
   if (last < text.length) out.push(text.slice(last));
   return out;
