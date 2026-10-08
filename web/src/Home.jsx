@@ -24,6 +24,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   const [regroupMin, setRegroupMin] = useState(5);
   const [camPref, setCamPref] = useState(initialCamPref ?? remembered.camPref); // 'on' | 'off' | null — camera-preference signal
   const [helpOpen, setHelpOpen] = useState(false); // "how it works / what's new" panel
+  const [videoOpen, setVideoOpen] = useState(false); // the moon's hidden morning video
   const [rooms, setRooms] = useState([]);
   const [pinged, setPinged] = useState(() => new Set()); // people just invited (for button feedback)
 
@@ -185,6 +186,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   const wide = (
     <main className={`home wide${embedded ? ' embedded' : ''}`}>
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+      {videoOpen && <MorningVideo onClose={() => setVideoOpen(false)} />}
       {embedded && <button className="overlay-close" onClick={onClose} aria-label="Close">×</button>}
       <Sparkles />
       {!embedded && invite && (
@@ -206,7 +208,10 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
             <ThemeToggle className="on-hero" />
             <button className="help-btn" onClick={() => setHelpOpen(true)} aria-label="How Nook works and what's new">? How it works</button>
             <p className="tagline">Your focus crew for the next 50 minutes. Show up, say what you're working on, and get it done alongside a few other people.</p>
-            <Moon size={40} />
+            {/* Easter egg: the moon hides a bit of extra motivation to start the day. */}
+            <button className="moon-egg" onClick={() => setVideoOpen(true)} aria-label="A little motivation to start the day" title="Rise and shine">
+              <Moon size={40} />
+            </button>
           </header>
 
           <ol className="steps">
@@ -379,4 +384,29 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
     );
   }
   return wide;
+}
+
+// The moon's easter egg. youtube-nocookie and only mounted after the click, so
+// no visitor loads anything from YouTube unless they go looking for it.
+const MORNING_VIDEO = 'enYdAxVcNZA';
+function MorningVideo({ onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <div className="report-overlay" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="help-card video-card" role="dialog" aria-label="Rise and shine">
+        <div className="help-head">
+          <h3 className="panel-title">Rise and shine</h3>
+          <button className="ghost x" onClick={onClose} aria-label="Close">×</button>
+        </div>
+        <div className="video-frame">
+          <iframe src={`https://www.youtube-nocookie.com/embed/${MORNING_VIDEO}?autoplay=1&rel=0`}
+            title="Rise and shine" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen />
+        </div>
+      </div>
+    </div>
+  );
 }
