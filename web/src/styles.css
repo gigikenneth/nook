@@ -392,7 +392,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .react-picker button:hover { background: var(--field); }
 .chat-empty { color: var(--muted); font-size: 13px; text-align: center; display: grid; justify-items: center; gap: 6px; }
 .chat-empty p { margin: 0; }
-.chat-form { display: flex; gap: 8px; }
+.chat-form { display: flex; gap: 8px; position: relative; }
+/* Composer emoji tray: opens above the message box, reusing the reaction picker's look. */
+.emoji-tray { position: absolute; bottom: 100%; left: 0; margin-bottom: 6px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; background: var(--surface); padding: 6px; border-radius: 14px; box-shadow: var(--shadow); z-index: 5; }
+.emoji-tray button { font-size: 19px; padding: 4px; border: 0; background: none; border-radius: 8px; cursor: pointer; }
+.emoji-tray button:hover, .emoji-tray button:focus-visible { background: var(--field); }
 .chat-form input { border-radius: var(--r-pill); flex: 1; min-width: 0; }
 /* Multi-line composer (#70): a textarea that grows to a few lines, snug like the
    old single-line field at rest. */

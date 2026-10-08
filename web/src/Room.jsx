@@ -11,6 +11,10 @@ import { Moon, ChatDoodle } from './graphics.jsx';
 import { prepareImage, isImage, bytesOf } from './image';
 
 const REACTIONS = ['👍', '❤️', '🎉', '😂', '👀']; // quick emoji reactions (#53)
+// Composer emoji tray. A short hand-picked set, not a full picker: the OS emoji
+// keyboard still works for anything else.
+const COMPOSER_EMOJIS = ['😀', '😂', '😊', '😍', '🥳', '😎', '🤔', '😅', '😭', '😴', '🫠', '🙃',
+  '👍', '👏', '🙌', '🙏', '💪', '👋', '🔥', '✨', '🎉', '❤️', '💜', '💙', '☕', '📚', '✅', '🌱'];
 
 // Turn bare URLs in a message into links. Nothing is fetched and nothing is sent
 // anywhere: this is purely how the text is drawn. The label drops the scheme and
@@ -327,6 +331,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   const [preparing, setPreparing] = useState(false); // shrinking a picture right now
   const [imgError, setImgError] = useState('');      // why the last one couldn't go
   const [dragging, setDragging] = useState(false);   // a file is hovering the chat panel
+  const [emojiOpen, setEmojiOpen] = useState(false); // composer emoji tray
   const fileRef = useRef(null);   // hidden file input for importing a list
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [chat.length]);
 
@@ -381,6 +386,18 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       setDraft('');
       if (chatTaRef.current) chatTaRef.current.style.height = 'auto'; // collapse the grown textarea
     }
+  }
+
+  // Drop an emoji in at the cursor (replacing any selection), then put the cursor after it.
+  function addEmoji(e) {
+    const ta = chatTaRef.current;
+    const start = ta ? ta.selectionStart : draft.length;
+    const end = ta ? ta.selectionEnd : draft.length;
+    const next = draft.slice(0, start) + e + draft.slice(end);
+    if (next.length > 500) return; // same cap as the textarea
+    setDraft(next);
+    setEmojiOpen(false);
+    requestAnimationFrame(() => { if (ta) { ta.focus(); ta.setSelectionRange(start + e.length, start + e.length); } });
   }
 
   // Share a picture: shrink it here, hand the result to the room, show the reason
@@ -477,6 +494,15 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         <input ref={picRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={onPickFile} />
         <button type="button" className="attach-btn" onClick={() => picRef.current?.click()} disabled={preparing}
           aria-label="Share a picture" title="Share a picture">{preparing ? '…' : '🖼'}</button>
+        <button type="button" className="attach-btn" onClick={() => setEmojiOpen((o) => !o)}
+          aria-label="Add an emoji" title="Add an emoji" aria-expanded={emojiOpen}>😊</button>
+        {emojiOpen && (
+          <div className="emoji-tray" role="group" aria-label="Emoji" onKeyDown={(e) => { if (e.key === 'Escape') setEmojiOpen(false); }}>
+            {COMPOSER_EMOJIS.map((e) => (
+              <button type="button" key={e} onClick={() => addEmoji(e)} aria-label={`Add ${e}`}>{e}</button>
+            ))}
+          </div>
+        )}
         <textarea ref={chatTaRef} className="chat-input" value={draft} placeholder="Message…" maxLength={500} rows={1}
           onChange={(e) => setDraft(e.target.value)}
           onPaste={onPasteChat}
