@@ -359,7 +359,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .gif-tag { background: var(--olive); color: var(--on-slab); border-radius: var(--r-pill); padding: 1px 6px; font-size: 9px; letter-spacing: .06em; }
 .chat-img-gone { font-size: 12px; font-style: italic; color: var(--muted); margin-top: 2px; }
 .chat-img-error { font-size: 12px; font-weight: 600; color: var(--accent-text); margin: 6px 2px 0; }
-.attach-btn { flex: none; width: 38px; height: 38px; border: 0; border-radius: 50%; background: var(--field); font-size: 16px; cursor: pointer; }
+.attach-btn { flex: none; width: 38px; height: 38px; padding: 0; display: grid; place-items: center; line-height: 1; border: 0; border-radius: 50%; background: var(--field); font-size: 16px; cursor: pointer; }
 .attach-btn:hover:not(:disabled) { background: var(--cream2); }
 .attach-btn:disabled { opacity: .6; cursor: default; }
 .chat-panel.dropping { outline: 2px dashed var(--accent-text); outline-offset: -6px; }
