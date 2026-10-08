@@ -345,6 +345,25 @@ const store = new Map();
   assert.equal(r.regroupMin, 0, 'regroup clamped to min 0');
 }
 
+// Someone joins/reconnects during the pre-focus countdown: the alarm must stay
+// on startAt, not get pushed to the next 60s heartbeat (focus stalled on "go").
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'cd'; r.configured = true;
+  const a = join(r, st, { id: 'a' });
+  msg(r, a, { type: 'start' });
+  const startAt = r.startAt;
+  assert.equal(st.alarm, startAt, 'countdown alarm armed');
+  join(r, st, { id: 'b' });
+  r.scheduleTick(); // what fetch() does after a join
+  assert.equal(st.alarm, startAt, 'join during countdown keeps the countdown alarm');
+  NOW = startAt;
+  await r.alarm();
+  assert.equal(r.phase, 'focus', 'focus begins on time');
+}
+
 Date.now = realNow;
 // 13) Orphan sockets don't hold seats or block the room (#89 follow-up). A
 //     superseded socket whose close() frame never reached the client stays in
