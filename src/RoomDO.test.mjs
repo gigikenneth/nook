@@ -578,6 +578,13 @@ Date.now = realNow;
   msg(r, a, { type: 'image', mime: 'image/png', data: 'https://example.com/cat.png' });
   msg(r, a, { type: 'image', mime: 'image/png', data: `data:image/png;base64,${'A'.repeat(900000)}` });
   assert.equal(b.sent.filter((m) => m.type === 'chat').length, 0, 'svg, a bare URL and an oversize payload all refused');
+
+  // Unsending carries the sender's real id, so a client can't remove someone else's picture.
+  b.sent.length = 0;
+  msg(r, a, { type: 'unsend', mid: got.mid });
+  const un = b.sent.find((m) => m.type === 'unsent');
+  assert.equal(un.mid, got.mid, 'unsend relayed with the mid');
+  assert.equal(un.id, 'a', 'stamped with the sender, not whatever the client claims');
   Date.now = realNow;
 }
 

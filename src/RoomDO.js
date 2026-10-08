@@ -374,6 +374,12 @@ export class RoomDO {
         this.broadcast({ type: 'chat', mid: crypto.randomUUID(), id, name: a.name || 'Guest', img: data, mime, t: now });
         break;
       }
+      case 'unsend': { // take back your own picture. Nothing is stored, so the server
+        // can't check the mid is yours; it stamps the sender's id instead, and
+        // clients only remove a message whose author matches it.
+        if (m.mid) this.broadcast({ type: 'unsent', mid: String(m.mid), id });
+        break;
+      }
       case 'react': { // emoji reaction on a chat message (#53) — relayed, not stored
         if (m.mid && REACTIONS.has(m.emoji)) {
           this.broadcast({ type: 'react', mid: String(m.mid), emoji: m.emoji, id, on: !!m.on });

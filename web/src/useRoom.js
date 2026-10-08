@@ -135,6 +135,9 @@ export function useRoom(roomId, name, opts) {
         case 'edited': // someone edited their message (#70)
           setChat((c) => c.map((msg) => (msg.mid === m.mid ? { ...msg, text: m.text, edited: true } : msg)));
           break;
+        case 'unsent': // someone took back their picture: only the author's own message goes
+          setChat((c) => c.filter((msg) => !(msg.mid === m.mid && msg.id === m.id)));
+          break;
         case 'pong': clearLive(); break; // socket proved alive; cancel the zombie-reconnect
         case 'host': setHostId(m.id); break;
         case 'peer-list':
@@ -250,6 +253,7 @@ export function useRoom(roomId, name, opts) {
     sendChat: (text) => sendWs({ type: 'chat', text }),
     sendImage: (data, mime) => sendWs({ type: 'image', data, mime }),
     editChat: (mid, text) => sendWs({ type: 'edit', mid, text }),
+    unsend: (mid) => sendWs({ type: 'unsend', mid }),
     react: (mid, emoji, on) => sendWs({ type: 'react', mid, emoji, on }),
   };
 }

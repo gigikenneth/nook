@@ -50,7 +50,7 @@ const sizeLabel = (bytes) => (bytes >= 1024 * 1024 ? `${(bytes / 1048576).toFixe
 // A chat message with emoji reactions: existing reactions show as chips (click
 // to toggle your own), and a ＋ opens the quick palette. Reactions are relayed
 // live and kept only in the client's chat state, like the messages themselves.
-function ChatMessage({ m, selfId, onReact, onEdit }) {
+function ChatMessage({ m, selfId, onReact, onEdit, onUnsend }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [edraft, setEdraft] = useState(m.text);
@@ -114,6 +114,7 @@ function ChatMessage({ m, selfId, onReact, onEdit }) {
       {m.mid && !editing && (
         <div className="msg-actions">
           {m.mine && !m.img && !m.imgDropped && <button className="msg-act" aria-label="Edit message" title="Edit" onClick={startEdit}>✎</button>}
+          {m.mine && (m.img || m.imgDropped) && <button className="msg-act" aria-label="Delete picture" title="Delete for everyone" onClick={() => onUnsend(m.mid)}>🗑</button>}
           <button className="msg-act" aria-label="Add reaction" title="React" onClick={() => setPickerOpen((o) => !o)}>＋</button>
         </div>
       )}
@@ -466,7 +467,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         {chat.length === 0 ? (
           <div className="chat-empty"><ChatDoodle /><p>Say something. Messages vanish when the room does.</p></div>
         ) : chat.map((m, i) => (
-          <ChatMessage key={m.mid || i} m={m} selfId={selfId} onReact={room.react} onEdit={room.editChat} />
+          <ChatMessage key={m.mid || i} m={m} selfId={selfId} onReact={room.react} onEdit={room.editChat} onUnsend={room.unsend} />
         ))}
       </div>
       <form className="chat-form" onSubmit={send}>
