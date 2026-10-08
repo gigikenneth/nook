@@ -31,8 +31,14 @@ export function useRoom(roomId, name, opts) {
   const [config, setConfig] = useState({ focusMin: opts.focusMin, regroupMin: opts.regroupMin });
   const [status, setStatus] = useState('connecting');
 
+  // Mirror the log so a refresh restores it. Picture payloads are left out: a few
+  // hundred KB each would blow the ~5MB quota and take the whole log down with
+  // them, so a restored picture comes back as a note that it didn't survive.
   useEffect(() => {
-    try { sessionStorage.setItem(`nook.chat.${roomId}`, JSON.stringify(chat)); } catch { /* full/blocked */ }
+    try {
+      const light = chat.map((m) => (m.img ? { ...m, img: null, imgDropped: true } : m));
+      sessionStorage.setItem(`nook.chat.${roomId}`, JSON.stringify(light));
+    } catch { /* full/blocked */ }
   }, [chat, roomId]);
 
   const ws = useRef(null);
@@ -114,7 +120,7 @@ export function useRoom(roomId, name, opts) {
           setCamPrefs((c) => { const n = { ...c }; if (m.pref) n[m.id] = m.pref; else delete n[m.id]; return n; });
           break;
         case 'chat':
-          setChat((c) => [...c, { mid: m.mid, id: m.id, name: m.name, text: m.text, t: m.t, mine: m.id === selfIdRef.current, reactions: {} }]);
+          setChat((c) => [...c, { mid: m.mid, id: m.id, name: m.name, text: m.text, img: m.img, mime: m.mime, t: m.t, mine: m.id === selfIdRef.current, reactions: {} }]);
           break;
         case 'react':
           setChat((c) => c.map((msg) => {
@@ -128,6 +134,9 @@ export function useRoom(roomId, name, opts) {
           break;
         case 'edited': // someone edited their message (#70)
           setChat((c) => c.map((msg) => (msg.mid === m.mid ? { ...msg, text: m.text, edited: true } : msg)));
+          break;
+        case 'unsent': // someone took back their picture: only the author's own message goes
+          setChat((c) => c.filter((msg) => !(msg.mid === m.mid && msg.id === m.id)));
           break;
         case 'pong': clearLive(); break; // socket proved alive; cancel the zombie-reconnect
         case 'host': setHostId(m.id); break;
@@ -242,7 +251,9 @@ export function useRoom(roomId, name, opts) {
     shareList: (tasks) => sendWs({ type: 'list', tasks }),
     setCamPref: (pref) => sendWs({ type: 'campref', pref }),
     sendChat: (text) => sendWs({ type: 'chat', text }),
+    sendImage: (data, mime) => sendWs({ type: 'image', data, mime }),
     editChat: (mid, text) => sendWs({ type: 'edit', mid, text }),
+    unsend: (mid) => sendWs({ type: 'unsend', mid }),
     react: (mid, emoji, on) => sendWs({ type: 'react', mid, emoji, on }),
   };
 }

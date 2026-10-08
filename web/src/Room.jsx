@@ -8,13 +8,53 @@ import { SupportNook } from './SupportNook.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
 import { JitsiStage } from './JitsiStage.jsx';
 import { Moon, ChatDoodle } from './graphics.jsx';
+import { prepareImage, isImage, bytesOf } from './image';
 
 const REACTIONS = ['👍', '❤️', '🎉', '😂', '👀']; // quick emoji reactions (#53)
+// Composer emoji tray. A short hand-picked set, not a full picker: the OS emoji
+// keyboard still works for anything else.
+const COMPOSER_EMOJIS = ['😀', '😂', '😊', '😍', '🥳', '😎', '🤔', '😅', '😭', '😴', '🫠', '🙃',
+  '👍', '👏', '🙌', '🙏', '💪', '👋', '🔥', '✨', '🎉', '❤️', '💜', '💙', '☕', '📚', '✅', '🌱'];
+
+// Turn bare URLs in a message into links. Nothing is fetched and nothing is sent
+// anywhere: this is purely how the text is drawn. The label drops the scheme and
+// any trailing slash, so a long link reads as the place it goes rather than as a
+// wall of query string.
+const URL_RE = /\bhttps?:\/\/[^\s<>"')]+/gi;
+const linkLabel = (url) => {
+  const bare = url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+  return bare.length > 48 ? `${bare.slice(0, 47)}…` : bare;
+};
+function linkify(text) {
+  const out = [];
+  let last = 0;
+  for (const match of String(text).matchAll(URL_RE)) {
+    if (match.index > last) out.push(text.slice(last, match.index));
+    out.push(
+      <a key={match.index} className="chat-link" href={match[0]} target="_blank" rel="noopener noreferrer nofollow">
+        {linkLabel(match[0])}
+      </a>,
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+const dataUrlToBlobUrl = (dataUrl) => {
+  const [head, b64] = dataUrl.split(',');
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([bytes], { type: head.slice(5, head.indexOf(';')) }));
+};
+
+const sizeLabel = (bytes) => (bytes >= 1024 * 1024 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
 
 // A chat message with emoji reactions: existing reactions show as chips (click
 // to toggle your own), and a ＋ opens the quick palette. Reactions are relayed
 // live and kept only in the client's chat state, like the messages themselves.
-function ChatMessage({ m, selfId, onReact, onEdit }) {
+function ChatMessage({ m, selfId, onReact, onEdit, onUnsend }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [edraft, setEdraft] = useState(m.text);
@@ -33,6 +73,20 @@ function ChatMessage({ m, selfId, onReact, onEdit }) {
         <span className="who">{m.mine ? 'You' : m.name}</span>
         {m.t && <time className="chat-time" dateTime={new Date(m.t).toISOString()}>{new Date(m.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>}
       </div>
+      {m.img && (
+        // Browsers refuse to open a data: URI in a new tab, so hand it over as a blob URL.
+        <a href={m.img} target="_blank" rel="noopener noreferrer" className="chat-img-link"
+          onClick={(e) => { e.preventDefault(); window.open(dataUrlToBlobUrl(m.img), '_blank', 'noopener'); }}>
+          <img className="chat-img" src={m.img} alt={`Shared by ${m.mine ? 'you' : m.name}`} loading="lazy" />
+        </a>
+      )}
+      {m.img && (
+        <div className="chat-img-meta">
+          {m.mime === 'image/gif' && <span className="gif-tag">GIF</span>}
+          <span>{sizeLabel(bytesOf(m.img))}</span>
+        </div>
+      )}
+      {m.imgDropped && <div className="chat-img-gone">Picture not kept after a refresh.</div>}
       {editing ? (
         // Inline editor for your own message (#70). Enter saves, Shift+Enter adds
         // a line, Esc cancels.
@@ -49,7 +103,7 @@ function ChatMessage({ m, selfId, onReact, onEdit }) {
           </div>
         </form>
       ) : (
-        <span className="body">{m.text}{m.edited && <span className="edited-tag"> (edited)</span>}</span>
+        <span className="body">{linkify(m.text || '')}{m.edited && <span className="edited-tag"> (edited)</span>}</span>
       )}
       {/* Chips only appear once a message has reactions, so un-reacted messages
           don't grow. The actions are a hover overlay in the corner, not a row. */}
@@ -63,7 +117,8 @@ function ChatMessage({ m, selfId, onReact, onEdit }) {
       )}
       {m.mid && !editing && (
         <div className="msg-actions">
-          {m.mine && <button className="msg-act" aria-label="Edit message" title="Edit" onClick={startEdit}>✎</button>}
+          {m.mine && !m.img && !m.imgDropped && <button className="msg-act" aria-label="Edit message" title="Edit" onClick={startEdit}>✎</button>}
+          {m.mine && (m.img || m.imgDropped) && <button className="msg-act" aria-label="Delete picture" title="Delete for everyone" onClick={() => onUnsend(m.mid)}>🗑</button>}
           <button className="msg-act" aria-label="Add reaction" title="React" onClick={() => setPickerOpen((o) => !o)}>＋</button>
         </div>
       )}
@@ -279,6 +334,11 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   // Keep the chat log pinned to the newest message.
   const logRef = useRef(null);
   const chatTaRef = useRef(null); // composer textarea, to reset its height after send
+  const picRef = useRef(null);    // hidden file input behind the picture button
+  const [preparing, setPreparing] = useState(false); // shrinking a picture right now
+  const [imgError, setImgError] = useState('');      // why the last one couldn't go
+  const [dragging, setDragging] = useState(false);   // a file is hovering the chat panel
+  const [emojiOpen, setEmojiOpen] = useState(false); // composer emoji tray
   const fileRef = useRef(null);   // hidden file input for importing a list
   useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [chat.length]);
 
@@ -334,12 +394,49 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       if (chatTaRef.current) chatTaRef.current.style.height = 'auto'; // collapse the grown textarea
     }
   }
+
+  // Drop an emoji in at the cursor (replacing any selection), then put the cursor after it.
+  function addEmoji(e) {
+    const ta = chatTaRef.current;
+    const start = ta ? ta.selectionStart : draft.length;
+    const end = ta ? ta.selectionEnd : draft.length;
+    const next = draft.slice(0, start) + e + draft.slice(end);
+    if (next.length > 500) return; // same cap as the textarea
+    setDraft(next);
+    setEmojiOpen(false);
+    requestAnimationFrame(() => { if (ta) { ta.focus(); ta.setSelectionRange(start + e.length, start + e.length); } });
+  }
+
+  // Share a picture: shrink it here, hand the result to the room, show the reason
+  // if it can't go. Anything that isn't a picture is ignored rather than explained.
+  async function sendPicture(file) {
+    if (!isImage(file)) return;
+    setImgError('');
+    setPreparing(true);
+    try {
+      const { data, mime } = await prepareImage(file);
+      room.sendImage(data, mime);
+    } catch (err) {
+      setImgError(err.message || 'That picture could not be shared.');
+    } finally {
+      setPreparing(false);
+    }
+  }
+  const onPickFile = (e) => { const f = e.target.files?.[0]; if (f) sendPicture(f); e.target.value = ''; };
+  const onPasteChat = (e) => {
+    const file = [...(e.clipboardData?.files || [])][0];
+    if (file && isImage(file)) { e.preventDefault(); sendPicture(file); }
+  };
+  const onDropChat = (e) => {
+    const file = [...(e.dataTransfer?.files || [])][0];
+    if (file && isImage(file)) { e.preventDefault(); setDragging(false); sendPicture(file); }
+  };
   function downloadTodos() {
     const body = tasks.map((t) => `[${t.done ? 'x' : ' '}] ${t.text}`).join('\n');
     download('nook-todo.txt', `Nook to-do list\n\n${body || '(empty)'}\n`);
   }
   function downloadChat() {
-    const body = chat.map((m) => `[${new Date(m.t).toLocaleTimeString()}] ${m.name}: ${m.text}`).join('\n');
+    const body = chat.map((m) => `[${new Date(m.t).toLocaleTimeString()}] ${m.name}: ${m.text ?? '[picture]'}`).join('\n');
     download('nook-chat.txt', `Nook chat log\n\n${body || '(no messages)'}\n`);
   }
   function importList(e) {
@@ -382,7 +479,10 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   ) : null;
 
   const chatPanelEl = (
-    <aside className="panel chat-panel">
+    <aside className={`panel chat-panel ${dragging ? 'dropping' : ''}`}
+      onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); setDragging(true); } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }}
+      onDrop={onDropChat}>
       <div className="panel-head">
         <h3 className="panel-title">Chat</h3>
         <span className="hint" title="Never stored on a server. A copy stays in your browser so a refresh can restore it, and it clears when you close the tab.">not on our servers</span>
@@ -391,19 +491,34 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
         {chat.length === 0 ? (
           <div className="chat-empty"><ChatDoodle /><p>Say something. Messages vanish when the room does.</p></div>
         ) : chat.map((m, i) => (
-          <ChatMessage key={m.mid || i} m={m} selfId={selfId} onReact={room.react} onEdit={room.editChat} />
+          <ChatMessage key={m.mid || i} m={m} selfId={selfId} onReact={room.react} onEdit={room.editChat} onUnsend={room.unsend} />
         ))}
       </div>
       <form className="chat-form" onSubmit={send}>
         {/* Multi-line composer (#70): grows to a few lines. Enter sends,
             Shift+Enter adds a line. */}
+        {/* Picture: picker here, or paste into the composer, or drop on the panel. */}
+        <input ref={picRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden onChange={onPickFile} />
+        <button type="button" className="attach-btn" onClick={() => picRef.current?.click()} disabled={preparing}
+          aria-label="Share a picture" title="Share a picture">{preparing ? '…' : '🖼'}</button>
+        <button type="button" className="attach-btn" onClick={() => setEmojiOpen((o) => !o)}
+          aria-label="Add an emoji" title="Add an emoji" aria-expanded={emojiOpen}>😊</button>
+        {emojiOpen && (
+          <div className="emoji-tray" role="group" aria-label="Emoji" onKeyDown={(e) => { if (e.key === 'Escape') setEmojiOpen(false); }}>
+            {COMPOSER_EMOJIS.map((e) => (
+              <button type="button" key={e} onClick={() => addEmoji(e)} aria-label={`Add ${e}`}>{e}</button>
+            ))}
+          </div>
+        )}
         <textarea ref={chatTaRef} className="chat-input" value={draft} placeholder="Message…" maxLength={500} rows={1}
           onChange={(e) => setDraft(e.target.value)}
+          onPaste={onPasteChat}
           onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = `${Math.min(e.target.scrollHeight, 84)}px`; }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(e); } }} />
         <button className="primary chat-send" type="submit" disabled={!draft.trim()}>Send</button>
       </form>
-      <p className="chat-note">Chat isn’t saved. It clears when you leave or the room closes.</p>
+      {imgError && <p className="chat-img-error" role="alert">{imgError}</p>}
+      <p className="chat-note">Chat isn’t saved, and pictures are passed straight through, never stored. Both clear when you leave or the room closes.</p>
       <div className="dl-row">
         <button className="secondary sm" onClick={downloadTodos}>Download list</button>
         <button className="secondary sm" onClick={() => fileRef.current?.click()}>Import list</button>

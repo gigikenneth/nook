@@ -558,4 +558,53 @@ Date.now = realNow;
   assert.equal(r.count(), 1, 'and it changes nothing else');
 }
 
+// 19) Shared pictures: relayed like chat, never stored, and bounded. The cap and
+//     the type check are the backstop for a client that lies; the gap keeps one
+//     person from filling the room.
+{
+  Date.now = () => NOW; // this block needs the frozen clock back, for the rate-limit gap
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  const a = join(r, st, { id: 'a', name: 'Gigi' });
+  const b = join(r, st, { id: 'b', name: 'Jeff' });
+  const tiny = (mime) => `data:${mime};base64,AAAA`;
+
+  b.sent.length = 0;
+  msg(r, a, { type: 'image', mime: 'image/webp', data: tiny('image/webp') });
+  const got = b.sent.find((m) => m.type === 'chat');
+  assert.ok(got, 'relayed as a chat message, so reactions and ordering still work');
+  assert.equal(got.img, tiny('image/webp'), 'payload passed through untouched');
+  assert.equal(got.mime, 'image/webp', 'type carried for the GIF tag');
+  assert.ok(got.mid, 'carries a mid to react to');
+  assert.equal(st.store.get('sess'), undefined, 'handling a picture writes nothing to storage at all');
+
+  // Same person again straight away: dropped.
+  b.sent.length = 0;
+  msg(r, a, { type: 'image', mime: 'image/webp', data: tiny('image/webp') });
+  assert.equal(b.sent.filter((m) => m.type === 'chat').length, 0, 'rate limited');
+
+  NOW += 5000; // past the gap
+  b.sent.length = 0;
+  msg(r, a, { type: 'image', mime: 'image/webp', data: tiny('image/webp') });
+  assert.equal(b.sent.filter((m) => m.type === 'chat').length, 1, 'allowed again after the gap');
+
+  // Things a well-behaved client would never send.
+  NOW += 5000;
+  b.sent.length = 0;
+  msg(r, a, { type: 'image', mime: 'image/svg+xml', data: tiny('image/svg+xml') });
+  msg(r, a, { type: 'image', mime: 'image/png', data: 'https://example.com/cat.png' });
+  msg(r, a, { type: 'image', mime: 'image/png', data: `data:image/png;base64,${'A'.repeat(900000)}` });
+  assert.equal(b.sent.filter((m) => m.type === 'chat').length, 0, 'svg, a bare URL and an oversize payload all refused');
+
+  // Unsending carries the sender's real id, so a client can't remove someone else's picture.
+  b.sent.length = 0;
+  msg(r, a, { type: 'unsend', mid: got.mid });
+  const un = b.sent.find((m) => m.type === 'unsent');
+  assert.equal(un.mid, got.mid, 'unsend relayed with the mid');
+  assert.equal(un.id, 'a', 'stamped with the sender, not whatever the client claims');
+  Date.now = realNow;
+}
+
 console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 + dead-socket seats + session continuity): all passed');

@@ -350,6 +350,23 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .chat-head { display: flex; align-items: baseline; gap: 6px; }
 .chat-time { font-size: 10px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 .chat-msg.mine .chat-time { color: rgba(23, 23, 23, 0.5); } /* readable on the mint bubble */
+/* A shared picture sits in the bubble like any other message (#chat images). */
+.chat-img-link { display: block; margin-top: 4px; }
+/* Kept short on purpose: the chat log is only about a third of the screen, and a
+   tall picture would push every message out of view. Click opens the full size. */
+.chat-img { display: block; width: 100%; max-height: 170px; object-fit: cover; border-radius: 12px; background: var(--cream2); }
+.chat-img-meta { display: flex; gap: 6px; align-items: center; font-size: 10px; font-weight: 700; color: var(--muted); margin-top: 5px; }
+.chat-msg.mine .chat-img-meta { color: rgba(23, 23, 23, 0.55); }
+.gif-tag { background: var(--olive); color: var(--on-slab); border-radius: var(--r-pill); padding: 1px 6px; font-size: 9px; letter-spacing: .06em; }
+.chat-img-gone { font-size: 12px; font-style: italic; color: var(--muted); margin-top: 2px; }
+.chat-img-error { font-size: 12px; font-weight: 600; color: var(--accent-text); margin: 6px 2px 0; }
+.attach-btn { flex: none; width: 38px; height: 38px; padding: 0; display: grid; place-items: center; line-height: 1; border: 0; border-radius: 50%; background: var(--field); font-size: 16px; cursor: pointer; }
+.attach-btn:hover:not(:disabled) { background: var(--cream2); }
+.attach-btn:disabled { opacity: .6; cursor: default; }
+.chat-panel.dropping { outline: 2px dashed var(--accent-text); outline-offset: -6px; }
+/* Links in a message: the place it goes, not the raw URL. */
+.chat-link { color: var(--accent-text); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; text-decoration-thickness: 2px; }
+.chat-msg.mine .chat-link { color: #0d2f6b; }
 .chat-msg .body { font-size: 14px; line-height: 1.35; white-space: pre-wrap; word-break: break-word; } /* preserve multi-line messages (#70) */
 .edited-tag { font-size: 11px; font-weight: 500; opacity: .6; }
 /* Inline editor for your own message (#70). */
@@ -376,7 +393,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .react-picker button:hover { background: var(--field); }
 .chat-empty { color: var(--muted); font-size: 13px; text-align: center; display: grid; justify-items: center; gap: 6px; }
 .chat-empty p { margin: 0; }
-.chat-form { display: flex; gap: 8px; }
+.chat-form { display: flex; gap: 8px; position: relative; }
+/* Composer emoji tray: opens above the message box, reusing the reaction picker's look. */
+.emoji-tray { position: absolute; bottom: 100%; left: 0; margin-bottom: 6px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; background: var(--surface); padding: 6px; border-radius: 14px; box-shadow: var(--shadow); z-index: 5; }
+.emoji-tray button { font-size: 19px; padding: 4px; border: 0; background: none; border-radius: 8px; cursor: pointer; }
+.emoji-tray button:hover, .emoji-tray button:focus-visible { background: var(--field); }
 .chat-form input { border-radius: var(--r-pill); flex: 1; min-width: 0; }
 /* Multi-line composer (#70): a textarea that grows to a few lines, snug like the
    old single-line field at rest. */

@@ -22,6 +22,14 @@ const MAX = 4;
 const HEARTBEAT_MS = 60000; // slow tick just to keep the directory fresh; phase ends fire on their own exact alarm. Longer = fewer wakes = cheaper under hibernation.
 const SESSION_KEY = 'sess'; // persisted session blob (survives eviction/deploy)
 const REACTIONS = new Set(['👍', '❤️', '🎉', '😂', '👀']); // allowed chat reactions (#53)
+// Shared pictures are relayed exactly like chat text and never stored. The cap is
+// on the data URI we forward: base64 costs about a third on top, so this lands
+// near 600 KB of actual image, well under the 32 MiB a socket could carry. It is
+// a responsiveness and sessionStorage budget, not a billing one.
+const IMAGE_MAX_CHARS = 820000;
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+// One picture at a time, so nobody can paste a room into silence.
+const IMAGE_MIN_GAP_MS = 4000;
 // A tab that returns within this window (matched by its stable client id) is a
 // reconnect, not a new arrival — so we restore their goal/camera pref instead of
 // rebuilding from scratch (#30). Kept in memory; a rare eviction inside the
@@ -350,6 +358,26 @@ export class RoomDO {
         const text = String(m.text || '').slice(0, 500).trim();
         // `mid` gives each message a stable id so reactions can attach to it.
         if (text) this.broadcast({ type: 'chat', mid: crypto.randomUUID(), id, name: a.name || 'Guest', text, t: Date.now() });
+        break;
+      }
+      case 'image': { // a shared picture — relayed live, never stored, exactly like chat
+        const mime = String(m.mime || '');
+        const data = typeof m.data === 'string' ? m.data : '';
+        if (!IMAGE_TYPES.has(mime)) break;
+        if (!data.startsWith(`data:${mime};base64,`)) break; // only what we said we'd carry
+        if (data.length > IMAGE_MAX_CHARS) break;            // the client shrinks first; this is the backstop
+        const now = Date.now();
+        if (now - (a.lastImageAt || 0) < IMAGE_MIN_GAP_MS) break;
+        this.patch(ws, (r) => { r.lastImageAt = now; });
+        // Sent as a chat message carrying an image, so mid, reactions and ordering
+        // all keep working with no second code path.
+        this.broadcast({ type: 'chat', mid: crypto.randomUUID(), id, name: a.name || 'Guest', img: data, mime, t: now });
+        break;
+      }
+      case 'unsend': { // take back your own picture. Nothing is stored, so the server
+        // can't check the mid is yours; it stamps the sender's id instead, and
+        // clients only remove a message whose author matches it.
+        if (m.mid) this.broadcast({ type: 'unsent', mid: String(m.mid), id });
         break;
       }
       case 'react': { // emoji reaction on a chat message (#53) — relayed, not stored
