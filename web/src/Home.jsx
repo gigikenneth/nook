@@ -289,7 +289,9 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
                     <button className="primary sm" disabled={full || !canGo || r.locked}
                       title={r.locked ? 'This group closed their room to new people'
                         : !canGo ? 'Add your name first' : full ? 'Room is full' : ''}
-                      onClick={() => go(r.roomId, true)}>Join</button>
+                      onClick={() => go(r.roomId, true)}>
+                      {r.locked ? 'Closed' : full ? 'Full' : !canGo ? 'Add name' : 'Join'}
+                    </button>
                   </div>
                 </li>
               );
