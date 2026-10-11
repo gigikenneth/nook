@@ -446,7 +446,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .room-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
 /* Room cards: who's here is shown by an avatar stack, not a decorative stripe. */
 .room-row {
-  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px;
   padding: 14px 18px; border-radius: var(--r-md); background: var(--surface);
   transition: transform .25s var(--spring);
 }
@@ -465,7 +465,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .room-people { display: grid; gap: 2px; min-width: 0; }
 .room-people strong { font-size: 15px; font-family: var(--display); font-weight: 700; }
 .room-people span { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.room-meta { display: flex; align-items: center; gap: 10px; flex: none; }
+.room-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; flex: none; max-width: 100%; margin-left: auto; }
 .room-meta .count { color: var(--muted); font-size: 13px; font-weight: 700; }
 .room-meta .primary { background: var(--pink); color: var(--on-accent); }
 
