@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { drawDuckTimer } from './duckTimer';
 
 // A pop-out timer showing just the countdown, so it stays visible when you
 // switch tabs or minimise. Three backends, best-first:
@@ -8,14 +9,9 @@ import { useEffect, useRef, useState } from 'react';
 //     popup, the macOS PiP tile floats above *other apps*, not just other tabs —
 //     which is what makes it stay put on Safari (#48).
 //   - A plain popup window (last resort): visible across tabs, not always-on-top.
-// All three need a user gesture, so this is wired to a button.
-const PHASE_LABEL = { greet: 'Greet', focus: 'Focus', regroup: 'Regroup' };
-
-const clock = (endsAt) => {
-  if (!endsAt) return '--:--';
-  const rem = Math.max(0, endsAt - Date.now());
-  return `${String(Math.floor(rem / 60000)).padStart(2, '0')}:${String(Math.floor((rem % 60000) / 1000)).padStart(2, '0')}`;
-};
+// All three need a user gesture, so this is wired to a button. Every backend
+// paints the same canvas scene (duckTimer.js): water rising as the phase runs out.
+const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // A Worker-backed ticker. Main-thread setInterval is clamped to ~1s when the tab
 // is hidden/minimised, which makes the Safari PiP countdown stutter; a Worker's
@@ -52,37 +48,27 @@ export function usePipTimer() {
   const streamRef = useRef(null);     // canvas capture stream (video backend)
   const drawRef = useRef(null);       // Worker-backed redraw ticker (video backend)
   const pollRef = useRef(null);       // parent-side close watchdog (window backends)
-  const dataRef = useRef({ endsAt: null, phase: 'greet' });
+  const dataRef = useRef({ endsAt: null, phase: 'greet', totalMs: null });
 
   const draw = () => {
-    const { endsAt, phase } = dataRef.current;
-    if (modeRef.current === 'video') {
-      const c = canvasRef.current;
+    let c = canvasRef.current;
+    if (modeRef.current !== 'video') {
+      const w = winRef.current;
+      if (!w || !w.document) return;
+      c = w.document.getElementById('pip-canvas');
       if (!c) return;
-      const g = c.getContext('2d');
-      const W = c.width, H = c.height;
-      g.fillStyle = '#10124e';
-      g.fillRect(0, 0, W, H);
-      g.textAlign = 'center';
-      g.fillStyle = 'rgba(255,255,255,.65)';
-      g.font = `700 ${Math.round(H * 0.13)}px system-ui,sans-serif`;
-      g.fillText((PHASE_LABEL[phase] || '').toUpperCase(), W / 2, H * 0.32);
-      g.fillStyle = '#fff';
-      g.font = `800 ${Math.round(H * 0.5)}px ui-monospace,monospace`;
-      g.fillText(clock(endsAt), W / 2, H * 0.82);
-      return;
+      // Keep the canvas sharp at whatever size the window is dragged to.
+      const dpr = w.devicePixelRatio || 1;
+      const cw = Math.round(c.clientWidth * dpr), ch = Math.round(c.clientHeight * dpr);
+      if (cw && ch && (c.width !== cw || c.height !== ch)) { c.width = cw; c.height = ch; }
     }
-    const w = winRef.current;
-    if (!w || !w.document) return;
-    const clk = w.document.getElementById('pip-clock');
-    const label = w.document.getElementById('pip-label');
-    if (!clk || !label) return;
-    clk.textContent = clock(endsAt);
-    label.textContent = PHASE_LABEL[phase] || '';
+    if (!c || !c.width) return;
+    drawDuckTimer(c.getContext('2d'), c.width, c.height, { ...dataRef.current, still });
   };
 
   // Push the latest phase/timer in from the component and redraw immediately.
-  const setData = (endsAt, phase) => { dataRef.current = { endsAt, phase }; draw(); };
+  // totalMs = the phase's full length, so the water knows how full to be.
+  const setData = (endsAt, phase, totalMs) => { dataRef.current = { endsAt, phase, totalMs }; draw(); };
 
   const stopPoll = () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } };
   const stopDraw = () => { if (drawRef.current) { drawRef.current.stop(); drawRef.current = null; } };
@@ -125,14 +111,10 @@ export function usePipTimer() {
   const openWindow = (w, mode) => {
     winRef.current = w;
     modeRef.current = mode;
-    w.document.body.style.cssText = 'margin:0;height:100vh;display:grid;place-items:center;background:#10124e;color:#fff;font-family:system-ui,sans-serif;';
-    w.document.body.innerHTML =
-      '<div style="text-align:center">' +
-      '<div id="pip-label" style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;opacity:.65;margin-bottom:4px"></div>' +
-      '<div id="pip-clock" style="font-family:ui-monospace,monospace;font-size:46px;font-weight:800;letter-spacing:2px">--:--</div>' +
-      '</div>';
+    w.document.body.style.cssText = 'margin:0;height:100vh;overflow:hidden;background:#10124e;';
+    w.document.body.innerHTML = '<canvas id="pip-canvas" style="display:block;width:100vw;height:100vh"></canvas>';
     draw();
-    w.setInterval(draw, 500); // tied to the pop-out window; dies when it closes
+    w.setInterval(draw, still ? 500 : 66); // ~15fps for the waves; tied to the pop-out window, dies when it closes
     // Detect close from the PARENT: a watchdog polling `.closed` never misfires
     // or permanently disarms; pagehide is an immediate fast path.
     stopPoll();
@@ -146,7 +128,7 @@ export function usePipTimer() {
   const openVideo = async () => {
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = 160; canvas.height = 90;
+      canvas.width = 320; canvas.height = 180;
       // Off-screen but IN the DOM — WebKit only captures frames from an attached,
       // actively-drawn canvas; a detached one emits nothing and play() hangs.
       canvas.style.cssText = 'position:fixed;left:-9999px;top:0;';
@@ -175,7 +157,7 @@ export function usePipTimer() {
       const pump = () => { draw(); if (++pumps < 40 && modeRef.current === 'video') requestAnimationFrame(pump); };
       requestAnimationFrame(pump);
       // Worker-backed so the countdown stays smooth while Safari is minimised.
-      drawRef.current = makeTicker(250, draw);
+      drawRef.current = makeTicker(still ? 250 : 100, draw);
 
       // Don't await — on Safari play() can stay pending; fire it and move on.
       video.play().catch(() => { /* frames still flow into PiP */ });
@@ -209,13 +191,13 @@ export function usePipTimer() {
     if (modeRef.current) return;
     if (hasDocPip) {
       try {
-        const w = await window.documentPictureInPicture.requestWindow({ width: 200, height: 112 });
+        const w = await window.documentPictureInPicture.requestWindow({ width: 240, height: 150 });
         return openWindow(w, 'docpip');
       } catch { return; } // denied / no gesture
     }
     if (hasVideoPip && await openVideo()) return;
     // Popup fallback: a small separate window. Opened from a click, so not blocked.
-    const w = window.open('', 'nook-timer', 'width=220,height=132,menubar=no,toolbar=no,location=no,status=no,resizable=yes');
+    const w = window.open('', 'nook-timer', 'width=240,height=170,menubar=no,toolbar=no,location=no,status=no,resizable=yes');
     if (!w) return;
     w.document.title = 'Nook timer';
     openWindow(w, 'popup');
