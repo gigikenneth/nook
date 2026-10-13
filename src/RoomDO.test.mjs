@@ -607,4 +607,45 @@ Date.now = realNow;
   Date.now = realNow;
 }
 
+// A removed person stays removed: their tab auto-reconnecting (a laptop waking
+// from sleep never heard the close) is turned away, even after an eviction.
+{
+  const realPair = globalThis.WebSocketPair, realResponse = globalThis.Response;
+  let lastPair = null;
+  globalThis.WebSocketPair = function () {
+    const mk = () => { const w = fakeWs(); w.accept = () => {}; w.close = (code) => { w._open = false; w.closedWith = code; }; return w; };
+    const client = mk(), server = mk();
+    lastPair = { client, server };
+    return { 0: client, 1: server };
+  };
+  globalThis.Response = class { constructor(body, init = {}) { this.body = body; Object.assign(this, init); } };
+  try {
+    const st = makeState();
+    const r = new RoomDO(st, null);
+    await r._restore;
+    r.roomId = 'test'; r.configured = true;
+    const host = join(r, st, { id: 'host', name: 'Gigi', rkey: 'dev-gigi' });
+    join(r, st, { id: 'byron', name: 'Byron', rkey: 'dev-byron' });
+    msg(r, host, { type: 'kick', id: 'byron' });
+    assert.equal(r.count(), 1, 'removed');
+
+    const req = (key) => new Request(`https://room/room/test/ws?name=Byron&did=${key}`, { headers: { Upgrade: 'websocket' } });
+    await r.fetch(req('dev-byron'));
+    assert.equal(lastPair.server.closedWith, 4000, 'auto-reconnect turned away as removed');
+    assert.equal(r.count(), 1, 'never rejoined');
+
+    const r2 = new RoomDO(st, null); // evicted and restored from storage
+    await r2._restore;
+    st._sockets.forEach((w) => { if (w._att?.id === 'host') w._open = true; });
+    await r2.fetch(req('dev-byron'));
+    assert.equal(lastPair.server.closedWith, 4000, 'still turned away after an eviction');
+
+    await r2.fetch(req('dev-someone-else'));
+    assert.equal(lastPair.server.closedWith, undefined, 'other people can still join');
+  } finally {
+    globalThis.WebSocketPair = realPair;
+    globalThis.Response = realResponse;
+  }
+}
+
 console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 + dead-socket seats + session continuity): all passed');
