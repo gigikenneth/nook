@@ -5,6 +5,12 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'October 13, 2026',
+    items: [
+      'The moon has been keeping you company during sessions too. If your morning needs a nudge mid-focus, the one next to the Nook title knows the same trick as the home page',
+    ],
+  },
+  {
     date: 'October 8, 2026',
     items: [
       'Share pictures and GIFs in the chat: pick one, paste it, or drop it on the chat panel. Photos are shrunk in your browser and their location data is stripped before they leave your device, and like the rest of the chat, nothing is stored. Changed your mind? Delete your own picture for everyone',
