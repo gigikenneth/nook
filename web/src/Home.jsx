@@ -385,7 +385,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
         <footer className="site-foot">
           <span>Nook is in beta, and I'm actively tinkering with it.</span>
           <span>Found a bug? <ReportBug label="Report it" /> · Like Nook? <SupportNook label="Support it" /></span>
-          <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>. Prefer Discord? There's the <a href="https://discord.gg/7fvsBq79VU" target="_blank" rel="noopener noreferrer">Groove Part 2 community</a>.</span>
+          <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>. Prefer Discord? There's the <a href="https://discord.gg/7fvsBq79VU" target="_blank" rel="noopener noreferrer">Groove Part 2 community</a>. Avatars by <a href="http://www.ashleyseo.com/" target="_blank" rel="noopener noreferrer">Ashley Seo</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, via <a href="https://www.dicebear.com/" target="_blank" rel="noopener noreferrer">DiceBear</a>.</span>
         </footer>
       )}
     </main>
