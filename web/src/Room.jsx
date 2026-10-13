@@ -374,7 +374,8 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   // Optional pop-out timer (Document PiP) so the countdown stays visible when the
   // tab is minimised on desktop (#34). Feed it the current phase + timer.
   const pip = usePipTimer();
-  useEffect(() => { pip.setData(endsAt, phase); }, [endsAt, phase]); // eslint-disable-line react-hooks/exhaustive-deps
+  const phaseMs = phase === 'focus' ? config.focusMin * 60000 : phase === 'regroup' ? config.regroupMin * 60000 : null;
+  useEffect(() => { pip.setData(endsAt, phase, phaseMs); }, [endsAt, phase, phaseMs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show the live countdown in the browser tab title (#18), so a glance at the
   // tab shows the time left even when Nook isn't the foreground app.
