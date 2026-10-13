@@ -17,6 +17,7 @@ const PING_COOLDOWN_MS = 4000; // ignore repeat pings to the same person
 const BLOCKS_KEY = 'blocks'; // persisted block graph (survives eviction/deploy)
 const ROOMS_KEY = 'rooms'; // persisted open-rooms directory (survives hibernation eviction)
 const prefOf = (v) => (v === 'on' || v === 'off' ? v : null); // camera preference, else unset
+const avOf = (v) => (Number.isInteger(v) && v >= 0 && v < 24 ? v : null); // avatar index (web/src/avatar.js AVATAR_COUNT), else unset
 
 export class LobbyDO {
   constructor(state, env) {
@@ -127,7 +128,7 @@ export class LobbyDO {
     if (!self) return;
     switch (m.type) {
       case 'hello': // opt in: announce yourself and appear in the roster
-        this.patch(ws, (x) => { x.announced = true; x.watching = false; x.name = String(m.name || 'Someone').slice(0, 32); x.pref = prefOf(m.pref); x.did = m.did || null; });
+        this.patch(ws, (x) => { x.announced = true; x.watching = false; x.name = String(m.name || 'Someone').slice(0, 32); x.pref = prefOf(m.pref); x.av = avOf(m.av); x.did = m.did || null; });
         this.sendBlocked(ws); // let the client reconcile its ignore list
         this.broadcastRoster();
         break;
@@ -166,6 +167,10 @@ export class LobbyDO {
         this.patch(ws, (x) => { x.pref = prefOf(m.pref); });
         this.broadcastRoster();
         break;
+      case 'avatar': // picked avatar (an index into web/public/avatars), shown in "Around now"
+        this.patch(ws, (x) => { x.av = avOf(m.av); });
+        this.broadcastRoster();
+        break;
       case 'ping': { // "come cowork with me" -> deliver an invite to one person
         const targetWs = this.personOf(m.toId);
         const target = targetWs?.deserializeAttachment();
@@ -201,7 +206,7 @@ export class LobbyDO {
     const hidden = (viewerDid && this.blocks.get(viewerDid)) || null;
     const people = this.people()
       .filter((x) => !x.a.watching && !(hidden && x.a.did && hidden.has(x.a.did)))
-      .map((x) => ({ id: x.a.id, name: x.a.name, pref: x.a.pref || null }));
+      .map((x) => ({ id: x.a.id, name: x.a.name, pref: x.a.pref || null, av: x.a.av ?? null }));
     return { type: 'roster', people };
   }
   // Roster is per-viewer now, so send each connected person their own filtered

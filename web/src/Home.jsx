@@ -3,7 +3,8 @@ import { apiBase } from './config';
 import { useLobby } from './useLobby';
 import { ReportBug } from './ReportBug.jsx';
 import { SupportNook } from './SupportNook.jsx';
-import { Moon, Sparkles, CamBadge, CamPrefPicker } from './graphics.jsx';
+import { Moon, Sparkles, CamBadge, CamPrefPicker, Avatar } from './graphics.jsx';
+import { AVATAR_COUNT } from './avatar';
 import { MoonEgg } from './MoonEgg.jsx';
 import { HelpModal } from './HelpModal.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
@@ -12,18 +13,17 @@ import { unlockAudio } from './sound';
 
 const uid = () => crypto.randomUUID();
 const phaseLabel = { greet: 'greeting', focus: 'focusing', regroup: 'regrouping' };
-const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
-const AV = ['#3e5ad5', '#10124e', '#1f97bf', '#5a7d2a']; // blue, indigo, teal, moss — readable with white text
 
-export default function Home({ pendingRoom, onEnter, embedded = false, initialName = '', initialCamPref = null, currentRoomId = null, onClose }) {
+export default function Home({ pendingRoom, onEnter, embedded = false, initialName = '', initialCamPref = null, initialAv = null, currentRoomId = null, onClose }) {
   // Fresh Home (no session handed in) prefills from remembered prefs so a
   // returning regular doesn't re-type their name / camera choice.
-  const remembered = embedded ? { name: '', camPref: null } : loadPrefs();
+  const remembered = embedded ? { name: '', camPref: null, av: null } : loadPrefs();
   const [name, setName] = useState(initialName || remembered.name);
   const [todos, setTodos] = useState(['']);
   const [focusMin, setFocusMin] = useState(50);
   const [regroupMin, setRegroupMin] = useState(5);
   const [camPref, setCamPref] = useState(initialCamPref ?? remembered.camPref); // 'on' | 'off' | null — camera-preference signal
+  const [av, setAv] = useState(initialAv ?? remembered.av); // picked avatar index, see avatar.js
   const [helpOpen, setHelpOpen] = useState(false); // "how it works / what's new" panel
   const [rooms, setRooms] = useState([]);
   const [pinged, setPinged] = useState(() => new Set()); // people just invited (for button feedback)
@@ -37,7 +37,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   const active = canGo && !pendingRoom;      // hold a lobby socket at all
   const online = active && !embedded;        // listed + pingable on the home screen
   const watching = active && embedded;       // peeking from a session
-  const { roster, selfId, invite, dismissInvite, ping, blocks, block, unblock } = useLobby(active, name.trim(), embedded ? 'watch' : 'here', camPref);
+  const { roster, selfId, invite, dismissInvite, ping, blocks, block, unblock } = useLobby(active, name.trim(), embedded ? 'watch' : 'here', camPref, av);
   const [hiddenIds, setHiddenIds] = useState(() => new Set()); // optimistically hidden while the undo window is open
   const undoTimers = useRef(new Map()); // id -> timeout, so Undo can cancel the pending block
   const [undoBlock, setUndoBlock] = useState(null); // { id, name } — the "Ignored X · Undo" toast
@@ -95,7 +95,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   function acceptInvite() {
     const roomId = invite.roomId;
     dismissInvite();
-    onEnter({ roomId, name: name.trim(), todos: cleanTodos(), focusMin, regroupMin, isPublic: false, camPref });
+    onEnter({ roomId, name: name.trim(), todos: cleanTodos(), focusMin, regroupMin, isPublic: false, camPref, av });
   }
 
   // Poll the live directory of open rooms.
@@ -133,16 +133,33 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
   }
 
   function go(roomId, isPublic) {
-    onEnter({ roomId, name: name.trim(), todos: cleanTodos(), focusMin, regroupMin, isPublic, camPref });
+    onEnter({ roomId, name: name.trim(), todos: cleanTodos(), focusMin, regroupMin, isPublic, camPref, av });
   }
 
   const identity = (
     <div className="card">
       <label className="field">
         <span>Your name</span>
-        <input id="nook-name" value={name} onChange={(e) => setName(e.target.value)}
-          placeholder="What should we call you?" maxLength={32} />
+        <span className="name-row">
+          <Avatar className="me-av" av={av} />
+          <input id="nook-name" value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="What should we call you?" maxLength={32} />
+        </span>
       </label>
+      <div className="field">
+        <span className="av-head">
+          Your avatar
+          <button type="button" className="ghost sm" onClick={() => setAv((cur) => (cur + 1 + Math.floor(Math.random() * (AVATAR_COUNT - 1))) % AVATAR_COUNT)}>Surprise me</button>
+        </span>
+        <div className="av-picks" role="radiogroup" aria-label="Your avatar">
+          {Array.from({ length: AVATAR_COUNT }, (_, i) => (
+            <button key={i} type="button" role="radio" aria-checked={i === av} aria-label={`Avatar ${i + 1}`}
+              className="av-pick" onClick={() => setAv(i)}>
+              <Avatar av={i} />
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="field">
         <span>What you're working on</span>
         <ul className="todo-edit">
@@ -254,7 +271,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
                   <div className="room-left">
                     <div className="room-avatars">
                       {r.occupants.slice(0, 4).map((o, i) => (
-                        <span key={i} className="room-av" style={{ background: AV[i % AV.length] }}>{initials(o.name)}</span>
+                        <Avatar key={i} className="room-av" av={o.av} seed={o.name} />
                       ))}
                     </div>
                     <div className="room-people">
@@ -308,9 +325,9 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
           </p>
         ) : (
           <ul className="people-list">
-            {others.map((p, i) => (
+            {others.map((p) => (
               <li key={p.id} className="person-row">
-                <span className="goal-chip" style={{ background: AV[i % AV.length] }}>{initials(p.name)}</span>
+                <Avatar className="goal-chip" av={p.av} seed={p.name} />
                 <strong>{p.name}</strong>
                 <CamBadge pref={p.pref} compact />
                 {watching ? (
@@ -368,7 +385,7 @@ export default function Home({ pendingRoom, onEnter, embedded = false, initialNa
         <footer className="site-foot">
           <span>Nook is in beta, and I'm actively tinkering with it.</span>
           <span>Found a bug? <ReportBug label="Report it" /> · Like Nook? <SupportNook label="Support it" /></span>
-          <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>. Prefer Discord? There's the <a href="https://discord.gg/7fvsBq79VU" target="_blank" rel="noopener noreferrer">Groove Part 2 community</a>.</span>
+          <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>. Prefer Discord? There's the <a href="https://discord.gg/7fvsBq79VU" target="_blank" rel="noopener noreferrer">Groove Part 2 community</a>. Avatars by <a href="http://www.ashleyseo.com/" target="_blank" rel="noopener noreferrer">Ashley Seo</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, via <a href="https://www.dicebear.com/" target="_blank" rel="noopener noreferrer">DiceBear</a>.</span>
         </footer>
       )}
     </main>

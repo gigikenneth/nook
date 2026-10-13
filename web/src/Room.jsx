@@ -8,7 +8,7 @@ import { SupportNook } from './SupportNook.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
 import { MoonEgg } from './MoonEgg.jsx';
 import { JitsiStage } from './JitsiStage.jsx';
-import { Moon, ChatDoodle } from './graphics.jsx';
+import { Moon, ChatDoodle, Avatar } from './graphics.jsx';
 import { prepareImage, isImage, bytesOf } from './image';
 import { findLinks } from './links';
 
@@ -129,15 +129,12 @@ function ChatMessage({ m, selfId, onReact, onEdit, onUnsend }) {
   );
 }
 
-const initials = (n) => (n || '?').trim().slice(0, 2).toUpperCase();
-const CHIP = ['#29bcee', '#a5d67b', '#6be492', '#171a6b']; // cyan, lime, green, indigo (Groove complements)
-
 // A small who's-here bubble for the focus phase, where cameras are off. The name
 // stays full-size and readable; only the avatar is a compact circle.
-function PresenceChip({ name, isHost, i, onKick }) {
+function PresenceChip({ name, av, seed, isHost, onKick }) {
   return (
     <span className="presence-chip">
-      <span className="presence-av" style={{ background: CHIP[i % CHIP.length] }}>{initials(name)}</span>
+      <Avatar className="presence-av" av={av} seed={seed} />
       <span className="presence-name">{name}{isHost ? ' · host' : ''}</span>
       {onKick && <button className="presence-kick" title={`Remove ${name} from the room`} aria-label={`Remove ${name}`} onClick={onKick}>×</button>}
     </span>
@@ -215,8 +212,8 @@ function Timer({ endsAt, label }) {
   );
 }
 
-export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, camPref, onLeave, onBrowse }) {
-  const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic });
+export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, camPref, av = null, onLeave, onBrowse }) {
+  const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic, av });
   const { selfId, hostId, peers, phase, startingAt, endsAt, ready, shared, order, locked, goals, chat, config, status } = room;
 
   const [goal, setGoal] = useState(todos[0] || '');
@@ -563,9 +560,9 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
            the bar, and the space goes to chat (left) + your list (right). */
         <>
           <div className="presence-bar">
-            <PresenceChip name={`${name} (you)`} isHost={isHost} i={0} />
-            {peerIds.map((id, idx) => (
-              <PresenceChip key={id} name={peers[id].name || 'Guest'} isHost={id === hostId} i={idx + 1}
+            <PresenceChip name={`${name} (you)`} av={av} seed={name} isHost={isHost} />
+            {peerIds.map((id) => (
+              <PresenceChip key={id} name={peers[id].name || 'Guest'} av={peers[id].av} seed={peers[id].name} isHost={id === hostId}
                 onKick={isHost ? () => { if (window.confirm(`Remove ${peers[id].name || 'this person'} from the room?`)) room.kick(id); } : undefined} />
             ))}
           </div>
@@ -594,7 +591,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
           <div className="rail">
             <aside className="panel stage-lead">
               {phase === 'greet' && (
-                <GreetPanel selfId={selfId} selfName={name} goal={goal} setGoal={setGoal}
+                <GreetPanel selfId={selfId} selfName={name} selfAv={av} goal={goal} setGoal={setGoal}
                   onShareGoal={() => goal.trim() && room.sendGoal(goal.trim())}
                   onShared={() => {
                     unlockAudio();
@@ -613,7 +610,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
               )}
               {phase === 'regroup' && (
                 <RegroupPanel tasks={tasks} isHost={isHost} focusMin={config.focusMin} regroupMin={config.regroupMin} onRestart={room.restart}
-                  selfId={selfId} selfName={name} peers={peers} order={order} shared={shared}
+                  selfId={selfId} selfName={name} selfAv={av} peers={peers} order={order} shared={shared}
                   onReported={() => room.shareGoal()} />
               )}
             </aside>
@@ -631,7 +628,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       )}
       <footer className="site-foot in-room">
         <span><ReportBug /> · <SupportNook /></span>
-        <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>. Prefer Discord? There’s the <a href="https://discord.gg/7fvsBq79VU" target="_blank" rel="noopener noreferrer">Groove Part 2 community</a>.</span>
+        <span>Built by <a href="https://www.gigikenneth.com/" target="_blank" rel="noopener noreferrer">Gigi</a>. <a href="https://github.com/gigikenneth/nook" target="_blank" rel="noopener noreferrer">Source on GitHub</a>. Prefer Discord? There’s the <a href="https://discord.gg/7fvsBq79VU" target="_blank" rel="noopener noreferrer">Groove Part 2 community</a>. Avatars by <a href="http://www.ashleyseo.com/" target="_blank" rel="noopener noreferrer">Ashley Seo</a>, <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a>, via <a href="https://www.dicebear.com/" target="_blank" rel="noopener noreferrer">DiceBear</a>.</span>
       </footer>
     </main>
   );
@@ -668,7 +665,7 @@ function PhaseBanner({ phase, endsAt, regroupMin }) {
   );
 }
 
-function GreetPanel({ selfId, selfName, goal, setGoal, onShareGoal, onShared, goals, peers, order, shared,
+function GreetPanel({ selfId, selfName, selfAv, goal, setGoal, onShareGoal, onShared, goals, peers, order, shared,
   ready, iAmReady, count, onReady, isHost, onStart }) {
   // Turn-taking: the frame sits on the first person (join order) who hasn't shared yet.
   const currentSharer = order.find((id) => !shared.includes(id));
@@ -691,9 +688,7 @@ function GreetPanel({ selfId, selfName, goal, setGoal, onShareGoal, onShared, go
           const hasShared = shared.includes(id);
           return (
             <li key={id} className={`share-row ${isCurrent ? 'current' : ''} ${hasShared ? 'shared' : ''}`}>
-              <span className="goal-chip" style={{ background: CHIP[order.indexOf(id) % CHIP.length] }}>
-                {initials(id === selfId ? selfName : nameOf(id))}
-              </span>
+              <Avatar className="goal-chip" av={id === selfId ? selfAv : peers[id]?.av} seed={id === selfId ? selfName : nameOf(id)} />
               <div className="goal-body">
                 <strong>{id === selfId ? 'You' : `${nameOf(id)}’s goal`}</strong>
                 <span>{goalOf(id) || (isCurrent ? 'sharing now…' : '…')}</span>
@@ -783,7 +778,7 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, share
 const LEN_PRESETS = [15, 25, 50]; // quick focus-length picks for the next round
 
 function RegroupPanel({ tasks, isHost, focusMin, regroupMin, onRestart,
-  selfId, selfName, peers, order, shared, onReported }) {
+  selfId, selfName, selfAv, peers, order, shared, onReported }) {
   const finished = tasks.filter((t) => t.done).length;
   // Host can retune the next round's length; seeded with the current length.
   const [f, setF] = useState(focusMin);
@@ -805,9 +800,7 @@ function RegroupPanel({ tasks, isHost, focusMin, regroupMin, onRestart,
             {order.map((id, i) => (
               <li key={id} className={`share-row ${id === current ? 'current' : ''} ${shared.includes(id) ? 'shared' : ''}`}>
                 <span className="turn-num">{i + 1}</span>
-                <span className="goal-chip" style={{ background: CHIP[i % CHIP.length] }}>
-                  {initials(id === selfId ? selfName : nameOf(id))}
-                </span>
+                <Avatar className="goal-chip" av={id === selfId ? selfAv : peers[id]?.av} seed={id === selfId ? selfName : nameOf(id)} />
                 <div className="goal-body">
                   <strong>{nameOf(id)}</strong>
                   <span>{id === current ? 'reporting now…' : shared.includes(id) ? 'done' : 'waiting'}</span>

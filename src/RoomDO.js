@@ -253,13 +253,17 @@ export class RoomDO {
     this.persist(); // capture roomId (and any fresh config) so alarms can sync the lobby after an eviction
 
     const name = (url.searchParams.get('name') || 'Guest').slice(0, 32);
+    // Picked avatar, an index into web/public/avatars (web/src/avatar.js). Absent
+    // or junk = null, and clients draw a stand-in from the name.
+    const avN = Number(url.searchParams.get('av'));
+    const av = url.searchParams.has('av') && Number.isInteger(avN) && avN >= 0 && avN < 24 ? avN : null;
     const id = crypto.randomUUID();
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     this.state.acceptWebSocket(server);
     server.serializeAttachment({
-      id, name, rkey, joinedAt: Date.now(),
+      id, name, av, rkey, joinedAt: Date.now(),
       ready: false, shared: false, goal: restoredGoal, list: null,
       cam: { session: null, audio: null, video: null }, camPref: restoredPref,
     });
@@ -268,7 +272,7 @@ export class RoomDO {
 
     const peers = this.roster()
       .filter((x) => x.a.id !== id)
-      .map((x) => ({ id: x.a.id, name: x.a.name }));
+      .map((x) => ({ id: x.a.id, name: x.a.name, av: x.a.av ?? null }));
 
     this.send(id, {
       type: 'welcome',
@@ -290,7 +294,7 @@ export class RoomDO {
       locked: this.locked,
     });
     this.broadcast({ type: 'order', order: this.order() });
-    this.broadcastExcept(id, { type: 'peer-join', id, name, reconnect: reconnecting });
+    this.broadcastExcept(id, { type: 'peer-join', id, name, av, reconnect: reconnecting });
     // On a reconnect, replay the restored goal/pref so peers see them again.
     if (reconnecting) {
       if (restoredGoal) this.broadcast({ type: 'goal', id, text: restoredGoal });
@@ -619,7 +623,7 @@ export class RoomDO {
     if (!this.env || !this.roomId) return;
     const lobby = this.env.LOBBY.get(this.env.LOBBY.idFromName('global'));
     const occupants = this.isPublic
-      ? this.roster().map((x) => ({ name: x.a.name, goal: x.a.goal || '', pref: x.a.camPref || null }))
+      ? this.roster().map((x) => ({ name: x.a.name, av: x.a.av ?? null, goal: x.a.goal || '', pref: x.a.camPref || null }))
       : [];
     lobby.fetch('https://lobby/update', {
       method: 'POST',

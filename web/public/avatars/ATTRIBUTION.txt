@@ -1,0 +1,8 @@
+Avatars in this folder are "Custom Avatar" by Ashley Seo (DiceBear's "Big Smile" style), generated with DiceBear.
+
+Design: https://www.figma.com/community/file/881358461963645496
+Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Changes: background colours set to Nook's palette.
+DiceBear: https://www.dicebear.com (MIT)
+
+0.svg to 23.svg are seeds nook-1 to nook-24.

@@ -10,6 +10,8 @@
 // `did`. Stops casual repeat friction; not a hard wall. ponytail: that's the
 // whole point of the "cheap wins" scope — no server-stored relational state.
 
+import { avatarOf, validAv } from './avatar';
+
 const DID_KEY = 'nook.did';
 const PREFS_KEY = 'nook.prefs';
 
@@ -23,18 +25,21 @@ export function getDid() {
   } catch { return crypto.randomUUID(); }
 }
 
-// Remembered name + camera preference so a regular doesn't re-type on return.
+// Remembered name, camera preference and avatar so a regular doesn't re-pick on
+// return. No avatar picked yet: a random-looking one seeded by the device id, so
+// it stays the same visit to visit.
 export function loadPrefs() {
+  const fallbackAv = () => avatarOf(null, getDid());
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
-    if (p && typeof p === 'object') return { name: p.name || '', camPref: p.camPref ?? null };
+    if (p && typeof p === 'object') return { name: p.name || '', camPref: p.camPref ?? null, av: validAv(p.av) ? p.av : fallbackAv() };
   } catch { /* ignore */ }
-  return { name: '', camPref: null };
+  return { name: '', camPref: null, av: fallbackAv() };
 }
 
-export function savePrefs({ name, camPref }) {
+export function savePrefs({ name, camPref, av }) {
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify({ name: (name || '').trim(), camPref: camPref ?? null }));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ name: (name || '').trim(), camPref: camPref ?? null, av: validAv(av) ? av : null }));
   } catch { /* ignore */ }
 }
 

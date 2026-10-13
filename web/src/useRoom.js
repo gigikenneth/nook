@@ -82,13 +82,13 @@ export function useRoom(roomId, name, opts) {
           if (m.camPrefs) setCamPrefs(m.camPrefs);
           setPeers((p) => {
             const n = { ...p };
-            for (const pe of m.peers) n[pe.id] = { ...(n[pe.id] || {}), name: pe.name };
+            for (const pe of m.peers) n[pe.id] = { ...(n[pe.id] || {}), name: pe.name, av: pe.av ?? null };
             for (const [pid, tasks] of Object.entries(m.lists || {})) n[pid] = { ...(n[pid] || {}), list: tasks };
             return n;
           });
           break;
         case 'peer-join':
-          setPeers((p) => ({ ...p, [m.id]: { ...(p[m.id] || {}), name: m.name } }));
+          setPeers((p) => ({ ...p, [m.id]: { ...(p[m.id] || {}), name: m.name, av: m.av ?? null } }));
           // Ping when a new person arrives while you're waiting to start (#87). Only
           // in greet, and never for reconnects — the server flags those, which is
           // what kept the old always-on join sound spamming on flaky connections (#32).
@@ -146,7 +146,7 @@ export function useRoom(roomId, name, opts) {
       }
     }
 
-    const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}&cid=${encodeURIComponent(cidRef.current)}&did=${encodeURIComponent(didRef.current)}`;
+    const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}${opts.av != null ? `&av=${opts.av}` : ''}&cid=${encodeURIComponent(cidRef.current)}&did=${encodeURIComponent(didRef.current)}`;
     let attempts = 0;
     const MAX_RETRIES = 10;
 

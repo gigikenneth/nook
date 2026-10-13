@@ -1,6 +1,13 @@
 // Real assets: Twemoji (© Twitter, CC-BY 4.0), downloaded into public/twemoji.
 // See public/twemoji/ATTRIBUTION.txt. Used as <img>, no generated art.
+import { avatarSrc } from './avatar';
+
 const A = '/twemoji';
+
+// Someone's picked character, or a stable stand-in from `seed` if they haven't picked.
+export function Avatar({ av, seed, className = '' }) {
+  return <img src={avatarSrc(av, seed)} className={`av ${className}`} alt="" />;
+}
 
 export function Moon({ size = 44, className = '' }) {
   return <img src={`${A}/1f319.svg`} width={size} height={size} className={`moon ${className}`} alt="" />;
