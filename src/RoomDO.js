@@ -365,6 +365,14 @@ export class RoomDO {
         this.syncLobby();
         break;
       }
+      case 'avatar': { // changed avatar mid-session (an index into web/public/avatars)
+        const av = Number.isInteger(m.av) && m.av >= 0 && m.av < 24 ? m.av : null;
+        if (av === null) break;
+        this.patch(ws, (x) => { x.av = av; });
+        this.broadcast({ type: 'avatar', id, av });
+        this.syncLobby();
+        break;
+      }
       case 'chat': { // relayed live, never stored — history dies with the room
         const text = String(m.text || '').slice(0, 500).trim();
         // `mid` gives each message a stable id so reactions can attach to it.

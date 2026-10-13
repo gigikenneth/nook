@@ -36,6 +36,14 @@ export default function App() {
     setBrowsing(false);
   }
 
+  // Avatar changed mid-session: keep it for a refresh (session) and next visit (prefs).
+  function changeAvatar(av) {
+    const s = { ...session, av };
+    sessionStorage.setItem(KEY, JSON.stringify(s));
+    savePrefs({ name: s.name, camPref: s.camPref, av });
+    setSession(s);
+  }
+
   function leave() {
     const room = roomFromHash();
     sessionStorage.removeItem(KEY);
@@ -58,7 +66,7 @@ export default function App() {
   if (session) {
     return (
       <>
-        <Room {...session} onLeave={leave} onBrowse={() => setBrowsing(true)} />
+        <Room {...session} onAvatar={changeAvatar} onLeave={leave} onBrowse={() => setBrowsing(true)} />
         {browsing && (
           <Home embedded initialName={session.name} initialCamPref={session.camPref} initialAv={session.av} currentRoomId={session.roomId} onClose={() => setBrowsing(false)} onEnter={switchRoom} />
         )}

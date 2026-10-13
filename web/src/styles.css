@@ -582,6 +582,12 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .presence-chip { display: inline-flex; align-items: center; gap: 8px; background: var(--surface); padding: 5px 15px 5px 5px; border-radius: var(--r-pill); box-shadow: var(--shadow); }
 .presence-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 12px; flex: none; }
 .presence-name { font-weight: 700; font-size: 14px; font-family: var(--display); white-space: nowrap; }
+.presence-chip.self { position: relative; }
+/* Your own avatar is a button: a small pencil badge says it can be changed. */
+.presence-av-btn { position: relative; padding: 0; border: 0; background: none; border-radius: 50%; cursor: pointer; }
+.presence-av-btn::after { content: '✎'; position: absolute; right: -4px; bottom: -4px; width: 15px; height: 15px; border-radius: 50%; background: var(--gold); color: #fff; font-size: 9px; line-height: 15px; text-align: center; border: 2px solid var(--surface); }
+.presence-av-btn:hover .presence-av, .presence-av-btn[aria-expanded="true"] .presence-av { box-shadow: 0 0 0 3px var(--gold); }
+.av-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 30; display: grid; grid-template-columns: repeat(6, 44px); gap: 6px; padding: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); box-shadow: var(--shadow); }
 .presence-kick { margin-left: 2px; padding: 0 5px; font-size: 15px; line-height: 1; color: var(--muted); border-radius: 50%; }
 .presence-kick:hover { color: var(--pink-deep); background: var(--field); }
 

@@ -9,6 +9,7 @@ import { ThemeToggle } from './ThemeToggle.jsx';
 import { MoonEgg } from './MoonEgg.jsx';
 import { JitsiStage } from './JitsiStage.jsx';
 import { Moon, ChatDoodle, Avatar } from './graphics.jsx';
+import { AVATAR_COUNT, avatarOf } from './avatar';
 import { prepareImage, isImage, bytesOf } from './image';
 import { findLinks } from './links';
 
@@ -140,6 +141,40 @@ function PresenceChip({ name, av, seed, isHost, onKick }) {
     </span>
   );
 }
+// Your own chip: tap your avatar to swap it without leaving the session.
+function SelfChip({ name, av, isHost, onAvatar }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', away);
+    window.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', away); window.removeEventListener('keydown', esc); };
+  }, [open]);
+  const current = avatarOf(av, name);
+  return (
+    <span className="presence-chip self" ref={ref}>
+      <button type="button" className="presence-av-btn" aria-label="Change your avatar" aria-expanded={open}
+        title="Change your avatar" onClick={() => setOpen((o) => !o)}>
+        <Avatar className="presence-av" av={av} seed={name} />
+      </button>
+      <span className="presence-name">{name} (you){isHost ? ' · host' : ''}</span>
+      {open && (
+        <div className="av-pop" role="radiogroup" aria-label="Your avatar">
+          {Array.from({ length: AVATAR_COUNT }, (_, i) => (
+            <button key={i} type="button" role="radio" aria-checked={i === current} aria-label={`Avatar ${i + 1}`}
+              className="av-pick" onClick={() => { onAvatar(i); setOpen(false); }}>
+              <Avatar av={i} />
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
 // Light tints so each other person's chat bubbles read as their own colour.
 // Keyed by name (stable across reconnects, unlike the per-connection id).
 const CHAT_TINT = ['#dbe4ff', '#d4f3e0', '#e6f0cf', '#cdeefb']; // pale blue, mint, lime, cyan
@@ -212,7 +247,7 @@ function Timer({ endsAt, label }) {
   );
 }
 
-export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, camPref, av = null, onLeave, onBrowse }) {
+export default function Room({ roomId, name, todos, focusMin, regroupMin, isPublic, camPref, av = null, onAvatar, onLeave, onBrowse }) {
   const room = useRoom(roomId, name, { focusMin, regroupMin, isPublic, av });
   const { selfId, hostId, peers, phase, startingAt, endsAt, ready, shared, order, locked, goals, chat, config, status } = room;
 
@@ -560,7 +595,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
            the bar, and the space goes to chat (left) + your list (right). */
         <>
           <div className="presence-bar">
-            <PresenceChip name={`${name} (you)`} av={av} seed={name} isHost={isHost} />
+            <SelfChip name={name} av={av} isHost={isHost} onAvatar={(i) => { room.setAvatar(i); onAvatar?.(i); }} />
             {peerIds.map((id) => (
               <PresenceChip key={id} name={peers[id].name || 'Guest'} av={peers[id].av} seed={peers[id].name} isHost={id === hostId}
                 onKick={isHost ? () => { if (window.confirm(`Remove ${peers[id].name || 'this person'} from the room?`)) room.kick(id); } : undefined} />

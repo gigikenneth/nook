@@ -47,6 +47,8 @@ export function useRoom(roomId, name, opts) {
 
   const selfIdRef = useRef(null);
   const cidRef = useRef(null);
+  const avRef = useRef(opts.av);
+  avRef.current = opts.av;
   if (!cidRef.current) {
     try {
       let c = sessionStorage.getItem('nook.cid');
@@ -116,6 +118,9 @@ export function useRoom(roomId, name, opts) {
         case 'order': setOrder(m.order); break;
         case 'locked-state': setLocked(m.locked); break;
         case 'goal': setGoals((g) => ({ ...g, [m.id]: m.text })); break;
+        case 'avatar':
+          setPeers((p) => (p[m.id] ? { ...p, [m.id]: { ...p[m.id], av: m.av } } : p));
+          break;
         case 'campref':
           setCamPrefs((c) => { const n = { ...c }; if (m.pref) n[m.id] = m.pref; else delete n[m.id]; return n; });
           break;
@@ -146,12 +151,13 @@ export function useRoom(roomId, name, opts) {
       }
     }
 
-    const qs = `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}${opts.av != null ? `&av=${opts.av}` : ''}&cid=${encodeURIComponent(cidRef.current)}&did=${encodeURIComponent(didRef.current)}`;
+    // Built per connect so a reconnect carries an avatar changed mid-session.
+    const qs = () => `name=${encodeURIComponent(name)}&focus=${opts.focusMin}&regroup=${opts.regroupMin}&public=${opts.isPublic ? 1 : 0}${avRef.current != null ? `&av=${avRef.current}` : ''}&cid=${encodeURIComponent(cidRef.current)}&did=${encodeURIComponent(didRef.current)}`;
     let attempts = 0;
     const MAX_RETRIES = 10;
 
     function connect() {
-      const socket = new WebSocket(`${wsBase}/room/${encodeURIComponent(roomId)}/ws?${qs}`);
+      const socket = new WebSocket(`${wsBase}/room/${encodeURIComponent(roomId)}/ws?${qs()}`);
       ws.current = socket;
       socket.onopen = () => { attempts = 0; everConnected.current = true; setStatus('connected'); };
       socket.onmessage = (ev) => handle(JSON.parse(ev.data));
@@ -250,6 +256,7 @@ export function useRoom(roomId, name, opts) {
     sendGoal: (text) => sendWs({ type: 'goal', text }),
     shareList: (tasks) => sendWs({ type: 'list', tasks }),
     setCamPref: (pref) => sendWs({ type: 'campref', pref }),
+    setAvatar: (av) => sendWs({ type: 'avatar', av }),
     sendChat: (text) => sendWs({ type: 'chat', text }),
     sendImage: (data, mime) => sendWs({ type: 'image', data, mime }),
     editChat: (mid, text) => sendWs({ type: 'edit', mid, text }),

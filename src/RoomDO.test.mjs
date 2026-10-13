@@ -648,4 +648,21 @@ Date.now = realNow;
   }
 }
 
+// Changing your avatar mid-session reaches everyone; junk is ignored.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  const a = join(r, st, { id: 'a', name: 'Gigi' });
+  const b = join(r, st, { id: 'b', name: 'Ineke' });
+  msg(r, a, { type: 'avatar', av: 7 });
+  assert.deepEqual(b.sent.find((m) => m.type === 'avatar'), { type: 'avatar', id: 'a', av: 7 }, 'peers hear the new avatar');
+  assert.equal(a.deserializeAttachment().av, 7, 'kept on the socket for anyone who joins later');
+  b.sent.length = 0;
+  for (const junk of [24, -1, 2.5, '3', null]) msg(r, a, { type: 'avatar', av: junk });
+  assert.equal(b.sent.filter((m) => m.type === 'avatar').length, 0, 'out-of-range or non-integer picks ignored');
+  assert.equal(a.deserializeAttachment().av, 7, 'and the old pick stands');
+}
+
 console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 + dead-socket seats + session continuity): all passed');
