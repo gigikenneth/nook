@@ -9,6 +9,7 @@ const CHANGELOG = [
     items: [
       'The moon has been keeping you company during sessions too. If your morning needs a nudge mid-focus, the one next to the Nook title knows the same trick as the home page',
       'Fixed: on phones, the screen now stays awake for the whole session',
+      'Fixed: someone removed from a room stays removed. Before, a laptop that was asleep when they were removed could quietly rejoin the room once it woke up',
     ],
   },
   {
