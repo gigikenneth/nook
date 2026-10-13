@@ -6,6 +6,7 @@ import { chime, unlockAudio } from './sound';
 import { ReportBug } from './ReportBug.jsx';
 import { SupportNook } from './SupportNook.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
+import { MoonEgg } from './MoonEgg.jsx';
 import { JitsiStage } from './JitsiStage.jsx';
 import { Moon, ChatDoodle } from './graphics.jsx';
 import { prepareImage, isImage, bytesOf } from './image';
@@ -528,7 +529,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       {startingAt && phase === 'greet' && <StartCountdown startingAt={startingAt} />}
       <header className="room-head">
         <div className="room-id">
-          <Moon size={26} className="small" /><span>Nook</span>
+          <MoonEgg size={26} /><span>Nook</span>
           <span className="dot">·</span><span className="count">{count}/4 here</span>
           {isPublic ? <span className="badge badge-greet">open</span> : <span className="badge">invite only</span>}
           {locked && <span className="badge badge-locked">🔒 closed</span>}
