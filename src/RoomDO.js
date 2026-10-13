@@ -75,6 +75,10 @@ export class RoomDO {
     this.startAt = null; // absolute ms the countdown lands on and focus begins
     this.roomId = null; // path segment, for lobby registration (persisted so alarms can sync after eviction)
     this.isPublic = false;
+    // Reconnect keys of people the host removed. A removed tab that never heard
+    // the close (a sleeping laptop) auto-reconnects on wake, so the room has to
+    // remember to turn it away. Persisted, cleared when the room is wiped.
+    this.kicked = [];
 
     // The client ticks every 30s so its socket doesn't go idle (#89). Let the
     // runtime answer those ticks itself: an auto-response never wakes a hibernating
@@ -100,6 +104,7 @@ export class RoomDO {
       this.starting = !!s.starting; this.startAt = s.startAt ?? null;
       this.isPublic = s.isPublic; this.locked = !!s.locked;
       this.roomId = s.roomId ?? null;
+      this.kicked = s.kicked || [];
       this.configured = true;
     });
   }
@@ -110,6 +115,7 @@ export class RoomDO {
       abandonAt: this.abandonAt, focusMin: this.focusMin, regroupMin: this.regroupMin,
       starting: this.starting, startAt: this.startAt,
       isPublic: this.isPublic, locked: this.locked, roomId: this.roomId,
+      kicked: this.kicked,
     });
   }
 
@@ -143,7 +149,7 @@ export class RoomDO {
   // A room sat empty past the abandon window — clear it for good.
   wipe() {
     this.phase = 'greet'; this.endsAt = null; this.paused = false; this.remainingMs = null;
-    this.abandonAt = null; this.locked = false; this.configured = false;
+    this.abandonAt = null; this.locked = false; this.configured = false; this.kicked = [];
     this.state.storage.delete(SESSION_KEY);
     this.state.storage.deleteAlarm();
     this.syncLobby();
@@ -213,6 +219,7 @@ export class RoomDO {
     // fall back to the per-tab `cid` (covers a refresh when localStorage is
     // blocked). Either way it's an opaque, anonymous id — nothing relational.
     const rkey = (url.searchParams.get('did') || url.searchParams.get('cid')) || null;
+    if (rkey && this.kicked.includes(rkey)) return this.rejectWs(4000, 'kicked');
 
     // Restore a returning tab's goal/pref, evicting any live zombie socket that
     // shares this rkey (#57) so the person never appears twice. This runs BEFORE
@@ -424,7 +431,11 @@ export class RoomDO {
       case 'kick':
         if (id === this.hostId()) {
           const t = this.socketOf(m.id);
-          if (t) { try { t.close(4000, 'kicked'); } catch {} this.handleLeave(t); }
+          if (t) {
+            const rk = t.deserializeAttachment()?.rkey;
+            if (rk && !this.kicked.includes(rk)) { this.kicked.push(rk); this.persist(); }
+            try { t.close(4000, 'kicked'); } catch {} this.handleLeave(t);
+          }
         }
         break;
       case 'restart': {
