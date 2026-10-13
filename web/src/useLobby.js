@@ -10,7 +10,7 @@ import { chime } from './sound';
 // mode 'watch' (used by the in-room Home overlay) still receives the roster and
 // can ping, but stays off everyone else's list — you're in a session, not
 // available to be pulled elsewhere.
-export function useLobby(enabled, name, mode = 'here', pref = null) {
+export function useLobby(enabled, name, mode = 'here', pref = null, av = null) {
   const [roster, setRoster] = useState([]);
   const [selfId, setSelfId] = useState(null);
   const [invite, setInvite] = useState(null); // { fromName, roomId }
@@ -20,6 +20,8 @@ export function useLobby(enabled, name, mode = 'here', pref = null) {
   nameRef.current = name;
   const prefRef = useRef(pref);
   prefRef.current = pref;
+  const avRef = useRef(av);
+  avRef.current = av;
 
   useEffect(() => {
     if (!enabled) return;
@@ -47,7 +49,7 @@ export function useLobby(enabled, name, mode = 'here', pref = null) {
       ws.current = socket;
       socket.onopen = () => {
         attempts = 0;
-        socket.send(JSON.stringify({ type: mode === 'watch' ? 'watch' : 'hello', name: nameRef.current, pref: prefRef.current, did: getDid() }));
+        socket.send(JSON.stringify({ type: mode === 'watch' ? 'watch' : 'hello', name: nameRef.current, pref: prefRef.current, av: avRef.current, did: getDid() }));
       };
       socket.onmessage = (ev) => { clearLive(); handle(JSON.parse(ev.data)); };
       socket.onclose = () => {
@@ -127,6 +129,12 @@ export function useLobby(enabled, name, mode = 'here', pref = null) {
     const s = ws.current;
     if (enabled && s && s.readyState === 1) s.send(JSON.stringify({ type: 'pref', pref }));
   }, [pref, enabled]);
+
+  // Push avatar changes to the roster while connected.
+  useEffect(() => {
+    const s = ws.current;
+    if (enabled && s && s.readyState === 1) s.send(JSON.stringify({ type: 'avatar', av }));
+  }, [av, enabled]);
 
   const ping = (toId, roomId) => {
     const s = ws.current;

@@ -29,7 +29,7 @@ export default function App() {
   const pendingRoom = roomFromHash();
 
   function enter(s) {
-    savePrefs({ name: s.name, camPref: s.camPref }); // remember for next visit
+    savePrefs({ name: s.name, camPref: s.camPref, av: s.av }); // remember for next visit
     sessionStorage.setItem(KEY, JSON.stringify(s));
     window.location.hash = `room/${encodeURIComponent(s.roomId)}`;
     setSession(s);
@@ -60,7 +60,7 @@ export default function App() {
       <>
         <Room {...session} onLeave={leave} onBrowse={() => setBrowsing(true)} />
         {browsing && (
-          <Home embedded initialName={session.name} initialCamPref={session.camPref} currentRoomId={session.roomId} onClose={() => setBrowsing(false)} onEnter={switchRoom} />
+          <Home embedded initialName={session.name} initialCamPref={session.camPref} initialAv={session.av} currentRoomId={session.roomId} onClose={() => setBrowsing(false)} onEnter={switchRoom} />
         )}
       </>
     );

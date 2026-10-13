@@ -166,6 +166,19 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
 .field { display: grid; gap: 7px; }
 .field > span { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; }
 .field.small { width: 130px; }
+/* Avatars: Big Smile characters (public/avatars), drawn wherever initials used to be. */
+.av { display: block; object-fit: cover; padding: 0; }
+.field > .name-row { display: flex; align-items: center; gap: 12px; font: inherit; color: inherit; text-transform: none; letter-spacing: 0; }
+.name-row input { flex: 1; min-width: 0; }
+.me-av { width: 48px; height: 48px; border-radius: 50%; flex: none; }
+.field > .av-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.av-head button { text-transform: none; letter-spacing: 0; padding: 4px 12px; font-size: 13px; }
+.av-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+.av-pick { padding: 2px; border: 3px solid transparent; border-radius: 50%; background: none; cursor: pointer; transition: transform .2s var(--spring); }
+.av-pick .av { width: 100%; aspect-ratio: 1; border-radius: 50%; }
+.av-pick:hover { transform: scale(1.08); }
+.av-pick[aria-checked="true"] { border-color: var(--gold); }
+@media (prefers-reduced-motion: reduce) { .av-pick { transition: none; } .av-pick:hover { transform: none; } }
 input, textarea {
   font: inherit; color: var(--ink); background: var(--field);
   border: 2px solid transparent; border-radius: var(--r-md); padding: 13px 16px; width: 100%;
