@@ -363,6 +363,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .shared-lists { gap: 12px; }
 .shared-list strong { font-size: 14px; font-family: var(--display); }
 .shared-list .todo-check.readonly { margin-top: 4px; }
+
+/* Offer back the last list after a closed tab (#129) */
+.recover-list { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; background: var(--field); border-radius: var(--r-md); font-size: 14px; font-weight: 600; }
+.recover-list span { flex: 1 1 100%; }
 .shared-list .todo-check.readonly li { font-size: 14px; color: var(--ink); }
 .shared-list .todo-check.readonly li.done span { text-decoration: line-through; color: var(--muted); }
 

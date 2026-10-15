@@ -423,5 +423,8 @@ list is React-only — `{id, text, done}` objects personal to you.
   persist: the room's session state (so you can resume it), wiped after 6h empty;
   and the ignore block graph, pairs of opaque per-browser ids with no names
   attached (see [On-device id + blocking](#on-device-id--blocking)).
+  Your to-do list also keeps a copy in the browser's `localStorage`
+  (`nook.lastList`) so a closed tab can offer it back on the next join (#129);
+  it stays on the device.
 - **One global lobby.** Every presence socket lands on a single `LobbyDO`; fine
   for dozens of concurrent people, would need sharding for thousands.
