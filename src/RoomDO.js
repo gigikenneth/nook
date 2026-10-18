@@ -19,6 +19,7 @@
 // landing-page directory. Private (invite-link) rooms never report.
 
 const MAX = 4;
+const QUIET_MS = 3 * 60000; // no keepalive ping for this long (a laptop asleep in the room, #123) = away. Clients ping every 30s; background tabs can stretch that to ~60s.
 const HEARTBEAT_MS = 60000; // slow tick just to keep the directory fresh; phase ends fire on their own exact alarm. Longer = fewer wakes = cheaper under hibernation.
 const SESSION_KEY = 'sess'; // persisted session blob (survives eviction/deploy)
 const REACTIONS = new Set(['👍', '❤️', '🎉', '😂', '👀']); // allowed chat reactions (#53)
@@ -158,7 +159,7 @@ export class RoomDO {
   // --- Derive-from-sockets helpers ------------------------------------------
   // The room roster IS the set of accepted hibernatable sockets; per-person data
   // rides in each socket's attachment { id, name, rkey, joinedAt, ready, shared,
-  // goal, list, cam:{session,audio,video}, camPref }.
+  // goal, list, away, quiet, cam:{session,audio,video}, camPref }.
 
   sockets() { return this.state.getWebSockets(); }
 
@@ -197,6 +198,27 @@ export class RoomDO {
       const rs = ws.readyState;
       if ((rs === 2 || rs === 3) && ws.deserializeAttachment()) this.handleLeave(ws);
     }
+  }
+
+  // Mark anyone whose keepalive pings stopped (a laptop asleep in the room, #123)
+  // as away, and clear it once they ping again. The runtime answers pings itself,
+  // so its last auto-response time is when we last heard from them. Runs on the
+  // alarm, so it lags by up to a heartbeat. ponytail: no timestamp API (old
+  // runtime / tests without it) = never quiet.
+  sweepQuiet() {
+    const ts = this.state.getWebSocketAutoResponseTimestamp;
+    if (typeof ts !== 'function') return;
+    const now = Date.now();
+    for (const x of this.roster()) {
+      const heard = Math.max(ts.call(this.state, x.ws)?.getTime() || 0, x.a.heard || 0, x.a.joinedAt || 0);
+      const quiet = now - heard > QUIET_MS ? heard : null;
+      if (!quiet !== !x.a.quiet) this.broadcastAway(this.patch(x.ws, (r) => { r.quiet = quiet; }));
+    }
+  }
+
+  // Away = they said so (BRB or idle, x.away) or their socket went quiet (x.quiet).
+  broadcastAway(a) {
+    this.broadcast({ type: 'away', id: a.id, since: a.away || a.quiet || null, serverNow: Date.now() });
   }
 
   // Read-modify-write a socket's attachment.
@@ -289,6 +311,7 @@ export class RoomDO {
       order: this.order(),
       goals: this.goalsMap(),
       lists: this.listsMap(),
+      away: this.awayMap(),
       camPrefs: this.camPrefsMap(),
       tracks: this.tracksMap(), // Realtime roster: who publishes which tracks
       locked: this.locked,
@@ -327,6 +350,7 @@ export class RoomDO {
     switch (m.type) {
       case 'ping': // client liveness probe and 30s keepalive (#89); normally answered by the auto-response above
         try { ws.send(JSON.stringify({ type: 'pong' })); } catch { /* gone */ }
+        this.patch(ws, (x) => { x.heard = Date.now(); }); // for sweepQuiet when the runtime didn't auto-answer
         break;
       case 'publish': { // client reports its Cloudflare Realtime session + track ids
         // so roommates can pull them. video is absent when the camera is off.
@@ -356,6 +380,13 @@ export class RoomDO {
           this.patch(ws, (x) => { x.list = null; });
           this.broadcastExcept(id, { type: 'peer-list', id, tasks: null });
         }
+        break;
+      }
+      case 'away': { // away from the computer: tapped "Be right back" or idle. `ago`
+        // backdates an idle away to when the idle began (capped at an hour).
+        // Socket attachment only, like goals; the client re-sends after a reconnect.
+        const ago = Math.min(Math.max(Number(m.ago) || 0, 0), 3600_000);
+        this.broadcastAway(this.patch(ws, (x) => { x.away = m.away ? Date.now() - ago : null; }));
         break;
       }
       case 'campref': { // stated camera preference (signal only — never touches tracks)
@@ -559,6 +590,7 @@ export class RoomDO {
     // empty (to wipe a genuinely abandoned room).
     const now = Date.now();
     this.sweepDead(); // so a room frees held seats without waiting for someone to try the door
+    this.sweepQuiet();
     if (this.count() === 0) {
       // Everyone left mid-countdown: cancel it, don't drop an empty room into focus.
       if (this.starting) { this.starting = false; this.startAt = null; }
@@ -657,6 +689,7 @@ export class RoomDO {
   clearShared() { for (const x of this.roster()) this.patch(x.ws, (r) => { r.shared = false; }); }
   goalsMap() { const o = {}; for (const x of this.roster()) if (x.a.goal) o[x.a.id] = x.a.goal; return o; }
   listsMap() { const o = {}; for (const x of this.roster()) if (x.a.list) o[x.a.id] = x.a.list; return o; }
+  awayMap() { const o = {}; for (const x of this.roster()) if (x.a.away || x.a.quiet) o[x.a.id] = x.a.away || x.a.quiet; return o; }
   camPrefsMap() { const o = {}; for (const x of this.roster()) if (x.a.camPref) o[x.a.id] = x.a.camPref; return o; }
   tracksMap() {
     const o = {};

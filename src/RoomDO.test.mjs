@@ -665,4 +665,58 @@ Date.now = realNow;
   assert.equal(a.deserializeAttachment().av, 7, 'and the old pick stands');
 }
 
-console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 + dead-socket seats + session continuity): all passed');
+// Away status: relayed to everyone (including the sender, so all clocks agree),
+// backdated by a capped `ago`, kept for late joiners, cleared on return.
+{
+  const st = makeState();
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  const a = join(r, st, { id: 'a', name: 'Gigi' });
+  const b = join(r, st, { id: 'b', name: 'Ada' });
+  msg(r, a, { type: 'away', away: true, ago: 5 * 60_000 });
+  const got = b.sent.find((m) => m.type === 'away');
+  assert.ok(got && got.id === 'a' && got.serverNow - got.since === 5 * 60_000, 'peers hear away, backdated by ago');
+  assert.ok(a.sent.find((m) => m.type === 'away'), 'sender hears it too');
+  assert.equal(r.awayMap().a, got.since, 'kept for anyone who joins later');
+  msg(r, a, { type: 'away', away: true, ago: 99 * HOUR });
+  assert.ok(Math.abs(Date.now() - HOUR - r.awayMap().a) < 1000, 'ago capped at an hour');
+  msg(r, a, { type: 'away', away: true, ago: 'junk' });
+  assert.ok(Math.abs(Date.now() - r.awayMap().a) < 1000, 'junk ago means now');
+  msg(r, a, { type: 'away', away: false });
+  assert.deepEqual(r.awayMap(), {}, 'back clears it');
+  assert.equal(b.sent.filter((m) => m.type === 'away').pop().since, null, 'peers told they are back');
+}
+
+// A laptop that falls asleep in the room (the #123 situation) stops pinging, so
+// the room marks it away by itself, and clears it once pings resume.
+{
+  const st = makeState();
+  const last = new Map();
+  st.getWebSocketAutoResponseTimestamp = (ws) => last.get(ws) || null;
+  const r = new RoomDO(st, null);
+  await r._restore;
+  r.roomId = 'test'; r.configured = true;
+  const now = Date.now();
+  const byron = join(r, st, { id: 'byron', name: 'Byron', joinedAt: now - 10 * 60_000 });
+  const freya = join(r, st, { id: 'freya', name: 'Freya', joinedAt: now - 10 * 60_000 });
+  last.set(freya, new Date(now - 20_000));
+  last.set(byron, new Date(now - 4 * 60_000)); // asleep for 4 min
+  r.sweepQuiet();
+  const got = freya.sent.filter((m) => m.type === 'away');
+  assert.equal(got.length, 1, 'only the quiet one is announced');
+  assert.equal(got[0].id, 'byron');
+  assert.ok(Math.abs(got[0].since - (now - 4 * 60_000)) < 1000, 'away since they were last heard');
+  r.sweepQuiet();
+  assert.equal(freya.sent.filter((m) => m.type === 'away').length, 1, 'no repeat while still quiet');
+  msg(r, byron, { type: 'away', away: false }); // client's own "back" can't clear a quiet socket
+  assert.ok(r.awayMap().byron, 'still away while the socket is quiet');
+  last.set(byron, new Date(Date.now())); // laptop wakes, pings again
+  r.sweepQuiet();
+  assert.equal(freya.sent.filter((m) => m.type === 'away').pop().since, null, 'back once pings resume');
+  const fresh = join(r, st, { id: 'new', name: 'New', joinedAt: Date.now() });
+  r.sweepQuiet();
+  assert.ok(!r.awayMap().new, 'a just-joined socket with no ping yet is not quiet');
+}
+
+console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 + dead-socket seats + session continuity + away): all passed');

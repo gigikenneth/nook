@@ -696,3 +696,12 @@ html[data-theme="dark"] .reaction { background: rgba(255,255,255,.08); }
 html[data-theme="dark"] .chat-msg { background: var(--surface); background: color-mix(in srgb, var(--tint, var(--surface)) 22%, var(--surface)); color: var(--text); }
 html[data-theme="dark"] .chat-msg.mine { background: var(--cream2); background: color-mix(in srgb, var(--pink) 22%, var(--surface)); }
 html[data-theme="dark"] .chat-msg.mine .who { color: var(--muted); }
+
+/* Away from the computer: BRB, idle, or a laptop asleep in the room (#123) */
+.presence-avwrap { position: relative; display: inline-grid; }
+.presence-chip.is-away { background: var(--field); box-shadow: none; }
+.presence-chip.is-away .presence-av, .share-row.is-away .goal-chip { filter: grayscale(1); opacity: .5; }
+.away-badge { position: absolute; right: -5px; bottom: -5px; width: 17px; height: 17px; border-radius: 50%; background: var(--surface); font-size: 10px; line-height: 17px; text-align: center; box-shadow: var(--shadow); }
+.away-tag { font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; font-family: inherit; }
+.brb-btn, .brb-auto { align-self: center; }
+.away-strip { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; margin: 0 0 12px; border-radius: var(--r-md); background: var(--field); font-weight: 700; font-size: 14px; }

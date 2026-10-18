@@ -426,5 +426,11 @@ list is React-only — `{id, text, done}` objects personal to you.
   Your to-do list also keeps a copy in the browser's `localStorage`
   (`nook.lastList`) so a closed tab can offer it back on the next join (#129);
   it stays on the device.
+- **Away status.** A member is away if their client says so (`away` message:
+  "Be right back", or the Idle Detection API on Chrome/Edge, `web/src/idleAway.js`)
+  or if their socket goes quiet: no keepalive ping for 3 minutes, read from the
+  runtime's auto-response timestamp on each alarm (`sweepQuiet`). The quiet
+  check is what catches a laptop asleep in the room (#123). Held in the socket
+  attachment only, never persisted.
 - **One global lobby.** Every presence socket lands on a single `LobbyDO`; fine
   for dozens of concurrent people, would need sharding for thousands.
