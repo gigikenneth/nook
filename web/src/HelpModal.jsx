@@ -5,6 +5,12 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'October 15, 2026',
+    items: [
+      'Closed the tab by mistake? Your to-do list is kept in your browser, so next time you join a room Nook offers to bring it back. It stays on your device and never reaches our servers',
+    ],
+  },
+  {
     date: 'October 13, 2026',
     items: [
       'Pick a little character to stand in for you instead of your initials. Choose from 24 on the home page, or keep the one picked for you at random. Everyone in your room and in “Around now” sees it. Changed your mind mid-session? Tap your own face next to the timer to swap it',

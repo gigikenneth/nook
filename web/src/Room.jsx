@@ -12,6 +12,7 @@ import { Moon, ChatDoodle, Avatar } from './graphics.jsx';
 import { AVATAR_COUNT, avatarOf } from './avatar';
 import { prepareImage, isImage, bytesOf } from './image';
 import { findLinks } from './links';
+import { loadLastList, saveLastList } from './lastList';
 
 const REACTIONS = ['👍', '❤️', '🎉', '😂', '👀']; // quick emoji reactions (#53)
 // Composer emoji tray. A short hand-picked set, not a full picker: the OS emoji
@@ -187,6 +188,15 @@ const chatColor = (name) => {
 // UUID ids so restored-from-storage tasks never collide with newly added ones.
 const nextTaskId = () => crypto.randomUUID();
 
+// This tab's saved list for the room, or null if there isn't one.
+function readTabTasks(roomId) {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(`nook.tasks.${roomId}`) || 'null');
+    if (Array.isArray(saved) && saved.length) return saved;
+  } catch { /* ignore */ }
+  return null;
+}
+
 function download(filename, text) {
   const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
   const url = URL.createObjectURL(blob);
@@ -255,19 +265,30 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   // Personal, editable task list (browser-only, never synced). Restored from this
   // tab's own storage first, so a refresh or a phone reclaiming the tab doesn't
   // wipe your list; falls back to the goals you joined with.
-  const [tasks, setTasks] = useState(() => {
-    try {
-      const saved = JSON.parse(sessionStorage.getItem(`nook.tasks.${roomId}`) || 'null');
-      if (Array.isArray(saved) && saved.length) return saved;
-    } catch { /* ignore */ }
-    return todos.map((t) => ({ id: nextTaskId(), text: t, done: false }));
+  const [tasks, setTasks] = useState(() =>
+    readTabTasks(roomId) || todos.map((t) => ({ id: nextTaskId(), text: t, done: false })));
+  // Closed the tab by mistake? A fresh tab has no list of its own, so offer back
+  // the last list from this device (#129). Snapshot at join, since the effect
+  // below starts overwriting the saved copy straight away.
+  const [recover, setRecover] = useState(() => {
+    if (readTabTasks(roomId)) return [];
+    const have = new Set(todos);
+    return loadLastList().filter((t) => !have.has(t.text));
   });
-  // Keep the tab's copy in step so it survives a reload. sessionStorage is per-tab
-  // and clears when the tab closes, so nothing outlives the session or leaves the
-  // device.
+  // Keep the tab's copy in step so it survives a reload, plus a device copy that
+  // survives closing the tab. Neither leaves the device.
   useEffect(() => {
     try { sessionStorage.setItem(`nook.tasks.${roomId}`, JSON.stringify(tasks)); } catch { /* full/blocked */ }
+    if (tasks.length) saveLastList(tasks);
   }, [tasks, roomId]);
+  // Append items not already on the list (by text). Used by import and recover.
+  const mergeTasks = (items) => setTasks((ts) => {
+    const seen = new Set(ts.map((t) => t.text));
+    const fresh = items.filter((p) => !seen.has(p.text))
+                       .map((p) => ({ id: nextTaskId(), text: p.text, done: !!p.done }));
+    return [...ts, ...fresh];
+  });
+  const recoverList = () => { mergeTasks(recover); setRecover([]); };
   const addTask = (text) => setTasks((ts) => [...ts, { id: nextTaskId(), text, done: false }]);
   const editTask = (id, text) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, text } : t)));
   const toggleTask = (id) => setTasks((ts) => ts.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
@@ -472,13 +493,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     if (!file) return;
     file.text().then((txt) => {
       const parsed = parseList(txt);
-      if (!parsed.length) return;
-      setTasks((ts) => {
-        const seen = new Set(ts.map((t) => t.text));
-        const fresh = parsed.filter((p) => !seen.has(p.text))
-                            .map((p) => ({ id: nextTaskId(), text: p.text, done: p.done }));
-        return [...ts, ...fresh];
-      });
+      if (parsed.length) mergeTasks(parsed);
     });
   }
 
@@ -607,7 +622,8 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
             <div className="focus-right">
               <aside className="panel">
                 <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
-                  onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList} />
+                  onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList}
+                  recover={recover} onRecover={recoverList} onDismissRecover={() => setRecover([])} />
               </aside>
               {sharedListsEl}
             </div>
@@ -652,10 +668,11 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
             </aside>
             {/* In greet, surface the list you're carrying into the next round (#88) —
                 otherwise you only see the room's shared lists, not your own. */}
-            {phase === 'greet' && tasks.length > 0 && (
+            {phase === 'greet' && (tasks.length > 0 || recover.length > 0) && (
               <aside className="panel your-list">
                 <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
-                  onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList} />
+                  onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList}
+                  recover={recover} onRecover={recoverList} onDismissRecover={() => setRecover([])} />
               </aside>
             )}
             {sharedListsEl}
@@ -756,7 +773,7 @@ function GreetPanel({ selfId, selfName, selfAv, goal, setGoal, onShareGoal, onSh
   );
 }
 
-function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, shared, onToggleShare }) {
+function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, shared, onToggleShare, recover = [], onRecover, onDismissRecover }) {
   const [draft, setDraft] = useState('');
   const [dragId, setDragId] = useState(null);
   const ulRef = useRef(null);
@@ -790,7 +807,14 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, share
           <span>{shared ? 'Sharing' : 'Share with room'}</span>
         </label>
       </div>
-      {tasks.length === 0 && <p className="hint">Nothing yet. Add a task below.</p>}
+      {recover.length > 0 && (
+        <div className="recover-list" role="status">
+          <span>Your list from last time is still here ({recover.length} {recover.length === 1 ? 'task' : 'tasks'}).</span>
+          <button className="primary sm" onClick={onRecover}>Bring it back</button>
+          <button className="ghost sm" onClick={onDismissRecover}>No thanks</button>
+        </div>
+      )}
+      {tasks.length === 0 && recover.length === 0 && <p className="hint">Nothing yet. Add a task below.</p>}
       <ul className="todo-check" ref={ulRef}>
         {tasks.map((t) => (
           <li key={t.id} className={`${t.done ? 'done' : ''} ${dragId === t.id ? 'dragging' : ''}`}>
