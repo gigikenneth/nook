@@ -5,6 +5,14 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'October 18, 2026',
+    items: [
+      'Stepping away? Tap “Be right back” during focus and the room sees you as away, with how long you have been gone. Tap “I’m back” when you return',
+      'On Chrome and Edge, turn on “Auto away” and Nook marks you away after 5 minutes without your keyboard or mouse, or when your screen locks, then clears it when you are back',
+      'If someone’s laptop falls asleep in the room, they now show as away after a few minutes instead of looking like they are still there',
+    ],
+  },
+  {
     date: 'October 15, 2026',
     items: [
       'Closed the tab by mistake? Your to-do list is kept in your browser, so next time you join a room Nook offers to bring it back. It stays on your device and never reaches our servers',
