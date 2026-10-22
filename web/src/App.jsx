@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Home from './Home.jsx';
 import Room from './Room.jsx';
 import { savePrefs } from './device';
+import { FridayEgg } from './FridayEgg.jsx';
 
 // Invite links are #room/<id>. No router lib — one hash check is enough.
 function roomFromHash() {
@@ -70,8 +71,9 @@ export default function App() {
         {browsing && (
           <Home embedded initialName={session.name} initialCamPref={session.camPref} initialAv={session.av} currentRoomId={session.roomId} onClose={() => setBrowsing(false)} onEnter={switchRoom} />
         )}
+        <FridayEgg />
       </>
     );
   }
-  return <Home pendingRoom={pendingRoom} onEnter={enter} />;
+  return <><Home pendingRoom={pendingRoom} onEnter={enter} /><FridayEgg /></>;
 }

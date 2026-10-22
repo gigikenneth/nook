@@ -705,3 +705,37 @@ html[data-theme="dark"] .chat-msg.mine .who { color: var(--muted); }
 .away-tag { font-size: 12px; font-weight: 700; color: var(--muted); white-space: nowrap; font-family: inherit; }
 .brb-btn, .brb-auto { align-self: center; }
 .away-strip { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; padding: 8px 16px; margin: 0 0 12px; border-radius: var(--r-md); background: var(--field); font-weight: 700; font-size: 14px; }
+
+/* Friday easter egg: bottom pill + one burst of confetti that falls once. */
+.friday-toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 55;
+  display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px);
+  background: var(--purple); color: var(--on-accent); padding: 8px 8px 8px 22px;
+  border-radius: var(--r-pill); box-shadow: 0 16px 40px -16px rgba(16, 18, 78, 0.6); font-weight: 700;
+  animation: friday-pop .4s var(--spring);
+}
+.friday-toast a.primary { border-radius: var(--r-pill); font-weight: 700; text-decoration: none; flex: none; }
+.friday-toast .ghost { color: var(--on-accent); opacity: .7; flex: none; }
+@keyframes friday-pop { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 56; overflow: hidden; }
+.confetti span {
+  position: absolute; top: -16px; width: 9px; height: 14px; border-radius: 2px; opacity: 0;
+  animation: confetti-fall linear forwards;
+}
+.confetti span:nth-child(3n) { width: 12px; height: 12px; border-radius: 50%; }
+@keyframes confetti-fall {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0); }
+  100% { opacity: 0; transform: translate(40px, 100vh) rotate(720deg); }
+}
+.confetti span:nth-child(even) { animation-name: confetti-fall-left; }
+@keyframes confetti-fall-left {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0); }
+  100% { opacity: 0; transform: translate(-40px, 100vh) rotate(-540deg); }
+}
+@media (prefers-reduced-motion: reduce) { .confetti { display: none; } .friday-toast { animation: none; } }
+@media (max-width: 560px) {
+  .friday-toast { left: 16px; right: 16px; bottom: 16px; transform: none; max-width: none; border-radius: var(--r-md);
+    font-size: 14px; padding: 10px 8px 10px 16px; animation-name: friday-pop-m; }
+  .friday-toast span { flex: 1; }
+}
+@keyframes friday-pop-m { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
