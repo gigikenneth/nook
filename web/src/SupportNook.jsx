@@ -4,7 +4,7 @@ import { useState } from 'react';
 // widget) — add a name to thank someone. Only names you're OK showing publicly.
 // Empty = the Thanks section is hidden.
 const SUPPORTERS = [
-  'Jowanna Daley', 'Jeff', 'Patricia',
+  'Jowanna Daley', 'Jeff', 'Patricia', 'Lex Roman',
 ];
 
 // Three low-key ways to support Nook, opened from a footer link. No tiers, no
