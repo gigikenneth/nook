@@ -739,3 +739,12 @@ html[data-theme="dark"] .chat-msg.mine .who { color: var(--muted); }
   .friday-toast span { flex: 1; }
 }
 @keyframes friday-pop-m { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+.friday-toast .ghost.x + .ghost.x { margin-left: -8px; }
+.friday-bubble {
+  position: fixed; right: 20px; bottom: 20px; z-index: 55; width: 52px; height: 52px; padding: 0;
+  border-radius: 50%; background: var(--purple); font-size: 24px; line-height: 1;
+  box-shadow: 0 12px 30px -12px rgba(16, 18, 78, 0.6); animation: friday-bubble-pop .35s var(--spring);
+}
+@keyframes friday-bubble-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .friday-bubble { animation: none; } }
+@media (max-width: 560px) { .friday-bubble { right: 16px; bottom: 16px; } }
