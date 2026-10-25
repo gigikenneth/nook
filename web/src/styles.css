@@ -367,6 +367,36 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 /* Offer back the last list after a closed tab (#129) */
 .recover-list { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; background: var(--field); border-radius: var(--r-md); font-size: 14px; font-weight: 600; }
 .recover-list span { flex: 1 1 100%; }
+
+/* Saved lists: a closed-by-default drawer in the list header */
+.list-head { flex-wrap: wrap; }
+.list-tools { display: flex; align-items: center; gap: 4px; }
+.lists-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; }
+.lists-btn .n { font-size: 11px; font-weight: 800; background: var(--field); color: var(--accent-text); border-radius: var(--r-pill); padding: 1px 7px; }
+.lists-btn[aria-expanded="true"] { color: var(--accent-text); background: var(--field); }
+.lists-btn[aria-expanded="true"] .n { background: var(--surface); }
+.xs { padding: 6px 12px; font-size: 13px; }
+.saved-drawer { display: grid; gap: 12px; background: var(--field); border-radius: var(--r-md); padding: 14px; animation: saved-drop .35s var(--spring); transform-origin: top; }
+@keyframes saved-drop { from { transform: scaleY(.85); opacity: 0; } to { transform: none; opacity: 1; } }
+.saved-head { display: flex; align-items: center; gap: 8px; }
+.saved-head strong { font-family: var(--display); font-size: 15px; }
+.saved-head .hint { flex: 1; }
+.saved-close { padding: 4px 10px; font-size: 13px; color: var(--accent-text); background: var(--surface); }
+.saved-lists, .saved-pick { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.saved-lists > li { background: var(--surface); border-radius: 16px; padding: 10px 8px 10px 14px; display: grid; gap: 8px; }
+.saved-row { display: flex; align-items: center; gap: 6px; }
+.saved-name { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.saved-name b { font-size: 15px; overflow-wrap: anywhere; }
+.saved-name small { font-size: 12px; color: var(--muted); font-weight: 600; }
+.saved-pick { padding-top: 6px; border-top: 1px solid var(--line); }
+.saved-pick label { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; padding: 2px 0; }
+.saved-pick li.have label { color: var(--muted); cursor: default; }
+.saved-pick em { font-style: normal; font-size: 12px; margin-left: auto; }
+.saved-pick-actions, .saved-confirm { display: flex; gap: 6px; justify-content: flex-end; align-items: center; flex-wrap: wrap; }
+.saved-confirm span { flex: 1; font-size: 13px; font-weight: 600; }
+.saved-drawer .chat-form input { background: var(--surface); padding: 9px 14px; font-size: 14px; }
+.lists-note { font-size: 13px; font-weight: 700; color: var(--accent-text); margin: 0; }
+@media (prefers-reduced-motion: reduce) { .saved-drawer { animation: none; } }
 .shared-list .todo-check.readonly li { font-size: 14px; color: var(--ink); }
 .shared-list .todo-check.readonly li.done span { text-decoration: line-through; color: var(--muted); }
 
