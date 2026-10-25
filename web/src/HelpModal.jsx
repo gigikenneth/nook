@@ -7,7 +7,7 @@ const CHANGELOG = [
   {
     date: 'October 25, 2026',
     items: [
-      'Save a list you repeat, like your start of day or a weekly review, and pull it back into any session. Tap “Saved” next to your list to save what you have, then add the whole thing or pick just the tasks you need. Saved lists stay in your browser and never reach our servers',
+      'Save a list you repeat, like your start of day or a weekly review, and pull it back into any session. Tap “Saved lists” next to your list to save what you have, then add the whole thing or pick just the tasks you need. Saved lists stay in your browser and never reach our servers',
     ],
   },
   {
