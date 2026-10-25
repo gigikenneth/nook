@@ -13,6 +13,7 @@ import { AVATAR_COUNT, avatarOf } from './avatar';
 import { prepareImage, isImage, bytesOf } from './image';
 import { findLinks } from './links';
 import { loadLastList, saveLastList } from './lastList';
+import { loadSavedLists, saveList, deleteList, markUsed, usedLabel } from './savedLists';
 import { nextAway, awayLabel, idleSupported, autoAwayPref, setAutoAwayPref, askIdlePermission, idleGranted, watchIdle } from './idleAway';
 
 const REACTIONS = ['👍', '❤️', '🎉', '😂', '👀']; // quick emoji reactions (#53)
@@ -669,7 +670,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
               <aside className="panel">
                 <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
                   onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList}
-                  recover={recover} onRecover={recoverList} onDismissRecover={() => setRecover([])} />
+                  recover={recover} onRecover={recoverList} onDismissRecover={() => setRecover([])} onMerge={mergeTasks} />
               </aside>
               {sharedListsEl}
             </div>
@@ -714,11 +715,11 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
             </aside>
             {/* In greet, surface the list you're carrying into the next round (#88) —
                 otherwise you only see the room's shared lists, not your own. */}
-            {phase === 'greet' && (tasks.length > 0 || recover.length > 0) && (
+            {phase === 'greet' && (tasks.length > 0 || recover.length > 0 || loadSavedLists().length > 0) && (
               <aside className="panel your-list">
                 <FocusPanel tasks={tasks} onAdd={addTask} onEdit={editTask} onToggle={toggleTask}
                   onRemove={removeTask} onReorder={reorderTask} shared={listShared} onToggleShare={toggleShareList}
-                  recover={recover} onRecover={recoverList} onDismissRecover={() => setRecover([])} />
+                  recover={recover} onRecover={recoverList} onDismissRecover={() => setRecover([])} onMerge={mergeTasks} />
               </aside>
             )}
             {sharedListsEl}
@@ -819,8 +820,14 @@ function GreetPanel({ selfId, selfName, selfAv, goal, setGoal, onShareGoal, onSh
   );
 }
 
-function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, shared, onToggleShare, recover = [], onRecover, onDismissRecover }) {
+function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, shared, onToggleShare, recover = [], onRecover, onDismissRecover, onMerge }) {
   const [draft, setDraft] = useState('');
+  const [listsOpen, setListsOpen] = useState(false);
+  const [savedCount, setSavedCount] = useState(() => loadSavedLists().length);
+  const [note, setNote] = useState('');
+  const listsBtnRef = useRef(null);
+  useEffect(() => { if (!note) return undefined; const t = setTimeout(() => setNote(''), 2600); return () => clearTimeout(t); }, [note]);
+  const closeLists = (msg) => { setListsOpen(false); setSavedCount(loadSavedLists().length); if (msg) setNote(msg); listsBtnRef.current?.focus(); };
   const [dragId, setDragId] = useState(null);
   const ulRef = useRef(null);
   function add(e) {
@@ -848,11 +855,18 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, share
     <>
       <div className="list-head">
         <h3 className="panel-title">Your list</h3>
-        <label className="share-toggle" title="Let the room see your list, for accountability. Off keeps it private.">
-          <input type="checkbox" checked={shared} onChange={onToggleShare} />
-          <span>{shared ? 'Sharing' : 'Share with room'}</span>
-        </label>
+        <div className="list-tools">
+          <button ref={listsBtnRef} className="ghost lists-btn" onClick={() => (listsOpen ? closeLists() : setListsOpen(true))}
+            aria-expanded={listsOpen} title="Lists you’ve saved on this device">
+            Saved{savedCount > 0 && <span className="n">{savedCount}</span>}
+          </button>
+          <label className="share-toggle" title="Let the room see your list, for accountability. Off keeps it private.">
+            <input type="checkbox" checked={shared} onChange={onToggleShare} />
+            <span>{shared ? 'Sharing' : 'Share with room'}</span>
+          </label>
+        </div>
       </div>
+      {listsOpen && <SavedLists tasks={tasks} onMerge={onMerge} onClose={closeLists} />}
       {recover.length > 0 && (
         <div className="recover-list" role="status">
           <span>Your list from last time is still here ({recover.length} {recover.length === 1 ? 'task' : 'tasks'}).</span>
@@ -877,7 +891,102 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, share
         <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Add a task…" maxLength={200} />
         <button className="primary sm" type="submit" disabled={!draft.trim()}>Add</button>
       </form>
+      {note && <p className="lists-note" role="status">{note}</p>}
     </>
+  );
+}
+
+// The "Saved" drawer: save the current list under a name, or pull a saved one
+// back in (all of it, or picked items). Closes itself after any add or save.
+function SavedLists({ tasks, onMerge, onClose }) {
+  const [lists, setLists] = useState(loadSavedLists);
+  const [name, setName] = useState('');
+  const [picking, setPicking] = useState(null); // list name
+  const [picked, setPicked] = useState(() => new Set());
+  const [confirmDel, setConfirmDel] = useState(null);
+  const have = new Set(tasks.map((t) => t.text));
+  useEffect(() => {
+    const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [onClose]);
+  const pull = (l, texts) => {
+    const fresh = texts.filter((t) => !have.has(t));
+    onMerge(fresh.map((text) => ({ text, done: false })));
+    markUsed(l.name);
+    onClose(fresh.length ? `Added ${fresh.length} from ${l.name}` : `You already have everything from ${l.name}`);
+  };
+  const startPick = (l) => {
+    if (picking === l.name) { setPicking(null); return; }
+    setPicking(l.name);
+    setPicked(new Set(l.items.filter((t) => !have.has(t))));
+  };
+  const togglePick = (t) => setPicked((p) => { const n = new Set(p); n.has(t) ? n.delete(t) : n.add(t); return n; });
+  const save = (e) => {
+    e.preventDefault();
+    const n = name.trim() || `My list ${lists.length + 1}`;
+    const existed = lists.some((l) => l.name.toLowerCase() === n.toLowerCase());
+    saveList(n, tasks.map((t) => t.text));
+    onClose(existed ? `Updated ${n}` : `Saved ${n}`);
+  };
+  return (
+    <div className="saved-drawer">
+      <div className="saved-head">
+        <strong>Saved lists</strong>
+        <span className="hint">on this device only</span>
+        <button className="saved-close" onClick={() => onClose()} aria-label="Close saved lists">Done ×</button>
+      </div>
+      {lists.length === 0
+        ? <p className="hint">Nothing saved yet. Save a list you repeat, like your start of day, and pull it back in any session.</p>
+        : (
+          <ul className="saved-lists">
+            {lists.map((l) => (
+              <li key={l.name}>
+                {confirmDel === l.name ? (
+                  <div className="saved-confirm">
+                    <span>Delete {l.name}?</span>
+                    <button className="ghost xs" onClick={() => setConfirmDel(null)}>Keep</button>
+                    <button className="primary xs" onClick={() => { setLists(deleteList(l.name)); setConfirmDel(null); }}>Delete</button>
+                  </div>
+                ) : (
+                  <div className="saved-row">
+                    <div className="saved-name"><b>{l.name}</b><small>{l.items.length} {l.items.length === 1 ? 'task' : 'tasks'} · {usedLabel(l.usedAt)}</small></div>
+                    <button className="ghost xs" onClick={() => startPick(l)} aria-expanded={picking === l.name}>Pick</button>
+                    <button className="secondary xs" onClick={() => pull(l, l.items)}>Add all</button>
+                    <button className="ghost x" onClick={() => setConfirmDel(l.name)} aria-label={`Delete ${l.name}`}>×</button>
+                  </div>
+                )}
+                {picking === l.name && confirmDel !== l.name && (
+                  <>
+                    <ul className="saved-pick">
+                      {l.items.map((t) => (
+                        <li key={t} className={have.has(t) ? 'have' : ''}>
+                          <label>
+                            <input type="checkbox" checked={have.has(t) || picked.has(t)} disabled={have.has(t)} onChange={() => togglePick(t)} />
+                            <span>{t}</span>
+                            {have.has(t) && <em>on your list</em>}
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="saved-pick-actions">
+                      <button className="ghost xs" onClick={() => setPicking(null)}>Cancel</button>
+                      <button className="primary xs" disabled={picked.size === 0} onClick={() => pull(l, [...picked])}>
+                        Add {picked.size || ''} {picked.size === 1 ? 'task' : 'tasks'}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      <form className="chat-form" onSubmit={save}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Save current list as…" maxLength={40}
+          aria-label="Name for this list" disabled={tasks.length === 0} />
+        <button className="primary xs" type="submit" disabled={tasks.length === 0}>Save</button>
+      </form>
+    </div>
   );
 }
 

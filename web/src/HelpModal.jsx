@@ -5,6 +5,12 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'October 25, 2026',
+    items: [
+      'Save a list you repeat, like your start of day or a weekly review, and pull it back into any session. Tap “Saved” next to your list to save what you have, then add the whole thing or pick just the tasks you need. Saved lists stay in your browser and never reach our servers',
+    ],
+  },
+  {
     date: 'October 18, 2026',
     items: [
       'Stepping away? Tap “Be right back” during focus and the room sees you as away, with how long you have been gone. Tap “I’m back” when you return',
