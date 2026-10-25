@@ -857,8 +857,8 @@ function FocusPanel({ tasks, onAdd, onEdit, onToggle, onRemove, onReorder, share
         <h3 className="panel-title">Your list</h3>
         <div className="list-tools">
           <button ref={listsBtnRef} className="ghost lists-btn" onClick={() => (listsOpen ? closeLists() : setListsOpen(true))}
-            aria-expanded={listsOpen} title="Lists you’ve saved on this device">
-            Saved{savedCount > 0 && <span className="n">{savedCount}</span>}
+            aria-expanded={listsOpen} title="Save this list to reuse later, or pull in one you saved before">
+            Saved lists ({savedCount})
           </button>
           <label className="share-toggle" title="Let the room see your list, for accountability. Off keeps it private.">
             <input type="checkbox" checked={shared} onChange={onToggleShare} />
