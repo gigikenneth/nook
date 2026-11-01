@@ -773,6 +773,7 @@ function GreetPanel({ selfId, selfName, selfAv, goal, setGoal, onShareGoal, onSh
   const myTurn = currentSharer === selfId;
   const nameOf = (id) => (id === selfId ? 'You' : peers[id]?.name || 'Guest');
   const goalOf = (id) => (id === selfId ? goal : goals[id] || '');
+  const [confirmStart, setConfirmStart] = useState(false);
 
   return (
     <>
@@ -815,7 +816,16 @@ function GreetPanel({ selfId, selfName, selfAv, goal, setGoal, onShareGoal, onSh
           <p className="hint">Everyone’s shared. We’ll start when you’re all ready.</p>
         </>
       )}
-      <button className="link-btn" onClick={onStart}>Start focus now</button>
+      {/* Two-step so a stray click doesn't cut someone's greeting short. */}
+      {confirmStart ? (
+        <div className="ready-row">
+          <span>{allShared ? 'Start focus for everyone?' : 'Did everyone share?'}</span>
+          <button className="primary" onClick={() => { setConfirmStart(false); onStart(); }}>Start focus</button>
+          <button className="link-btn" onClick={() => setConfirmStart(false)}>Not yet</button>
+        </div>
+      ) : (
+        <button className="link-btn" onClick={() => setConfirmStart(true)}>Start focus now</button>
+      )}
     </>
   );
 }
