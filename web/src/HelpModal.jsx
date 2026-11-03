@@ -7,7 +7,6 @@ const CHANGELOG = [
   {
     date: 'November 3, 2026',
     items: [
-      'In a meeting but want to stay in your Nook? Tap “Deafen” at the top of the room. Nook goes silent and you leave the video call, and the room sees a 🔇 next to your name. Tap “Undeafen” when you are back',
       'Wondering what Nook keeps? Tap “Privacy” in the chat panel for a short notice on what stays in your browser and what never gets saved',
       'The chat now stays on the newest message when the room moves into or out of focus',
     ],

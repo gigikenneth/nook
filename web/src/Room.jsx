@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRoom } from './useRoom';
 import { useWakeLock } from './useWakeLock';
 import { usePipTimer } from './usePipTimer';
-import { chime, unlockAudio, isDeaf, setDeaf } from './sound';
+import { chime, unlockAudio } from './sound';
 import { ReportBug } from './ReportBug.jsx';
 import { PrivacyNotice } from './PrivacyNotice.jsx';
 import { SupportNook } from './SupportNook.jsx';
@@ -136,7 +136,7 @@ function ChatMessage({ m, selfId, onReact, onEdit, onUnsend }) {
 
 // A small who's-here bubble for the focus phase, where cameras are off. The name
 // stays full-size and readable; only the avatar is a compact circle.
-function PresenceChip({ name, av, seed, isHost, onKick, away, deaf }) {
+function PresenceChip({ name, av, seed, isHost, onKick, away }) {
   return (
     <span className={`presence-chip ${away ? 'is-away' : ''}`}>
       <span className="presence-avwrap">
@@ -145,13 +145,12 @@ function PresenceChip({ name, av, seed, isHost, onKick, away, deaf }) {
       </span>
       <span className="presence-name">{name}{isHost ? ' · host' : ''}</span>
       {away && <span className="away-tag">{away}</span>}
-      {deaf && <span className="away-tag">🔇 deafened</span>}
       {onKick && <button className="presence-kick" title={`Remove ${name} from the room`} aria-label={`Remove ${name}`} onClick={onKick}>×</button>}
     </span>
   );
 }
 // Your own chip: tap your avatar to swap it without leaving the session.
-function SelfChip({ name, av, isHost, onAvatar, away, deaf }) {
+function SelfChip({ name, av, isHost, onAvatar, away }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -171,7 +170,6 @@ function SelfChip({ name, av, isHost, onAvatar, away, deaf }) {
       </button>
       <span className="presence-name">{name} (you){isHost ? ' · host' : ''}</span>
       {away && <span className="away-tag">{away}</span>}
-      {deaf && <span className="away-tag">🔇 deafened</span>}
       {open && (
         <div className="av-pop" role="radiogroup" aria-label="Your avatar">
           {Array.from({ length: AVATAR_COUNT }, (_, i) => (
@@ -349,13 +347,6 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
     const since = id === selfId ? myAway?.at : peers[id]?.away;
     return since ? awayLabel(since, now) : null;
   };
-
-  // Deafen (#144): silence Nook's sounds and leave the video call, so you can sit
-  // in the room through a meeting. The room sees a 🔇 tag. Re-sent on reconnect.
-  const [deaf, setDeafOn] = useState(isDeaf);
-  const toggleDeaf = () => { setDeaf(!deaf); setDeafOn(!deaf); };
-  useEffect(() => { if (selfId) room.setDeaf(deaf); }, [selfId, deaf]); // eslint-disable-line react-hooks/exhaustive-deps
-  const deafOf = (id) => (id === selfId ? deaf : !!peers[id]?.deaf);
 
   const [copied, setCopied] = useState(false);
   const [draft, setDraft] = useState('');
@@ -624,15 +615,10 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       {status === 'reconnecting' && <div className="reconnecting" role="status">Reconnecting…</div>}
       {status === 'down' && <div className="reconnecting" role="status">Nook's rooms are temporarily down — hang tight, we keep retrying and you'll reconnect automatically.</div>}
       {startingAt && phase === 'greet' && <StartCountdown startingAt={startingAt} />}
-      {/* One sticky strip for away and/or deafened: two would pile on top of each other. */}
-      {(myAway || deaf) && (
+      {myAway && (
         <div className="away-strip" role="status">
-          <span>{[
-            myAway && (myAway.manual ? 'You’re on a break. The room sees you as away.' : 'You’re marked away. The room can see it.'),
-            deaf && 'You’re deafened. Nook is silent and you’ve left the video call.',
-          ].filter(Boolean).join(' ')}</span>
-          {myAway && <button className="primary sm" onClick={() => awayEvent({ type: 'back' })}>I’m back</button>}
-          {deaf && <button className="primary sm" onClick={toggleDeaf}>Undeafen</button>}
+          <span>{myAway.manual ? 'You’re on a break. The room sees you as away.' : 'You’re marked away. The room can see it.'}</span>
+          <button className="primary sm" onClick={() => awayEvent({ type: 'back' })}>I’m back</button>
         </div>
       )}
       <header className="room-head">
@@ -651,10 +637,6 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
               ? 'Closed to new people. Open it to let someone in.'
               : 'Anyone with space can join, even mid-session. Close it to keep the room to this group.'}>
             {locked ? '🔒 Closed' : '🔓 Open'}
-          </button>
-          <button className="ghost sm" onClick={toggleDeaf} aria-pressed={deaf}
-            title="Silence Nook and leave the video call, so you can stay in the room through a meeting">
-            {deaf ? '🔈 Undeafen' : '🔇 Deafen'}
           </button>
           {onBrowse && <button className="ghost sm" onClick={onBrowse}>Home</button>}
           {pip.supported && (
@@ -675,9 +657,9 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
            the bar, and the space goes to chat (left) + your list (right). */
         <>
           <div className="presence-bar">
-            <SelfChip name={name} av={av} isHost={isHost} away={awayOf(selfId)} deaf={deaf} onAvatar={(i) => { room.setAvatar(i); onAvatar?.(i); }} />
+            <SelfChip name={name} av={av} isHost={isHost} away={awayOf(selfId)} onAvatar={(i) => { room.setAvatar(i); onAvatar?.(i); }} />
             {peerIds.map((id) => (
-              <PresenceChip key={id} name={peers[id].name || 'Guest'} av={peers[id].av} seed={peers[id].name} isHost={id === hostId} away={awayOf(id)} deaf={deafOf(id)}
+              <PresenceChip key={id} name={peers[id].name || 'Guest'} av={peers[id].av} seed={peers[id].name} isHost={id === hostId} away={awayOf(id)}
                 onKick={isHost ? () => { if (window.confirm(`Remove ${peers[id].name || 'this person'} from the room?`)) room.kick(id); } : undefined} />
             ))}
             {!myAway && <button className="ghost sm brb-btn" onClick={() => awayEvent({ type: 'brb' })}>☕ Be right back</button>}
@@ -707,18 +689,14 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
               channel, and a wide column under the faces is far easier to read
               than a narrow rail. */}
           <div className="stage-main">
-            {deaf ? (
-              <div className="jitsi-stage"><div className="jitsi-frame"><div className="jitsi-overlay">
-                <span>🔇 You’re deafened, so you’ve left the video call. <button className="link-btn" onClick={toggleDeaf}>Undeafen</button></span>
-              </div></div></div>
-            ) : <JitsiStage roomId={roomId} name={name} />}
+            <JitsiStage roomId={roomId} name={name} />
             {chatPanelEl}
           </div>
 
           <div className="rail">
             <aside className="panel stage-lead">
               {phase === 'greet' && (
-                <GreetPanel awayOf={awayOf} deafOf={deafOf} selfId={selfId} selfName={name} selfAv={av} goal={goal} setGoal={setGoal}
+                <GreetPanel awayOf={awayOf} selfId={selfId} selfName={name} selfAv={av} goal={goal} setGoal={setGoal}
                   onShareGoal={() => goal.trim() && room.sendGoal(goal.trim())}
                   onShared={() => {
                     unlockAudio();
@@ -736,7 +714,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
                   onStart={() => { unlockAudio(); room.start(); }} />
               )}
               {phase === 'regroup' && (
-                <RegroupPanel awayOf={awayOf} deafOf={deafOf} tasks={tasks} isHost={isHost} focusMin={config.focusMin} regroupMin={config.regroupMin} onRestart={room.restart}
+                <RegroupPanel awayOf={awayOf} tasks={tasks} isHost={isHost} focusMin={config.focusMin} regroupMin={config.regroupMin} onRestart={room.restart}
                   selfId={selfId} selfName={name} selfAv={av} peers={peers} order={order} shared={shared}
                   onReported={() => room.shareGoal()} />
               )}
@@ -794,7 +772,7 @@ function PhaseBanner({ phase, endsAt, regroupMin }) {
 }
 
 function GreetPanel({ selfId, selfName, selfAv, goal, setGoal, onShareGoal, onShared, goals, peers, order, shared,
-  ready, iAmReady, count, onReady, isHost, onStart, awayOf, deafOf }) {
+  ready, iAmReady, count, onReady, isHost, onStart, awayOf }) {
   // Turn-taking: the frame sits on the first person (join order) who hasn't shared yet.
   const currentSharer = order.find((id) => !shared.includes(id));
   const allShared = order.length > 0 && !currentSharer;
@@ -819,7 +797,7 @@ function GreetPanel({ selfId, selfName, selfAv, goal, setGoal, onShareGoal, onSh
             <li key={id} className={`share-row ${isCurrent ? 'current' : ''} ${hasShared ? 'shared' : ''} ${awayOf(id) ? 'is-away' : ''}`}>
               <Avatar className="goal-chip" av={id === selfId ? selfAv : peers[id]?.av} seed={id === selfId ? selfName : nameOf(id)} />
               <div className="goal-body">
-                <strong>{id === selfId ? 'You' : `${nameOf(id)}’s goal`}{awayOf(id) && <span className="away-tag"> · {awayOf(id)}</span>}{deafOf(id) && <span className="away-tag"> · 🔇 deafened</span>}</strong>
+                <strong>{id === selfId ? 'You' : `${nameOf(id)}’s goal`}{awayOf(id) && <span className="away-tag"> · {awayOf(id)}</span>}</strong>
                 <span>{goalOf(id) || (isCurrent ? 'sharing now…' : '…')}</span>
               </div>
               {hasShared && <span className="share-tick" aria-label="shared">✓</span>}
@@ -1031,7 +1009,7 @@ function SavedLists({ tasks, onMerge, onClose }) {
 const LEN_PRESETS = [15, 25, 50]; // quick focus-length picks for the next round
 
 function RegroupPanel({ tasks, isHost, focusMin, regroupMin, onRestart,
-  selfId, selfName, selfAv, peers, order, shared, onReported, awayOf, deafOf }) {
+  selfId, selfName, selfAv, peers, order, shared, onReported, awayOf }) {
   const finished = tasks.filter((t) => t.done).length;
   // Host can retune the next round's length; seeded with the current length.
   const [f, setF] = useState(focusMin);
@@ -1055,7 +1033,7 @@ function RegroupPanel({ tasks, isHost, focusMin, regroupMin, onRestart,
                 <span className="turn-num">{i + 1}</span>
                 <Avatar className="goal-chip" av={id === selfId ? selfAv : peers[id]?.av} seed={id === selfId ? selfName : nameOf(id)} />
                 <div className="goal-body">
-                  <strong>{nameOf(id)}{awayOf(id) && <span className="away-tag"> · {awayOf(id)}</span>}{deafOf(id) && <span className="away-tag"> · 🔇 deafened</span>}</strong>
+                  <strong>{nameOf(id)}{awayOf(id) && <span className="away-tag"> · {awayOf(id)}</span>}</strong>
                   <span>{id === current ? 'reporting now…' : shared.includes(id) ? 'done' : 'waiting'}</span>
                 </div>
                 {shared.includes(id) && <span className="share-tick" aria-label="reported">✓</span>}

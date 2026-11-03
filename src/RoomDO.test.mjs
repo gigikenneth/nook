@@ -665,21 +665,6 @@ Date.now = realNow;
   assert.equal(a.deserializeAttachment().av, 7, 'and the old pick stands');
 }
 
-// Deafen (#144): relayed to peers, listed for late joiners, cleared on undeafen.
-{
-  const st = makeState();
-  const r = new RoomDO(st, null);
-  await r._restore;
-  r.roomId = 'test'; r.configured = true;
-  const a = join(r, st, { id: 'a', name: 'Gigi' });
-  const b = join(r, st, { id: 'b', name: 'Ada' });
-  msg(r, a, { type: 'deaf', on: true });
-  assert.ok(b.sent.find((m) => m.type === 'deaf' && m.id === 'a' && m.on === true), 'peers hear deafen');
-  assert.deepEqual(r.deafIds(), ['a'], 'kept for anyone who joins later');
-  msg(r, a, { type: 'deaf', on: false });
-  assert.deepEqual(r.deafIds(), [], 'undeafen clears it');
-}
-
 // Away status: relayed to everyone (including the sender, so all clocks agree),
 // backdated by a capped `ago`, kept for late joiners, cleared on return.
 {
@@ -734,4 +719,4 @@ Date.now = realNow;
   assert.ok(!r.awayMap().new, 'a just-joined socket with no ping yet is not quiet');
 }
 
-console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 + dead-socket seats + session continuity + away + deafen): all passed');
+console.log('RoomDO hibernation self-check (#9 #30 #47 #55 #53 #57 #68 #89 #90 + dead-socket seats + session continuity + away): all passed');

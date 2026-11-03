@@ -11,7 +11,7 @@ import { chime } from './sound';
 export function useRoom(roomId, name, opts) {
   const [selfId, setSelfId] = useState(null);
   const [hostId, setHostId] = useState(null);
-  const [peers, setPeers] = useState({}); // id -> { name, av, list, away (local ms or null), deaf }
+  const [peers, setPeers] = useState({}); // id -> { name, av, list, away (local ms or null) }
   const [phase, setPhase] = useState('greet');
   const [startingAt, setStartingAt] = useState(null); // ms when the pre-focus countdown lands; null when not counting
   const [endsAt, setEndsAt] = useState(null);
@@ -87,7 +87,6 @@ export function useRoom(roomId, name, opts) {
             for (const pe of m.peers) n[pe.id] = { ...(n[pe.id] || {}), name: pe.name, av: pe.av ?? null };
             for (const [pid, tasks] of Object.entries(m.lists || {})) n[pid] = { ...(n[pid] || {}), list: tasks };
             for (const [pid, since] of Object.entries(m.away || {})) n[pid] = { ...(n[pid] || {}), away: Date.now() - (m.serverNow - since) };
-            for (const pid of m.deaf || []) n[pid] = { ...(n[pid] || {}), deaf: true };
             return n;
           });
           break;
@@ -122,9 +121,6 @@ export function useRoom(roomId, name, opts) {
         case 'goal': setGoals((g) => ({ ...g, [m.id]: m.text })); break;
         case 'avatar':
           setPeers((p) => (p[m.id] ? { ...p, [m.id]: { ...p[m.id], av: m.av } } : p));
-          break;
-        case 'deaf':
-          setPeers((p) => (p[m.id] ? { ...p, [m.id]: { ...p[m.id], deaf: m.on } } : p));
           break;
         case 'campref':
           setCamPrefs((c) => { const n = { ...c }; if (m.pref) n[m.id] = m.pref; else delete n[m.id]; return n; });
@@ -266,7 +262,6 @@ export function useRoom(roomId, name, opts) {
     setCamPref: (pref) => sendWs({ type: 'campref', pref }),
     setAvatar: (av) => sendWs({ type: 'avatar', av }),
     setAway: (away, ago) => sendWs({ type: 'away', away, ago }),
-    setDeaf: (on) => sendWs({ type: 'deaf', on }),
     sendChat: (text) => sendWs({ type: 'chat', text }),
     sendImage: (data, mime) => sendWs({ type: 'image', data, mime }),
     editChat: (mid, text) => sendWs({ type: 'edit', mid, text }),
