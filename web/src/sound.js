@@ -38,7 +38,18 @@ export function unlockAudio() {
   }
 }
 
+// Deafen (#144): every Nook sound goes through chime(), so one flag silences
+// them all. Remembered in this browser, like Auto away.
+const DEAF_KEY = 'nook.deaf';
+let deaf = (() => { try { return localStorage.getItem(DEAF_KEY) === 'on'; } catch { return false; } })();
+export const isDeaf = () => deaf;
+export function setDeaf(on) {
+  deaf = !!on;
+  try { localStorage.setItem(DEAF_KEY, deaf ? 'on' : 'off'); } catch { /* ignore */ }
+}
+
 export function chime(kind) {
+  if (deaf) return;
   const notes = TUNES[kind];
   if (!notes) return;
   try {

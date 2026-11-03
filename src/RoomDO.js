@@ -313,6 +313,7 @@ export class RoomDO {
       lists: this.listsMap(),
       away: this.awayMap(),
       camPrefs: this.camPrefsMap(),
+      deaf: this.deafIds(),
       tracks: this.tracksMap(), // Realtime roster: who publishes which tracks
       locked: this.locked,
     });
@@ -387,6 +388,11 @@ export class RoomDO {
         // Socket attachment only, like goals; the client re-sends after a reconnect.
         const ago = Math.min(Math.max(Number(m.ago) || 0, 0), 3600_000);
         this.broadcastAway(this.patch(ws, (x) => { x.away = m.away ? Date.now() - ago : null; }));
+        break;
+      }
+      case 'deaf': { // deafened (#144): a signal for the room; the client leaves the call itself
+        this.patch(ws, (x) => { x.deaf = !!m.on; });
+        this.broadcast({ type: 'deaf', id, on: !!m.on });
         break;
       }
       case 'campref': { // stated camera preference (signal only — never touches tracks)
@@ -690,6 +696,7 @@ export class RoomDO {
   goalsMap() { const o = {}; for (const x of this.roster()) if (x.a.goal) o[x.a.id] = x.a.goal; return o; }
   listsMap() { const o = {}; for (const x of this.roster()) if (x.a.list) o[x.a.id] = x.a.list; return o; }
   awayMap() { const o = {}; for (const x of this.roster()) if (x.a.away || x.a.quiet) o[x.a.id] = x.a.away || x.a.quiet; return o; }
+  deafIds() { return this.roster().filter((x) => x.a.deaf).map((x) => x.a.id); }
   camPrefsMap() { const o = {}; for (const x of this.roster()) if (x.a.camPref) o[x.a.id] = x.a.camPref; return o; }
   tracksMap() {
     const o = {};
