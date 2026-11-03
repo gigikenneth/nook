@@ -4,6 +4,7 @@ import { useWakeLock } from './useWakeLock';
 import { usePipTimer } from './usePipTimer';
 import { chime, unlockAudio } from './sound';
 import { ReportBug } from './ReportBug.jsx';
+import { PrivacyNotice } from './PrivacyNotice.jsx';
 import { SupportNook } from './SupportNook.jsx';
 import { ThemeToggle } from './ThemeToggle.jsx';
 import { MoonEgg } from './MoonEgg.jsx';
@@ -75,7 +76,7 @@ function ChatMessage({ m, selfId, onReact, onEdit, onUnsend }) {
         // Browsers refuse to open a data: URI in a new tab, so hand it over as a blob URL.
         <a href={m.img} target="_blank" rel="noopener noreferrer" className="chat-img-link"
           onClick={(e) => { e.preventDefault(); window.open(dataUrlToBlobUrl(m.img), '_blank', 'noopener'); }}>
-          <img className="chat-img" src={m.img} alt={`Shared by ${m.mine ? 'you' : m.name}`} loading="lazy" />
+          <img className="chat-img" src={m.img} alt={`Shared by ${m.mine ? 'you' : m.name}`} />
         </a>
       )}
       {m.img && (
@@ -421,7 +422,9 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
   const [dragging, setDragging] = useState(false);   // a file is hovering the chat panel
   const [emojiOpen, setEmojiOpen] = useState(false); // composer emoji tray
   const fileRef = useRef(null);   // hidden file input for importing a list
-  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [chat.length]);
+  // The panel remounts when focus swaps layouts, so re-pin on that too (#142).
+  const pinChat = () => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; };
+  useEffect(pinChat, [chat.length, phase === 'focus']);
 
   // Keep the phone/desktop screen awake while you're in a room (#17).
   useWakeLock(true);
@@ -561,9 +564,12 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       onDrop={onDropChat}>
       <div className="panel-head">
         <h3 className="panel-title">Chat</h3>
-        <span className="hint" title="Never stored on a server. A copy stays in your browser so a refresh can restore it, and it clears when you close the tab.">not on our servers</span>
+        <span className="hint"><PrivacyNotice /></span>
       </div>
-      <div className="chat-log" ref={logRef}>
+      {/* Pictures grow the log after they decode, so re-pin when one loads.
+          Not lazy: they're in-memory data URIs, and lazy loads fired by
+          scrolling back up would yank you to the bottom. */}
+      <div className="chat-log" ref={logRef} onLoadCapture={pinChat}>
         {chat.length === 0 ? (
           <div className="chat-empty"><ChatDoodle /><p>Say something. Messages vanish when the room does.</p></div>
         ) : chat.map((m, i) => (

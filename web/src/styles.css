@@ -101,6 +101,9 @@ h1, h2, h3 { font-family: var(--display); font-weight: 800; margin: 0; letter-sp
 .help-end { text-align: center; color: var(--muted); font-size: 12px; font-weight: 700;
   padding-top: 12px; margin: 6px 0 0; border-top: 1px solid var(--line); }
 .help-subhead { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 8px; }
+/* Privacy notice opens from centred footers; keep it left-aligned and in sentence case. */
+.privacy-card { text-align: left; }
+.privacy-card .help-subhead { text-transform: none; letter-spacing: 0; font-size: 13px; }
 .help-tips { margin: 0 0 12px; padding: 0; list-style: none; display: grid; gap: 9px; }
 .help-tips li { line-height: 1.45; padding-left: 16px; position: relative; }
 .help-tips li::before { content: '·'; position: absolute; left: 4px; color: var(--accent-text); font-weight: 800; }
