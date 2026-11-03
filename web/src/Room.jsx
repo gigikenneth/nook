@@ -259,7 +259,7 @@ function Timer({ endsAt, label }) {
       <span className="timer-label">{label}</span>
       <span className="timer-clock">{mm}:{ss}</span>
       <time className="timer-at" dateTime={at.toISOString()}>
-        ends {at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+        at {at.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
       </time>
     </div>
   );
