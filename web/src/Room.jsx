@@ -624,16 +624,15 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       {status === 'reconnecting' && <div className="reconnecting" role="status">Reconnecting…</div>}
       {status === 'down' && <div className="reconnecting" role="status">Nook's rooms are temporarily down — hang tight, we keep retrying and you'll reconnect automatically.</div>}
       {startingAt && phase === 'greet' && <StartCountdown startingAt={startingAt} />}
-      {myAway && (
+      {/* One sticky strip for away and/or deafened: two would pile on top of each other. */}
+      {(myAway || deaf) && (
         <div className="away-strip" role="status">
-          <span>{myAway.manual ? 'You’re on a break. The room sees you as away.' : 'You’re marked away. The room can see it.'}</span>
-          <button className="primary sm" onClick={() => awayEvent({ type: 'back' })}>I’m back</button>
-        </div>
-      )}
-      {deaf && (
-        <div className="away-strip" role="status">
-          <span>You’re deafened. Nook is silent and you’ve left the video call.</span>
-          <button className="primary sm" onClick={toggleDeaf}>Undeafen</button>
+          <span>{[
+            myAway && (myAway.manual ? 'You’re on a break. The room sees you as away.' : 'You’re marked away. The room can see it.'),
+            deaf && 'You’re deafened. Nook is silent and you’ve left the video call.',
+          ].filter(Boolean).join(' ')}</span>
+          {myAway && <button className="primary sm" onClick={() => awayEvent({ type: 'back' })}>I’m back</button>}
+          {deaf && <button className="primary sm" onClick={toggleDeaf}>Undeafen</button>}
         </div>
       )}
       <header className="room-head">
