@@ -564,7 +564,7 @@ export default function Room({ roomId, name, todos, focusMin, regroupMin, isPubl
       onDrop={onDropChat}>
       <div className="panel-head">
         <h3 className="panel-title">Chat</h3>
-        <span className="hint"><PrivacyNotice label="Chat isn’t saved" /></span>
+        <span className="hint"><PrivacyNotice /></span>
       </div>
       {/* Pictures grow the log after they decode, so re-pin when one loads.
           Not lazy: they're in-memory data URIs, and lazy loads fired by
