@@ -5,6 +5,13 @@ import { useState } from 'react';
 // so people can read back through past updates. (No em dashes, per house style.)
 const CHANGELOG = [
   {
+    date: 'November 3, 2026',
+    items: [
+      'Wondering what Nook keeps? Tap “Privacy” in the chat panel for a short notice on what stays in your browser and what never gets saved',
+      'The chat now stays on the newest message when the room moves into or out of focus',
+    ],
+  },
+  {
     date: 'October 25, 2026',
     items: [
       'Save a list you repeat, like your start of day or a weekly review, and pull it back into any session. Tap “Saved lists” next to your list to save what you have, then add the whole thing or pick just the tasks you need. Saved lists stay in your browser and never reach our servers',
