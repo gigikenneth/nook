@@ -11,6 +11,19 @@ import { apiBase } from './config';
 // path lived here previously — re-add an attemptJitsi + failover if we bring it
 // back. Mounted only during greet/regroup (the phases with cameras).
 
+// The stage remounts every greet/regroup, so Daily forgets a chosen background
+// effect. Remember it per browser. ponytail: an uploaded image (ArrayBuffer
+// source) can't be stored, only blur and Daily's built-in images stick.
+const BG_KEY = 'nook.dailyBg';
+function loadBg() {
+  try { return JSON.parse(localStorage.getItem(BG_KEY)) || undefined; } catch { return undefined; }
+}
+function saveBg(p) {
+  const src = p?.config?.source;
+  if (!p || (src != null && typeof src !== 'string' && typeof src !== 'number')) return;
+  try { localStorage.setItem(BG_KEY, JSON.stringify(p)); } catch { /* storage blocked */ }
+}
+
 export function JitsiStage({ roomId, name }) {
   const frameRef = useRef(null);
   const apiRef = useRef(null);
@@ -30,14 +43,16 @@ export function JitsiStage({ roomId, name }) {
         activeSpeakerMode: false, // grid — show everyone at once, not just the speaker
         iframeStyle: { width: '100%', height: '100%', border: '0' },
       });
+      frame.on('input-settings-updated', (e) => saveBg(e?.inputSettings?.video?.processor));
       frame.on('participant-updated', (e) => {
         if (e?.participant?.local) { setCam(!!e.participant.video); setMic(!!e.participant.audio); }
       });
       // join() resolves only once actually in the call — the authoritative
       // "joined" signal. A hung join rejects at 15s.
+      const bg = loadBg();
       const stall = new Promise((_, rej) => setTimeout(() => rej(new Error('daily stall')), 15000));
       try {
-        await Promise.race([frame.join({ url, userName: name, startVideoOff: true, startAudioOff: true }), stall]);
+        await Promise.race([frame.join({ url, userName: name, startVideoOff: true, startAudioOff: true, ...(bg && { inputSettings: { video: { processor: bg } } }) }), stall]);
       } catch (e) {
         try { frame.destroy(); } catch { /* gone */ }
         throw e;
