@@ -21,6 +21,7 @@
 const MAX = 4;
 const QUIET_MS = 3 * 60000; // no keepalive ping for this long (a laptop asleep in the room, #123) = away. Clients ping every 30s; background tabs can stretch that to ~60s.
 const HEARTBEAT_MS = 60000; // slow tick just to keep the directory fresh; phase ends fire on their own exact alarm. Longer = fewer wakes = cheaper under hibernation.
+const CLOSED_KEY = 'closed'; // operator-close expiry (ms), outlives wipe()
 const SESSION_KEY = 'sess'; // persisted session blob (survives eviction/deploy)
 const REACTIONS = new Set(['👍', '❤️', '🎉', '😂', '👀']); // allowed chat reactions (#53)
 // Shared pictures are relayed exactly like chat text and never stored. The cap is
@@ -80,6 +81,9 @@ export class RoomDO {
     // the close (a sleeping laptop) auto-reconnects on wake, so the room has to
     // remember to turn it away. Persisted, cleared when the room is wiped.
     this.kicked = [];
+    // Operator-closed: turn everyone away until then. Own storage key so wipe()
+    // doesn't clear it. ponytail: the key is never deleted; it's one number.
+    this.closedUntil = 0;
 
     // The client ticks every 30s so its socket doesn't go idle (#89). Let the
     // runtime answer those ticks itself: an auto-response never wakes a hibernating
@@ -96,6 +100,7 @@ export class RoomDO {
     // Restore the persisted session before any request/alarm/message is handled,
     // so an evicted/redeployed room resumes instead of starting fresh at greet.
     this._restore = state.blockConcurrencyWhile(async () => {
+      this.closedUntil = (await state.storage.get(CLOSED_KEY)) || 0;
       const s = await state.storage.get(SESSION_KEY);
       if (!s) return;
       this.phase = s.phase; this.endsAt = s.endsAt ?? null;
@@ -225,10 +230,14 @@ export class RoomDO {
   patch(ws, fn) { const a = ws.deserializeAttachment() || {}; fn(a); ws.serializeAttachment(a); return a; }
 
   async fetch(req) {
-    // Operator close (worker.js gates it on ADMIN_KEY). 4003 because clients
-    // already stop reconnecting on it; any other code and the tab comes right back.
+    await this._restore;
+    // Operator close (worker.js gates it on ADMIN_KEY). 4003 shows "stepped
+    // aside" and stops the client; older clients still retry on their 30s
+    // keepalive, so closedUntil keeps turning them away for the abandon window.
     if (new URL(req.url).pathname === '/admin/close') {
       const n = this.count();
+      this.closedUntil = Date.now() + ABANDON_MS;
+      this.state.storage.put(CLOSED_KEY, this.closedUntil);
       for (const ws of this.sockets()) { try { ws.close(4003, 'closed'); } catch { /* already gone */ } this.handleLeave(ws); }
       this.wipe();
       return new Response(`closed ${n}`);
@@ -239,6 +248,7 @@ export class RoomDO {
     // Before anyone is counted or turned away, let go of seats held by sockets
     // that are already closed.
     this.sweepDead();
+    if (Date.now() < this.closedUntil) return this.rejectWs(4003, 'closed');
 
     const url = new URL(req.url);
     const pathId = url.pathname.match(/^\/room\/([^/]+)\/ws$/);
