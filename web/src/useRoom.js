@@ -171,6 +171,9 @@ export function useRoom(roomId, name, opts) {
         // server superseded an old zombie). Its late close must not touch a healthy
         // session — otherwise a normal reconnect looks like a random kick (#89).
         if (socket !== ws.current) return;
+        // A server decision ends the session: stop, or the 30s keepalive probe
+        // finds the closed socket and reconnects right back in.
+        if (e.code >= 4000 && e.code <= 4003) dead = true;
         if (e.code === 4000) return setStatus('kicked');
         if (e.code === 4001) return setStatus('full');
         if (e.code === 4002) return setStatus('locked');

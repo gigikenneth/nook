@@ -96,6 +96,17 @@ export default {
       }
     }
 
+    // Operator-only: close a room for everyone. A forgotten background tab keeps
+    // pinging, so its room never empties on its own. Set ADMIN_KEY with
+    // `wrangler secret put`; unset = route disabled.
+    if (url.pathname === '/admin/close' && req.method === 'POST') {
+      if (!env.ADMIN_KEY || req.headers.get('x-admin-key') !== env.ADMIN_KEY) return json({ error: 'forbidden' }, 403);
+      const roomId = url.searchParams.get('room');
+      if (!roomId) return json({ error: 'room required' }, 400);
+      const room = env.ROOM.get(env.ROOM.idFromName(roomId));
+      return room.fetch(new Request('https://room/admin/close', { method: 'POST' }));
+    }
+
     // Presence websocket for the "who's around" list + cowork invites.
     if (url.pathname === '/lobby/ws') {
       const lobby = env.LOBBY.get(env.LOBBY.idFromName('global'));
