@@ -225,6 +225,14 @@ export class RoomDO {
   patch(ws, fn) { const a = ws.deserializeAttachment() || {}; fn(a); ws.serializeAttachment(a); return a; }
 
   async fetch(req) {
+    // Operator close (worker.js gates it on ADMIN_KEY). 4003 because clients
+    // already stop reconnecting on it; any other code and the tab comes right back.
+    if (new URL(req.url).pathname === '/admin/close') {
+      const n = this.count();
+      for (const ws of this.sockets()) { try { ws.close(4003, 'closed'); } catch { /* already gone */ } this.handleLeave(ws); }
+      this.wipe();
+      return new Response(`closed ${n}`);
+    }
     if (req.headers.get('Upgrade') !== 'websocket') {
       return new Response('expected websocket', { status: 426 });
     }
